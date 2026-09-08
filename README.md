@@ -25,15 +25,22 @@
 
 ## Запуск (разработка)
 
+**Быстро, без команд** — ярлыки на рабочем столе (или файлы в корне репозитория):
+- **Запуск терминала** — поднимает базу + сайт + сервер, открывает браузер.
+- **Стоп терминала** — всё выключает.
+
+**Вручную:**
 ```bash
-npm install          # ставит зависимости во всех воркспейсах
+npm install          # ставит зависимости во всех воркспейсах (один раз)
+npm run db:start     # поднять локальную PostgreSQL (C:\Dev\pgsql)
 npm run dev          # client (Vite :3000) + server (Express :4000) параллельно
-npm run dev:client   # только фронт
-npm run dev:server   # только backend
+npm run db:stop      # остановить базу
 ```
+Прочее: `npm run db:reset` (пересоздать БД по init.sql), `npm run db:psql` (консоль psql),
+`npm run dev:client` / `npm run dev:server` по отдельности.
 
 Backend без PostgreSQL тоже стартует: `/api/health` и `/api/quotes` работают,
-data-роуты отвечают `503`.
+data-роуты отвечают `503`. Вход в API/админку: `admin` / `admin123`.
 
 ## Правила проекта
 
