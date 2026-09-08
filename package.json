@@ -1,0 +1,23 @@
+{
+  "name": "mt5-terminal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Веб-терминал MT5 — мобильная PWA + ПК-версия. Монорепо.",
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev": "concurrently -n client,server -c blue,green \"npm:dev:client\" \"npm:dev:server\"",
+    "dev:client": "npm --workspace client run dev",
+    "dev:server": "npm --workspace server run dev",
+    "build": "npm --workspace client run build",
+    "lint": "npm --workspace client run lint"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

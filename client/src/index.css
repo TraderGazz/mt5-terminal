@@ -1,0 +1,129 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 211 100% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: #007AFF;
+    --accent-foreground: #FFFFFF;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
+    --radius: 0.625rem;
+
+    /* MT5 Terminal design tokens (design.md §2) */
+    --bg: #FFFFFF;
+    --bg-secondary: #F2F2F7;
+    /* iOS grouped-list background (MT5 iOS shell) — холодный светло-серый */
+    --bg-grouped: #EFEFF4;
+    --text: #000000;
+    --text-secondary: #8E8E93;
+    --accent: #007AFF;
+    --profit: #34C759;
+    --loss: #FF3B30;
+    --separator: #E5E5E5;
+    --fill: #F2F2F7;
+    --danger-tint: #FF3B301A;
+    --profit-tint: #34C7591A;
+    --chart-up: #34C759;
+    --chart-down: #FF3B30;
+    --chart-grid: #F0F0F3;
+    --chart-crosshair: #8E8E93;
+    --tabbar-bg: #F9F9F9;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Tahoma, Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    @apply bg-background text-foreground;
+    overscroll-behavior-y: none;
+  }
+  /* MT5 white pages (Торговля/История): the decorative status-bar strip above
+     the scroll container must also be white, not the grouped gray. !important
+     because @layer utilities (bg-bg-grouped) otherwise beats @layer base. */
+  div:has(> #app-scroll > .page-white) {
+    background-color: #ffffff !important;
+  }
+  /* Decorative iOS status bar is hidden when installed as a PWA
+     (the real iOS status bar takes over) */
+  @media (display-mode: standalone) {
+    .browser-only {
+      display: none;
+    }
+  }
+}
+
+@layer utilities {
+  /* Tabular numerals for all money / price cells (design.md §3) */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+  /* 0.5px iOS hairlines (design.md §2) */
+  .hairline-b {
+    box-shadow: 0 0.5px 0 0 var(--separator);
+  }
+  .hairline-t {
+    box-shadow: 0 -0.5px 0 0 var(--separator);
+  }
+}
