@@ -1,0 +1,3 @@
+upstream commit: 345582dd714df59077f2cddd91544d3c834f72c2
+source: https://github.com/mobjoy0/mt5-bridge (MIT)
+vendored: 2026-09-08

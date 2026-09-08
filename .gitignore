@@ -29,5 +29,8 @@ test-results/
 playwright-report/
 .playwright/
 
+# mt5 container runtime data (Wine prefix, MT5 profile, logs)
+mt5/container/data/
+
 # misc
 *.tmp

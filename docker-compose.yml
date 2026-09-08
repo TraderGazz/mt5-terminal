@@ -1,7 +1,17 @@
-# Альтернатива портативной БД: PostgreSQL в Docker.
-#   docker compose up -d
-#   psql / init: docker compose exec -T db psql -U terminal -d terminal < database/init.sql
-# Прод на Timeweb использует такой же образ postgres:16.
+# Инфраструктурные сервисы MT5 Terminal: PostgreSQL + MT5-мост.
+# Для локальной разработки приложение (client/server) запускается через `npm run dev`;
+# app-сервисы для прод-развёртывания добавятся отдельно на Этапе 8.
+#
+#   docker compose up -d db          # только база (альтернатива портативной C:\Dev\pgsql)
+#   docker compose up -d mt5         # MT5-мост (нужен Docker с Linux-контейнерами)
+#
+# ПОРТЫ:
+#   5432  — PostgreSQL (локально)
+#   6080  — NoVNC рабочего стола MT5, привязан к 127.0.0.1 (доступ только по SSH-туннелю)
+#   8890  — HTTP+WS мост EA — НЕ публикуется наружу, доступен как http://mt5:8890 внутри сети
+
+name: mt5-terminal
+
 services:
   db:
     image: postgres:16
@@ -20,6 +30,39 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    restart: unless-stopped
+
+  mt5:
+    build:
+      context: ./mt5/container
+    container_name: mt5-terminal-mt5
+    environment:
+      VNC_PASSWORD: ${MT5_VNC_PASSWORD:-changeme}
+      VNC_RESOLUTION: 1440x900
+      VNC_DEPTH: 24
+    ports:
+      # NoVNC только на localhost — наружу открывать нельзя, доступ по SSH-туннелю.
+      - "127.0.0.1:6080:6080"
+      # порт 8890 намеренно НЕ публикуется — только внутренняя сеть mt5net
+    volumes:
+      # КЛЮЧЕВОЕ: WINEPREFIX в постоянном томе, иначе логин/профиль MT5 слетают
+      # при пересборке контейнера.
+      - mt5_wine:/root/.mt5
+      - ./mt5/container/data:/opt/data
+    shm_size: "1gb"
+    networks:
+      - default
+      - mt5net
+    restart: unless-stopped
+
+  # Заглушка-подсказка: backend подключается к мосту так —
+  #   MT5_BRIDGE_URL=http://mt5:8890/v1   MT5_BRIDGE_WS=ws://mt5:8890
+  # и должен быть в сети mt5net.
+
+networks:
+  mt5net:
+    driver: bridge
 
 volumes:
   pgdata:
+  mt5_wine:
