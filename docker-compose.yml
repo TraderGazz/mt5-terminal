@@ -1,0 +1,25 @@
+# Альтернатива портативной БД: PostgreSQL в Docker.
+#   docker compose up -d
+#   psql / init: docker compose exec -T db psql -U terminal -d terminal < database/init.sql
+# Прод на Timeweb использует такой же образ postgres:16.
+services:
+  db:
+    image: postgres:16
+    container_name: mt5-terminal-db
+    environment:
+      POSTGRES_USER: terminal
+      POSTGRES_PASSWORD: terminal
+      POSTGRES_DB: terminal
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U terminal -d terminal"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

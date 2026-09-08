@@ -12,7 +12,13 @@
     "dev:client": "npm --workspace client run dev",
     "dev:server": "npm --workspace server run dev",
     "build": "npm --workspace client run build",
-    "lint": "npm --workspace client run lint"
+    "lint": "npm --workspace client run lint",
+    "db:start": "node scripts/db.mjs start",
+    "db:stop": "node scripts/db.mjs stop",
+    "db:status": "node scripts/db.mjs status",
+    "db:psql": "node scripts/db.mjs psql",
+    "db:init": "node scripts/db.mjs init",
+    "db:reset": "node scripts/db.mjs reset"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
