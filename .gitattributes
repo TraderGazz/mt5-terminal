@@ -1,6 +1,10 @@
 # Normalize line endings: LF in the repo, checked out as-is.
 * text=auto eol=lf
 
+# Windows batch files must be CRLF or cmd.exe mis-parses for-loops/labels.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
 # Binary assets — never touch.
 *.png binary
 *.jpg binary

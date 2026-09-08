@@ -1,23 +1,17 @@
 @echo off
-chcp 65001 >nul
-title MT5 Terminal - остановка
+title MT5 Terminal - stop
 cd /d "%~dp0"
 
 echo.
-echo   MT5 Terminal — остановка
-echo   -----------------------
+echo   Stopping MT5 Terminal...
 echo.
 
-echo   [1/2] Останавливаю сайт и сервер...
+rem --- site and server (ports 3000/3001/4000) ---
 for /f "tokens=5" %%p in ('netstat -ano ^| findstr /r ":300[01] :4000" ^| findstr LISTENING') do taskkill /f /pid %%p >nul 2>&1
-taskkill /f /im node.exe /fi "WINDOWTITLE eq MT5 Terminal*" >nul 2>&1
-echo   [1/2] Сайт остановлен.
-echo.
 
-echo   [2/2] Останавливаю базу данных...
+rem --- database ---
 call npm run db:stop >nul 2>&1
-echo   [2/2] База остановлена.
-echo.
 
-echo   Всё выключено.
-timeout /t 4 >nul
+echo   Done. Everything is off.
+echo.
+ping -n 3 127.0.0.1 >nul 2>&1
