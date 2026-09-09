@@ -1,19 +1,19 @@
 import { Router } from 'express';
-import { getCachedQuotes } from '../services/quotes/index.js';
+import { getBridge } from '../services/mt5-bridge/index.js';
 
 const router = Router();
 
-// GET /api/quotes — cached quotes for the Market Watch page.
-// Optional ?symbol=EURUSD to fetch a single symbol.
-router.get('/', (req, res) => {
-  const data = getCachedQuotes();
-  const { symbol } = req.query;
-  if (symbol) {
-    const q = data.quotes.find((item) => item.symbol === String(symbol).toUpperCase());
-    if (!q) return res.status(404).json({ error: 'Symbol not found' });
-    return res.json({ quote: q, updatedAt: data.updatedAt, refreshSec: data.refreshSec });
+// GET /api/quotes — котировка EURUSD из MT5-моста.
+// (Раньше был кэш нескольких символов + Yahoo; по ТЗ v3 — только EURUSD из MT5.)
+router.get('/', async (req, res) => {
+  const bridge = getBridge();
+  try {
+    const quote = await bridge.quote();
+    res.json({ quotes: [quote], symbol: bridge.symbol, updatedAt: quote.time, source: bridge.status() });
+  } catch (err) {
+    console.error('[quotes] error:', err.message);
+    res.status(502).json({ error: 'MT5-мост недоступен', detail: err.message });
   }
-  res.json(data);
 });
 
 export default router;

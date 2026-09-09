@@ -6,10 +6,14 @@ import { initDb, dbStatus } from './db.js';
 import authRouter, { ensureSeedAdmin } from './routes/auth.js';
 import tradesRouter from './routes/trades.js';
 import quotesRouter from './routes/quotes.js';
+import accountRouter from './routes/account.js';
+import positionsRouter from './routes/positions.js';
+import candlesRouter from './routes/candles.js';
 import uploadRouter from './routes/upload.js';
 import syncRouter from './routes/sync.js';
 import adminRouter from './routes/admin.js';
 import { startSyncScheduler } from './services/sync-service.js';
+import { getBridge } from './services/mt5-bridge/index.js';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -22,14 +26,17 @@ app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
     uptime: process.uptime(),
-    quoteProvider: process.env.QUOTE_PROVIDER || 'mock',
     db: dbStatus(),
+    mt5: getBridge().status(),
   });
 });
 
 app.use('/api/auth', authRouter);
 app.use('/api/trades', tradesRouter);
 app.use('/api/quotes', quotesRouter);
+app.use('/api/account', accountRouter);
+app.use('/api/positions', positionsRouter);
+app.use('/api/candles', candlesRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/sync', syncRouter);
 app.use('/api/admin', adminRouter);
@@ -48,6 +55,7 @@ initDb();
 // Create the first admin user once the DB probe finishes (no-op if users exist).
 setTimeout(() => ensureSeedAdmin(), 1500).unref();
 startSyncScheduler();
+getBridge().start();
 
 app.listen(PORT, () => {
   console.log(`[server] MT5 Terminal API listening on port ${PORT}`);
