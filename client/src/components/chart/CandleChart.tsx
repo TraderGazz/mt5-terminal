@@ -18,7 +18,8 @@ import type {
   Time,
   UTCTimestamp,
 } from 'lightweight-charts';
-import { TF_SECONDS, generateCandles, type MockCandle, type Timeframe } from './candles';
+import { TF_SECONDS, type MockCandle, type Timeframe } from './candles';
+import { getCandleSeries, useCandleData } from '@/data/candles';
 import { computeFractals, computeIchimoku, type IndicatorPoint } from './indicators';
 import type { Quote } from '@/data/quotes';
 import { POSITIONS } from '@/mocks/positions';
@@ -82,6 +83,7 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
   const dataLenRef = useRef(0);
   const crosshairOnRef = useRef(crosshairOn);
   const [ohlc, setOhlc] = useState<{ bar: BarData<Time>; visible: boolean } | null>(null);
+  const candleVersion = useCandleData(meta.symbol, timeframe, meta.digits);
 
   // Keep the ref current so chart-created closures see the latest toggle.
   useEffect(() => {
@@ -108,7 +110,7 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
 
     const digits = meta.digits;
     const bid = quote?.bid ?? meta.baseBid;
-    const candles = generateCandles(meta.symbol, timeframe, digits, bid);
+    const candles = getCandleSeries(meta.symbol, timeframe, digits, bid);
     dataLenRef.current = candles.length;
     lastCandleRef.current = candles[candles.length - 1];
 
@@ -327,7 +329,7 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
     // Chart/data rebuild only on symbol or timeframe change; live ticks are
     // applied by the effect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meta.symbol, meta.digits, meta.baseBid, meta.baseChangePct, timeframe]);
+  }, [meta.symbol, meta.digits, meta.baseBid, meta.baseChangePct, timeframe, candleVersion]);
 
   // Live: morph the last candle from the quote ticker (~3s demo ticks).
   useEffect(() => {
