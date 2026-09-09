@@ -17,6 +17,7 @@ import adminRouter from './routes/admin.js';
 import { startSyncScheduler } from './services/sync-service.js';
 import { getBridge } from './services/mt5-bridge/index.js';
 import { attachWsHub } from './services/ws-hub.js';
+import { startMt5Sync } from './services/mt5-sync.js';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -60,6 +61,7 @@ initDb();
 setTimeout(() => ensureSeedAdmin(), 1500).unref();
 startSyncScheduler();
 getBridge().start();
+startMt5Sync();
 
 const server = http.createServer(app);
 attachWsHub(server);
