@@ -134,11 +134,8 @@ router.patch('/sync-settings', wrap(async (req, res) => {
     updates.push(`enabled = $${params.length}`);
   }
   if (direction !== undefined) {
-    const allowed = ['rusinvest_to_alfaforex', 'alfaforex_to_rusinvest'];
-    if (!allowed.includes(direction)) {
-      return res.status(400).json({ error: `direction must be one of: ${allowed.join(', ')}` });
-    }
-    params.push(direction);
+    // Автообмен односторонний: терминал → сайт заказчика (ТЗ v3).
+    params.push(String(direction).slice(0, 64));
     updates.push(`direction = $${params.length}`);
   }
   if (reverse_enabled !== undefined) {
