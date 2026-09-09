@@ -5,8 +5,8 @@ import Toast from '@/components/Toast';
 import PositionSheet, { type LivePositionData } from '@/components/trade/PositionSheet';
 import { ACCOUNT } from '@/mocks/account';
 import { POSITIONS, type Position } from '@/mocks/positions';
-import { useQuotes } from '@/mocks/useQuotes';
-import { refreshQuotes, type Quote } from '@/mocks/quotes';
+import { useQuotes } from '@/data/useQuotes';
+import { refreshQuotes, type Quote } from '@/data/quotes';
 import { getSymbolMeta } from '@/mocks/symbols';
 import { formatPrice } from '@/lib/format';
 

@@ -7,8 +7,8 @@ import ActionSheet from '@/components/ActionSheet';
 import Toast from '@/components/Toast';
 import CandleChart from '@/components/chart/CandleChart';
 import { TIMEFRAMES, type Timeframe } from '@/components/chart/candles';
-import { ensureSymbols } from '@/mocks/quotes';
-import { useQuote } from '@/mocks/useQuotes';
+import { ensureSymbols } from '@/data/quotes';
+import { useQuote } from '@/data/useQuotes';
 import { SYMBOLS, getSymbolMeta, type SymbolMeta } from '@/mocks/symbols';
 import { cn } from '@/lib/utils';
 

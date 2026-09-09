@@ -20,7 +20,7 @@ import type {
 } from 'lightweight-charts';
 import { TF_SECONDS, generateCandles, type MockCandle, type Timeframe } from './candles';
 import { computeFractals, computeIchimoku, type IndicatorPoint } from './indicators';
-import type { Quote } from '@/mocks/quotes';
+import type { Quote } from '@/data/quotes';
 import { POSITIONS } from '@/mocks/positions';
 import type { SymbolMeta } from '@/mocks/symbols';
 import { formatPrice } from '@/lib/format';

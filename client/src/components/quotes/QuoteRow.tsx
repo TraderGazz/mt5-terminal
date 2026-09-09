@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Reorder, motion, useDragControls } from 'framer-motion';
 import { Hourglass } from 'lucide-react';
-import type { Quote } from '@/mocks/quotes';
+import type { Quote } from '@/data/quotes';
 import { getSymbolMeta } from '@/mocks/symbols';
 import { MINUS, formatPrice, formatTime } from '@/lib/format';
 import BigPrice from './BigPrice';
