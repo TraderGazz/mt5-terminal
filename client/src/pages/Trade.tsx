@@ -3,8 +3,9 @@ import { animate, motion } from 'framer-motion';
 import { Briefcase, Plus } from 'lucide-react';
 import Toast from '@/components/Toast';
 import PositionSheet, { type LivePositionData } from '@/components/trade/PositionSheet';
-import { ACCOUNT } from '@/mocks/account';
-import { POSITIONS, type Position } from '@/mocks/positions';
+import { useAccount } from '@/data/account';
+import { usePositions } from '@/data/positions';
+import type { Position } from '@/data/positions';
 import { useQuotes } from '@/data/useQuotes';
 import { refreshQuotes, type Quote } from '@/data/quotes';
 import { getSymbolMeta } from '@/mocks/symbols';
@@ -69,6 +70,8 @@ function AccountRow({ label, value }: { label: string; value: string }) {
 }
 
 export default function TradePage() {
+  const account = useAccount();
+  const positions = usePositions();
   const quotes = useQuotes();
   const quoteMap = useMemo(() => new Map(quotes.map((q) => [q.symbol, q])), [quotes]);
 
@@ -86,11 +89,14 @@ export default function TradePage() {
     hasMountedOnce = true;
   }, []);
 
-  const live = useMemo(() => POSITIONS.map((p) => toLive(p, quoteMap.get(p.symbol))), [quoteMap]);
+  const live = useMemo(
+    () => positions.map((p) => toLive(p, quoteMap.get(p.symbol))),
+    [positions, quoteMap],
+  );
   const totalProfit = useMemo(() => live.reduce((acc, l) => acc + l.profit, 0), [live]);
 
-  const equity = ACCOUNT.balance + totalProfit;
-  const freeMargin = equity - ACCOUNT.margin;
+  const equity = account.balance + totalProfit;
+  const freeMargin = equity - account.margin;
 
   // Hero count-up on first mount (0 → value, 600ms ease-out)
   const initialTotalRef = useRef(totalProfit);
@@ -201,7 +207,7 @@ export default function TradePage() {
               heroValue < 0 ? 'text-loss' : 'text-accent'
             }`}
           >
-            {mt5Money(heroValue)} {ACCOUNT.currency}
+            {mt5Money(heroValue)} {account.currency}
           </motion.div>
         </div>
         <button
@@ -220,11 +226,11 @@ export default function TradePage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, delay: firstMount ? 0.1 : 0 }}
       >
-        <AccountRow label="Баланс:" value={mt5Money(ACCOUNT.balance)} />
+        <AccountRow label="Баланс:" value={mt5Money(account.balance)} />
         <AccountRow label="Средства:" value={mt5Money(equity)} />
-        <AccountRow label="Маржа:" value={mt5Money(ACCOUNT.margin)} />
+        <AccountRow label="Маржа:" value={mt5Money(account.margin)} />
         <AccountRow label="Свободная маржа:" value={mt5Money(freeMargin)} />
-        <AccountRow label="Уровень маржи (%):" value={ACCOUNT.marginLevel.toFixed(2)} />
+        <AccountRow label="Уровень маржи (%):" value={account.marginLevel.toFixed(2)} />
       </motion.div>
 
       {/* Section header — full-width light-gray band with bold black title (MT5 iOS) */}

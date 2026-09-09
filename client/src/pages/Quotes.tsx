@@ -9,7 +9,7 @@ import QuoteRow, { QuoteFlashStyles } from '@/components/quotes/QuoteRow';
 import { useQuotes } from '@/data/useQuotes';
 import { ensureSymbols, refreshQuotes } from '@/data/quotes';
 import { EXTRA_SYMBOLS, SYMBOLS, getSymbolMeta } from '@/mocks/symbols';
-import { ACCOUNT } from '@/mocks/account';
+import { useAccount } from '@/data/account';
 import { formatTime } from '@/lib/format';
 
 /** First-mount stagger happens only once per session (design.md §6). */
@@ -26,6 +26,7 @@ const HEADER_BTN =
   'flex h-11 items-center justify-center px-1 text-black transition-opacity duration-150 active:opacity-50';
 
 export default function QuotesPage() {
+  const account = useAccount();
   const navigate = useNavigate();
   const quotes = useQuotes();
   const quoteMap = useMemo(() => new Map(quotes.map((q) => [q.symbol, q])), [quotes]);
@@ -320,9 +321,9 @@ export default function QuotesPage() {
         onClose={() => setAccountSheet(false)}
         title={
           <>
-            Счёт {ACCOUNT.accountId}
+            Счёт {account.accountId}
             <br />
-            {ACCOUNT.company} · {ACCOUNT.server}
+            {account.company} · {account.server}
           </>
         }
         actions={[

@@ -6,7 +6,7 @@ import NavBar, { BackButton } from '@/components/NavBar';
 import ActionSheet from '@/components/ActionSheet';
 import Toast from '@/components/Toast';
 import BrokerLogo from '@/components/auth/BrokerLogo';
-import { ACCOUNT } from '@/mocks/account';
+import { useAccount } from '@/data/account';
 
 /** Company name with straight quotes, exactly as in MT5 iOS. */
 const COMPANY_TITLE = 'ООО "Альфа-Форекс"';
@@ -20,15 +20,6 @@ const BADGES = [
   { label: 'Hedge', color: '#007AFF' },
 ] as const;
 
-const INFO_ROWS: Array<{ label: string; value: string }> = [
-  { label: 'Имя', value: ACCOUNT.holder },
-  { label: 'Email', value: '' },
-  { label: 'Телефон', value: '' },
-  { label: 'Логин', value: String(ACCOUNT.accountId) },
-  { label: 'Сервер', value: ACCOUNT.server },
-  { label: 'Подключен', value: ACCOUNT.accessServer },
-];
-
 const ROW_CLS =
   'flex h-12 w-full items-center px-4 text-left transition-colors duration-150 active:bg-[#D9D9DE]';
 
@@ -39,8 +30,18 @@ const ROW_CLS =
  */
 export default function AccountPage() {
   const navigate = useNavigate();
+  const account = useAccount();
   const [toast, setToast] = useState<string | null>(null);
   const [deleteSheet, setDeleteSheet] = useState(false);
+
+  const INFO_ROWS: Array<{ label: string; value: string }> = [
+    { label: 'Имя', value: account.holder },
+    { label: 'Email', value: '' },
+    { label: 'Телефон', value: '' },
+    { label: 'Логин', value: String(account.accountId) },
+    { label: 'Сервер', value: account.server },
+    { label: 'Подключен', value: account.accessServer },
+  ];
 
   return (
     <AppShell>
@@ -51,10 +52,10 @@ export default function AccountPage() {
         <div className="flex flex-col items-center bg-bg px-4 pb-5 pt-3 text-center">
           <BrokerLogo size={64} />
           <h1 className="mt-3 text-[17px] font-semibold leading-[22px] tracking-[-0.41px] text-black">
-            {ACCOUNT.holder}
+            {account.holder}
           </h1>
           <p className="tnum mt-0.5 text-[13px] leading-[18px] tracking-[-0.08px] text-text-secondary">
-            {ACCOUNT.accountId} - {ACCOUNT.server}
+            {account.accountId} - {account.server}
           </p>
           <p className="tnum text-[13px] leading-[18px] tracking-[-0.08px] text-text-secondary">
             {BALANCE_LABEL}

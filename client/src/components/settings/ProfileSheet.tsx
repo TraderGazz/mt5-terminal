@@ -1,21 +1,10 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { ACCOUNT } from '@/mocks/account';
+import { useAccount } from '@/data/account';
 
 interface ProfileSheetProps {
   open: boolean;
   onClose: () => void;
 }
-
-/** Read-only profile detail rows (settings.md §1). */
-const ROWS: Array<{ label: string; value: string }> = [
-  { label: 'ФИО', value: ACCOUNT.holder },
-  { label: 'Компания', value: ACCOUNT.company },
-  { label: 'Счёт', value: String(ACCOUNT.accountId) },
-  { label: 'Сервер', value: ACCOUNT.server },
-  { label: 'Валюта счёта', value: ACCOUNT.currency },
-  { label: 'Плечо', value: '1:100' },
-  { label: 'Подключено', value: '12.05.2025' },
-];
 
 /**
  * Profile detail bottom sheet (settings.md §1): slides up 350ms over a fading
@@ -23,6 +12,16 @@ const ROWS: Array<{ label: string; value: string }> = [
  * Scoped to the phone column.
  */
 export default function ProfileSheet({ open, onClose }: ProfileSheetProps) {
+  const account = useAccount();
+  const ROWS: Array<{ label: string; value: string }> = [
+    { label: 'ФИО', value: account.holder },
+    { label: 'Компания', value: account.company },
+    { label: 'Счёт', value: String(account.accountId) },
+    { label: 'Сервер', value: account.server },
+    { label: 'Валюта счёта', value: account.currency },
+    { label: 'Плечо', value: '1:100' },
+    { label: 'Подключено', value: '12.05.2025' },
+  ];
   return (
     <AnimatePresence>
       {open && (

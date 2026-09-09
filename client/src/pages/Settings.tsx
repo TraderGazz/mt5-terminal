@@ -19,7 +19,7 @@ import {
   IconOtp,
   IconTradays,
 } from '@/components/settings/icons';
-import { ACCOUNT } from '@/mocks/account';
+import { useAccount } from '@/data/account';
 
 const IOS_EASE: [number, number, number, number] = [0.32, 0.72, 0, 1];
 
@@ -89,6 +89,7 @@ const CARD_CLS = 'mx-5 overflow-hidden rounded-[20px] bg-white';
  */
 export default function SettingsPage() {
   const navigate = useNavigate();
+  const account = useAccount();
   const [stub, setStub] = useState<SettingsRowDef | null>(null);
   const [langSheet, setLangSheet] = useState(false);
 
@@ -127,16 +128,16 @@ export default function SettingsPage() {
         >
           <span className="min-w-0 flex-1 text-center">
             <span className="block truncate text-[17px] font-medium leading-[20px] tracking-[-0.41px] text-black">
-              {ACCOUNT.holder}
+              {account.holder}
             </span>
             <span className="block truncate text-[15px] leading-[20px] tracking-[-0.24px] text-black">
               {COMPANY_TITLE}
             </span>
             <span className="tnum mt-[5px] block truncate text-[15px] leading-[20px] tracking-[-0.24px] text-black">
-              {ACCOUNT.accountId} - {ACCOUNT.server}
+              {account.accountId} - {account.server}
             </span>
             <span className="block truncate text-[15px] leading-[20px] tracking-[-0.24px] text-black">
-              {ACCOUNT.accessServer}
+              {account.accessServer}
             </span>
           </span>
           <ChevronRight
