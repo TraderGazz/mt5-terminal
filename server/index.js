@@ -1,4 +1,5 @@
 import 'dotenv/config'; // must be first: loads .env before other modules read process.env
+import http from 'node:http';
 import express from 'express';
 import cors from 'cors';
 
@@ -14,6 +15,7 @@ import syncRouter from './routes/sync.js';
 import adminRouter from './routes/admin.js';
 import { startSyncScheduler } from './services/sync-service.js';
 import { getBridge } from './services/mt5-bridge/index.js';
+import { attachWsHub } from './services/ws-hub.js';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -57,6 +59,9 @@ setTimeout(() => ensureSeedAdmin(), 1500).unref();
 startSyncScheduler();
 getBridge().start();
 
-app.listen(PORT, () => {
-  console.log(`[server] MT5 Terminal API listening on port ${PORT}`);
+const server = http.createServer(app);
+attachWsHub(server);
+
+server.listen(PORT, () => {
+  console.log(`[server] MT5 Terminal API + WS listening on port ${PORT}`);
 });
