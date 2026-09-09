@@ -28,6 +28,7 @@ function resolveRange({ period, from, to }) {
 }
 
 const dbRowToDeal = (r) => ({
+  id: Number(r.id),
   ticket: Number(r.ticket),
   positionId: r.position_id ? Number(r.position_id) : null,
   orderTicket: r.order_ticket ? Number(r.order_ticket) : null,
@@ -58,6 +59,21 @@ async function loadDeals(range) {
   const deals = await getBridge().history({ from: range.from, to: range.to });
   return { deals, from: 'bridge' };
 }
+
+// GET /api/history/raw — все строки за всё время, разбитые по категориям.
+// Мобильный фронт фильтрует/агрегирует/считает итоги на клиенте (дизайн заморожен).
+router.get('/raw', authRequired, async (req, res) => {
+  try {
+    const { deals } = await loadDeals({ from: null, to: null });
+    const trade = deals.filter((d) => d.dealType === 'buy' || d.dealType === 'sell');
+    const balanceOps = deals.filter((d) => d.dealType === 'balance' || d.dealType === 'withdrawal');
+    const cfdOps = deals.filter((d) => d.dealType === 'cfd');
+    res.json({ deals: trade, balanceOps, cfdOps, source: getBridge().status() });
+  } catch (err) {
+    console.error('[history/raw] error:', err.message);
+    res.status(502).json({ error: 'Не удалось получить историю', detail: err.message });
+  }
+});
 
 // GET /api/history?tab=deals|positions|orders&symbol=&from=&to=&period=&sort=
 router.get('/', authRequired, async (req, res) => {

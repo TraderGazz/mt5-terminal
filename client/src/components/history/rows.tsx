@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowDownLeft, ArrowUpRight, Clock } from 'lucide-react';
-import type { Deal } from '@/mocks/history';
+import type { Deal } from '@/data/history';
 import { formatPrice, formatVolume, formatDate, formatTimeShort } from '@/lib/format';
 import { formatDayTime, formatFullDateTime, formatMoneyMT5, formatSignedMoneyMT5 } from './utils';
 

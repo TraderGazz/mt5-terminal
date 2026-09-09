@@ -6,9 +6,9 @@ import NavBar, { BackButton } from '@/components/NavBar';
 import Toast from '@/components/Toast';
 import TypeChip from '@/components/trade/TypeChip';
 import DetailRow, { RowGroup } from '@/components/trade/DetailRow';
-import { getDeal, useDealsVersion } from '@/mocks-trade/editStore';
+import { getDeal, useDealsVersion } from '@/data/history';
 import { getSymbolMeta } from '@/mocks/symbols';
-import type { Deal } from '@/mocks/history';
+import type { Deal } from '@/data/history';
 import {
   formatDateTime,
   formatMoney,

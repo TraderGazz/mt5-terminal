@@ -1,4 +1,4 @@
-import type { Deal } from '@/mocks/history';
+import type { Deal } from '@/data/history';
 import { formatDateTime, formatPrice, formatVolume } from '@/lib/format';
 import { formatPlainMoney } from './utils';
 

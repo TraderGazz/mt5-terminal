@@ -52,6 +52,7 @@ export interface ApiCandle {
 }
 
 export interface ApiHistoryRow {
+  id?: number;
   ticket: number;
   positionId: number | null;
   orderTicket: number | null;
@@ -116,6 +117,14 @@ export interface HistoryQuery {
 
 export const getHistory = (q: HistoryQuery) =>
   api<ApiHistoryResponse>('/history', { query: q as Record<string, string | undefined> });
+
+export interface ApiHistoryRaw {
+  deals: ApiHistoryRow[];
+  balanceOps: ApiHistoryRow[];
+  cfdOps: ApiHistoryRow[];
+}
+
+export const getHistoryRaw = () => api<ApiHistoryRaw>('/history/raw');
 
 export const patchTrade = (id: number, body: Record<string, unknown>) =>
   api<{ trade: unknown }>(`/trades/${id}`, { method: 'PATCH', body });

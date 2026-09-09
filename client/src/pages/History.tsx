@@ -4,8 +4,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Check, Clock } from 'lucide-react';
 import ActionSheet from '@/components/ActionSheet';
 import Toast from '@/components/Toast';
-import { BALANCE_OPS, CFD_OPS, type Deal } from '@/mocks/history';
-import { getDeals, useDealsVersion } from '@/mocks-trade/editStore';
+import type { Deal } from '@/data/history';
+import { getBalanceOps, getCfdOps, getDeals, useDealsVersion } from '@/data/history';
 import { getSymbolMeta } from '@/mocks/symbols';
 import { formatMoneyMT5 } from '@/components/history/utils';
 import SegmentedControl from '@/components/history/SegmentedControl';
@@ -275,20 +275,20 @@ export default function HistoryPage() {
   // Balance operations (deposits/withdrawals) feed ONLY the totals block —
   // the «Баланс» tab was removed per the MT5 iOS original (3 tabs only).
   const balanceOps = useMemo(
-    () => BALANCE_OPS.filter((d) => d.closeTime >= range.from && d.closeTime <= range.to),
-    [range],
+    () => getBalanceOps().filter((d) => d.closeTime >= range.from && d.closeTime <= range.to),
+    [range, dealsVersion],
   );
 
   // CFD adjustments for the «CFD» totals row (respects symbol + period).
   const cfdOps = useMemo(
     () =>
-      CFD_OPS.filter(
+      getCfdOps().filter(
         (d) =>
           (filter.symbol == null || d.symbol === filter.symbol) &&
           d.closeTime >= range.from &&
           d.closeTime <= range.to,
       ),
-    [filter.symbol, range],
+    [filter.symbol, range, dealsVersion],
   );
 
   const totals = useMemo(() => {

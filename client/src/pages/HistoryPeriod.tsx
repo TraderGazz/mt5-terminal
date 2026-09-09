@@ -5,7 +5,7 @@ import { Check, ChevronRight } from 'lucide-react';
 import NavBar, { BackButton } from '@/components/NavBar';
 import ActionSheet from '@/components/ActionSheet';
 import Toast from '@/components/Toast';
-import { HISTORY } from '@/mocks/history';
+import { getAllRows } from '@/data/history';
 import { formatDate } from '@/lib/format';
 import { RowSeparator } from '@/components/history/Section';
 import {
@@ -123,7 +123,7 @@ export default function HistoryPeriodPage() {
   /** Deals matching the current (not yet applied) selection — for the report. */
   const reportDeals = useMemo(() => {
     const range = periodRange({ symbol, period, customFrom, customTo });
-    return HISTORY.filter(
+    return getAllRows().filter(
       (d) =>
         d.type !== 'balance' &&
         (symbol == null || d.symbol === symbol) &&

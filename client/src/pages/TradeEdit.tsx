@@ -5,9 +5,9 @@ import { Briefcase, Minus, Plus } from 'lucide-react';
 import NavBar from '@/components/NavBar';
 import ActionSheet from '@/components/ActionSheet';
 import EditRow, { EDIT_INPUT_CLASS } from '@/components/trade/EditRow';
-import { getDeal, updateDeal, useDealsVersion } from '@/mocks-trade/editStore';
+import { getDeal, updateDeal, useDealsVersion } from '@/data/history';
 import { getSymbolMeta } from '@/mocks/symbols';
-import type { Deal } from '@/mocks/history';
+import type { Deal } from '@/data/history';
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
