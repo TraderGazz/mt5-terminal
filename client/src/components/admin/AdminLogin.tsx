@@ -5,6 +5,8 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useState, type FormEvent } from 'react';
 import { AdminButton, AdminInput, BrandGlyph } from './bits';
+import { IS_API } from '@/config';
+import { login as apiLogin } from '@/api/auth';
 
 export default function AdminLogin({ onLogin }: { onLogin: () => void }) {
   const [login, setLogin] = useState('');
@@ -13,6 +15,15 @@ export default function AdminLogin({ onLogin }: { onLogin: () => void }) {
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
+    if (IS_API) {
+      apiLogin(login.trim(), password)
+        .then((user) => {
+          if (user.role === 'admin') onLogin();
+          else setError(true);
+        })
+        .catch(() => setError(true));
+      return;
+    }
     if (login.trim() === 'admin' && password === 'admin') {
       onLogin();
     } else {

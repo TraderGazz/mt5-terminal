@@ -8,12 +8,13 @@
 
 | Папка | Что это | Статус |
 |---|---|---|
-| `client/` | Мобильная PWA — React 19 + TS + Vite 7 + Tailwind 3.4 + lightweight-charts 5 | вёрстка готова, данные — моки |
-| `server/` | Backend — Node.js + Express + PostgreSQL | каркас, довести до ТЗ v2 |
-| `database/` | `init.sql` — схема PostgreSQL | обновить под ТЗ v2 (`deal_type`, `balance_ops`) |
-| `desktop/` | ПК-версия (2 страницы) | не начата (Этап 7) |
-| `platform-gate/` | Страница выбора платформы | не начата (Этап 6) |
-| `docs/` | ТЗ, план, спецификация дизайна | — |
+| `client/` | Мобильная PWA — React 19 + TS + Vite 7 + Tailwind 3.4 + lightweight-charts 5 | вёрстка принята; данные — mock \| api (флаг) |
+| `server/` | Backend — Node.js + Express + PostgreSQL + WebSocket-хаб | Этапы 1–2 закрыты |
+| `database/` | `init.sql` + `migrations/` — схема PostgreSQL (ТЗ v2) | готово |
+| `mt5/` | MT5-мост: Docker-контейнер (Wine+MT5+EA) + исходники EA | вендорнут, разворачивается на Этапе 4 |
+| `desktop/` | ПК-версия (Торговля + История) — React + Vite | каркас (Этап 7, черновик) |
+| `platform-gate/` | Страница выбора платформы — статика | готово (Этап 6) |
+| `docs/` | ТЗ (v2), план (v3), спецификация дизайна | — |
 | `design/` | Эталонные скриншоты принятой версии | ⏳ ждём от заказчика |
 
 ## Документы
@@ -33,14 +34,24 @@
 ```bash
 npm install          # ставит зависимости во всех воркспейсах (один раз)
 npm run db:start     # поднять локальную PostgreSQL (C:\Dev\pgsql)
-npm run dev          # client (Vite :3000) + server (Express :4000) параллельно
+npm run dev          # client (:3000) + server (:4000)
+npm run dev:all      # + desktop (:3100)
 npm run db:stop      # остановить базу
 ```
-Прочее: `npm run db:reset` (пересоздать БД по init.sql), `npm run db:psql` (консоль psql),
-`npm run dev:client` / `npm run dev:server` по отдельности.
+Прочее: `npm run db:reset` (пересоздать БД), `npm run db:psql` (консоль psql),
+`npm run dev:client` / `dev:server` / `dev:desktop` по отдельности.
 
-Backend без PostgreSQL тоже стартует: `/api/health` и `/api/quotes` работают,
-data-роуты отвечают `503`. Вход в API/админку: `admin` / `admin123`.
+### Режим данных мобильного клиента
+
+По умолчанию `mock` — вёрстка на моках, как принято заказчиком.
+Чтобы включить реальные данные (backend + PostgreSQL + MT5-мост):
+создать `client/.env.local` с `VITE_DATA_SOURCE=api`, перезапустить.
+Вход: `admin` / `admin123`. Удалить файл → снова демо-режим.
+
+ПК-версия (`desktop/`) всегда работает с реальным backend.
+
+Backend без PostgreSQL тоже стартует: `/api/health`, `/api/quotes`, `/api/candles`
+работают от MT5-моста; роуты с БД отвечают `503`.
 
 ## Правила проекта
 
