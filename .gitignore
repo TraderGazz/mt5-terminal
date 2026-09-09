@@ -34,3 +34,6 @@ mt5/container/data/
 
 # misc
 *.tmp
+
+# ts build info
+*.tsbuildinfo
