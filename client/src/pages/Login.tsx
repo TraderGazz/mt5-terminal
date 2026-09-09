@@ -9,6 +9,8 @@ import BrokerLogo from '@/components/auth/BrokerLogo';
 import IosToggle from '@/components/auth/IosToggle';
 import { startSession } from '@/components/auth/session';
 import { ACCOUNT } from '@/mocks/account';
+import { IS_API } from '@/config';
+import { login as apiLogin } from '@/api/auth';
 
 const SERVERS = ['AlfaForexRU-Real', 'AlfaForexRU-Demo'];
 
@@ -41,21 +43,36 @@ export default function LoginPage() {
 
   const canSubmit = login.trim().length > 0 && password.length > 0 && !submitting;
 
+  const fail = (msg: string) => {
+    setSubmitting(false);
+    setError(msg);
+    setPassword('');
+    setShakeKey((k) => k + 1);
+  };
+
   const onSubmit = (e?: FormEvent) => {
     e?.preventDefault();
     if (!canSubmit) return;
     setSubmitting(true);
     setError(null);
+
+    if (IS_API) {
+      apiLogin(login.trim(), password)
+        .then(() => {
+          startSession(login.trim()); // мок-сессия для совместимости UI
+          navigate('/', { replace: true });
+        })
+        .catch((err: Error) => fail(err.message || 'Неверный логин или пароль'));
+      return;
+    }
+
     // Mock auth round-trip (auth.md §3: inline spinner, 1s mock delay).
     window.setTimeout(() => {
       if (password === DEMO_PASSWORD) {
         startSession(login.trim());
         navigate('/', { replace: true });
       } else {
-        setSubmitting(false);
-        setError('Неверный логин или пароль');
-        setPassword('');
-        setShakeKey((k) => k + 1);
+        fail('Неверный логин или пароль');
       }
     }, 1000);
   };

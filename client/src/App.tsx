@@ -1,5 +1,7 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
+import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router';
 import Layout from '@/components/Layout';
+import { IS_API } from '@/config';
+import { isAuthed } from '@/api/auth';
 import QuotesPage from '@/pages/Quotes';
 import ChartPage from '@/pages/Chart';
 import TradePage from '@/pages/Trade';
@@ -14,25 +16,33 @@ import AdminPage from '@/pages/Admin';
 import EmbedTradePage from '@/pages/EmbedTrade';
 import EmbedHistoryPage from '@/pages/EmbedHistory';
 
+/** В режиме api закрывает маршруты без JWT. В режиме mock — прозрачна (no-op). */
+function RequireAuth() {
+  if (IS_API && !isAuthed()) return <Navigate to="/login" replace />;
+  return <Outlet />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
         {/* Tabbed pages with app chrome (NavBar slot + TabBar) */}
-        <Route element={<Layout />}>
-          <Route index element={<QuotesPage />} />
-          <Route path="chart" element={<ChartPage />} />
-          <Route path="trade" element={<TradePage />} />
-          <Route path="trade/:id" element={<TradeDetailPage />} />
-          <Route path="trade/:id/edit" element={<TradeEditPage />} />
-          <Route path="history" element={<HistoryPage />} />
-          <Route path="history/period" element={<HistoryPeriodPage />} />
-          <Route path="settings" element={<SettingsPage />} />
+        <Route element={<RequireAuth />}>
+          <Route element={<Layout />}>
+            <Route index element={<QuotesPage />} />
+            <Route path="chart" element={<ChartPage />} />
+            <Route path="trade" element={<TradePage />} />
+            <Route path="trade/:id" element={<TradeDetailPage />} />
+            <Route path="trade/:id/edit" element={<TradeEditPage />} />
+            <Route path="history" element={<HistoryPage />} />
+            <Route path="history/period" element={<HistoryPeriodPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+          </Route>
+          <Route path="account" element={<AccountPage />} />
         </Route>
 
         {/* Chrome-less pages: no NavBar / TabBar */}
         <Route path="login" element={<LoginPage />} />
-        <Route path="account" element={<AccountPage />} />
         <Route path="admin" element={<AdminPage />} />
         <Route path="embed/trade" element={<EmbedTradePage />} />
         <Route path="embed/history" element={<EmbedHistoryPage />} />
