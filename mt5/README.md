@@ -37,9 +37,10 @@ docker compose up -d mt5
 ручная настройка через браузер:
 
 1. SSH-туннель к серверу: `ssh -L 6080:127.0.0.1:6080 user@server`
-2. Открыть `http://localhost:6080`, пароль из `MT5_VNC_PASSWORD`.
+2. Открыть `http://localhost:6080`, пароль из `mt5/container/.env` (`VNC_PASSWORD`).
 3. Дожать установщики Mono / MT5.
-4. Войти в счёт: сервер (`AlfaForexRU-Real`?), номер счёта, **инвесторский пароль**.
+4. Войти в счёт — данные в `mt5/container/.env` (`MT5_LOGIN` / `MT5_INVESTOR_PASSWORD`
+   / `MT5_SERVER`). Сервер: **AlfaForex-Real**. Пароль инвесторский (только чтение).
 5. Открыть график **EURUSD**, перетащить `SocketBridgeEA` из «Навигатора» на график,
    разрешить, включить «Автоторговлю» (Ctrl+E).
 6. Вкладка «Эксперты» → должно быть `WebSocket server initialized on port 8890`.

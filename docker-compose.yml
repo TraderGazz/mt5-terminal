@@ -36,8 +36,12 @@ services:
     build:
       context: ./mt5/container
     container_name: mt5-terminal-mt5
+    env_file:
+      # секреты (VNC_PASSWORD, данные счёта) — не в репозитории.
+      # Скопировать mt5/container/.env.example → mt5/container/.env
+      - path: ./mt5/container/.env
+        required: false
     environment:
-      VNC_PASSWORD: ${MT5_VNC_PASSWORD:-changeme}
       VNC_RESOLUTION: 1440x900
       VNC_DEPTH: 24
     ports:
