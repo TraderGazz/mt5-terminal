@@ -6,9 +6,12 @@
 #   docker compose up -d mt5         # MT5-мост (нужен Docker с Linux-контейнерами)
 #
 # ПОРТЫ:
-#   5432  — PostgreSQL (локально)
+#   5432  — PostgreSQL, привязан к 127.0.0.1 (только сам сервер, не интернет)
 #   6080  — NoVNC рабочего стола MT5, привязан к 127.0.0.1 (доступ только по SSH-туннелю)
 #   8890  — HTTP+WS мост EA — НЕ публикуется наружу, доступен как http://mt5:8890 внутри сети
+#
+# На проде задать свой пароль БД: создать рядом файл `.env` (не в репозитории,
+# docker compose подхватит его сам) со строкой POSTGRES_PASSWORD=<сильный пароль>.
 
 name: mt5-terminal
 
@@ -18,10 +21,10 @@ services:
     container_name: mt5-terminal-db
     environment:
       POSTGRES_USER: terminal
-      POSTGRES_PASSWORD: terminal
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-terminal}
       POSTGRES_DB: terminal
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
