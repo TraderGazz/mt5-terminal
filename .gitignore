@@ -37,3 +37,6 @@ mt5/container/data/
 
 # ts build info
 *.tsbuildinfo
+
+# секреты серверов/аккаунтов — вообще никогда не коммитим
+.secrets/
