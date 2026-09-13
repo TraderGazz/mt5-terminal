@@ -100,22 +100,29 @@ async function saveDeals(deals) {
 // EA обрезает ответ /history/orders на ~110КБ (не JSON-ошибка, а именно
 // усечение строки на полпути) — на плотных по сделкам днях годовой запрос
 // не помещается целиком. Делим диапазон пополам, пока запрос не влезет.
-const MIN_CHUNK_MS = 15 * 60 * 1000; // мельче 15 минут не дробим — отдаём как есть
+const MIN_CHUNK_MS = 5 * 60 * 1000; // мельче 5 минут не дробим — отдаём как есть
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function fetchHistoryChunked(bridge, from, to) {
+async function fetchHistoryChunked(bridge, from, to, retry = true) {
   try {
     return await bridge.history({ from: from.toISOString(), to: to.toISOString() });
   } catch (err) {
+    // EA — однопоточный MQL5-скрипт: параллельный шквал запросов сам по себе
+    // роняет его в HTTP 500. Один раз пробуем повторить после паузы, прежде
+    // чем дробить дальше.
+    if (retry) {
+      await sleep(300);
+      return fetchHistoryChunked(bridge, from, to, false);
+    }
     const span = to.getTime() - from.getTime();
     if (span <= MIN_CHUNK_MS) {
       console.error(`[mt5-sync] история: диапазон не влезает даже мелкими частями (${from.toISOString()}–${to.toISOString()}):`, err.message);
       return [];
     }
     const mid = new Date(from.getTime() + Math.floor(span / 2));
-    const [a, b] = await Promise.all([
-      fetchHistoryChunked(bridge, from, mid),
-      fetchHistoryChunked(bridge, mid, to),
-    ]);
+    // Последовательно (не Promise.all) — EA не тянет параллельные запросы.
+    const a = await fetchHistoryChunked(bridge, from, mid);
+    const b = await fetchHistoryChunked(bridge, mid, to);
     return [...a, ...b];
   }
 }
