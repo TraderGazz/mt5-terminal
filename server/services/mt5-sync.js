@@ -72,10 +72,7 @@ async function syncPositions(bridge) {
   }
 }
 
-async function syncHistory(bridge) {
-  const from = new Date();
-  from.setMonth(from.getMonth() - HISTORY_MONTHS);
-  const deals = await bridge.history({ from: from.toISOString(), to: new Date().toISOString() });
+async function saveDeals(deals) {
   for (const d of deals) {
     await query(
       `INSERT INTO trades
@@ -100,6 +97,58 @@ async function syncHistory(bridge) {
   return deals.length;
 }
 
+// EA обрезает ответ /history/orders на ~110КБ (не JSON-ошибка, а именно
+// усечение строки на полпути) — на плотных по сделкам днях годовой запрос
+// не помещается целиком. Делим диапазон пополам, пока запрос не влезет.
+const MIN_CHUNK_MS = 15 * 60 * 1000; // мельче 15 минут не дробим — отдаём как есть
+
+async function fetchHistoryChunked(bridge, from, to) {
+  try {
+    return await bridge.history({ from: from.toISOString(), to: to.toISOString() });
+  } catch (err) {
+    const span = to.getTime() - from.getTime();
+    if (span <= MIN_CHUNK_MS) {
+      console.error(`[mt5-sync] история: диапазон не влезает даже мелкими частями (${from.toISOString()}–${to.toISOString()}):`, err.message);
+      return [];
+    }
+    const mid = new Date(from.getTime() + Math.floor(span / 2));
+    const [a, b] = await Promise.all([
+      fetchHistoryChunked(bridge, from, mid),
+      fetchHistoryChunked(bridge, mid, to),
+    ]);
+    return [...a, ...b];
+  }
+}
+
+// Обычная (частая) синхронизация — узкое окно, дешёво и почти всегда без дробления.
+const SYNC_WINDOW_DAYS = Number(process.env.MT5_SYNC_WINDOW_DAYS) || 3;
+
+async function syncHistory(bridge) {
+  const to = new Date();
+  const from = new Date(to.getTime() - SYNC_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const deals = await fetchHistoryChunked(bridge, from, to);
+  return saveDeals(deals);
+}
+
+// Полная выгрузка истории за HISTORY_MONTHS — один раз при старте (не по таймеру),
+// чтобы «зеркалить» терминал полностью, а не только последние несколько дней.
+let backfilled = false;
+export async function backfillHistory() {
+  if (backfilled || !isDbReady()) return;
+  backfilled = true;
+  const bridge = getBridge();
+  const to = new Date();
+  const from = new Date(to);
+  from.setMonth(from.getMonth() - HISTORY_MONTHS);
+  try {
+    const deals = await fetchHistoryChunked(bridge, from, to);
+    const n = await saveDeals(deals);
+    console.log(`[mt5-sync] бэкфилл истории за ${HISTORY_MONTHS} мес. — ${n} строк`);
+  } catch (err) {
+    console.error('[mt5-sync] ошибка бэкфилла истории:', err.message);
+  }
+}
+
 export async function syncNow(reason = 'manual') {
   if (!isDbReady() || running) return;
   running = true;
@@ -120,6 +169,7 @@ export function startMt5Sync() {
   const bridge = getBridge();
   // первый прогон — после того, как проба БД завершится
   setTimeout(() => syncNow('startup'), 4000).unref?.();
+  setTimeout(() => backfillHistory(), 6000).unref?.();
   timer = setInterval(() => syncNow('interval'), INTERVAL_MS);
   timer.unref?.();
   bridge.on('trade', () => syncNow('trade-event'));
