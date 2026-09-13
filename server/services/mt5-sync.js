@@ -216,11 +216,20 @@ function buildPositionsFromDeals(deals) {
 }
 
 // Обычная (частая) синхронизация — узкое окно, дешёво и почти всегда без дробления.
-const SYNC_WINDOW_DAYS = Number(process.env.MT5_SYNC_WINDOW_DAYS) || 3;
+const SYNC_WINDOW_DAYS = Number(process.env.MT5_SYNC_WINDOW_DAYS) || 14;
 
 async function syncHistory(bridge) {
   const to = atUtcMidnight(new Date(Date.now() + DAY_MS)); // включая сегодня целиком
   const from = new Date(to.getTime() - SYNC_WINDOW_DAYS * DAY_MS);
+  if (bridge.mode === 'real') {
+    // Тот же путь, что и в бэкфилле (deals + своя сборка) — mode=positions
+    // у EA теряет записи и использует другую нумерацию тикетов (deal ticket
+    // vs position ticket), что при смешивании с бэкфиллом даёт дубли.
+    const rawDeals = await fetchDealsChunked(bridge, from, to);
+    const positions = buildPositionsFromDeals(rawDeals);
+    const deals = positions.map(normalizeDeal).filter((d) => d.ticket);
+    return saveDeals(deals);
+  }
   const deals = await fetchHistoryChunked(bridge, from, to);
   return saveDeals(deals);
 }
