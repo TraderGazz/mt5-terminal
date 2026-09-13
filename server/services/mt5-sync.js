@@ -97,30 +97,33 @@ async function saveDeals(deals) {
   return deals.length;
 }
 
-// EA обрезает ответ /history/orders на ~110КБ (не JSON-ошибка, а именно
-// усечение строки на полпути) — на плотных по сделкам днях годовой запрос
-// не помещается целиком. Делим диапазон пополам, пока запрос не влезет.
-const MIN_CHUNK_MS = 5 * 60 * 1000; // мельче 5 минут не дробим — отдаём как есть
+// EA принимает from_date/to_date только как ДАТЫ (без времени) и падает в
+// HTTP 500, если from_date === to_date (пустой/нулевой диапазон — похоже на
+// баг самого EA, а не на размер ответа). Поэтому дробим строго по целым
+// суткам (никогда не давая from_date == to_date), а не по времени внутри дня.
+// Отдельно — EA всё ещё может обрезать ответ на ~110КБ на очень плотный по
+// сделкам день; если не помещается даже один день — отдаём как есть (мельче
+// суток дробить нечем, у API нет параметра времени).
+const DAY_MS = 24 * 60 * 60 * 1000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const atUtcMidnight = (d) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 
 async function fetchHistoryChunked(bridge, from, to, retry = true) {
   await sleep(120); // EA однопоточный — не бомбим его запросами впритык
   try {
     return await bridge.history({ from: from.toISOString(), to: to.toISOString() });
   } catch (err) {
-    // EA — однопоточный MQL5-скрипт: параллельный шквал запросов сам по себе
-    // роняет его в HTTP 500. Один раз пробуем повторить после паузы, прежде
-    // чем дробить дальше.
     if (retry) {
       await sleep(300);
       return fetchHistoryChunked(bridge, from, to, false);
     }
-    const span = to.getTime() - from.getTime();
-    if (span <= MIN_CHUNK_MS) {
-      console.error(`[mt5-sync] история: диапазон не влезает даже мелкими частями (${from.toISOString()}–${to.toISOString()}):`, err.message);
+    const days = Math.round((to.getTime() - from.getTime()) / DAY_MS);
+    if (days <= 1) {
+      console.error(`[mt5-sync] история: день не влезает целиком (${from.toISOString().slice(0, 10)}):`, err.message);
       return [];
     }
-    const mid = new Date(from.getTime() + Math.floor(span / 2));
+    const midDays = Math.floor(days / 2) || 1;
+    const mid = new Date(from.getTime() + midDays * DAY_MS);
     // Последовательно (не Promise.all) — EA не тянет параллельные запросы.
     const a = await fetchHistoryChunked(bridge, from, mid);
     const b = await fetchHistoryChunked(bridge, mid, to);
@@ -132,8 +135,8 @@ async function fetchHistoryChunked(bridge, from, to, retry = true) {
 const SYNC_WINDOW_DAYS = Number(process.env.MT5_SYNC_WINDOW_DAYS) || 3;
 
 async function syncHistory(bridge) {
-  const to = new Date();
-  const from = new Date(to.getTime() - SYNC_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const to = atUtcMidnight(new Date(Date.now() + DAY_MS)); // включая сегодня целиком
+  const from = new Date(to.getTime() - SYNC_WINDOW_DAYS * DAY_MS);
   const deals = await fetchHistoryChunked(bridge, from, to);
   return saveDeals(deals);
 }
@@ -151,9 +154,9 @@ export async function backfillHistory() {
   while (running) await sleep(500);
   running = true;
   const bridge = getBridge();
-  const to = new Date();
+  const to = atUtcMidnight(new Date(Date.now() + DAY_MS)); // включая сегодня целиком
   const from = new Date(to);
-  from.setMonth(from.getMonth() - HISTORY_MONTHS);
+  from.setUTCMonth(from.getUTCMonth() - HISTORY_MONTHS);
   try {
     const deals = await fetchHistoryChunked(bridge, from, to);
     const n = await saveDeals(deals);
