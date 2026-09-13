@@ -6,7 +6,7 @@
 import { IS_API } from '@/config';
 import * as mock from '@/mocks/quotes';
 import { wsClient } from '@/api/ws';
-import { getQuote as fetchQuoteRest, type ApiQuote } from '@/api/rest';
+import { getQuotes as fetchQuotesRest, type ApiQuote } from '@/api/rest';
 
 export type { Quote, TickDirection } from '@/mocks/quotes';
 import type { Quote } from '@/mocks/quotes';
@@ -50,8 +50,10 @@ function apiSubscribe(listener: () => void): () => void {
   listeners.add(listener);
   if (!wsUnsub) {
     wsUnsub = wsClient.on('quote', (d) => apply(d as ApiQuote));
-    // первичное значение, пока не пришёл первый WS-кадр
-    fetchQuoteRest().then(apply).catch(() => {});
+    // первичные значения, пока не пришёл первый WS-кадр
+    fetchQuotesRest()
+      .then((qs) => qs.forEach(apply))
+      .catch(() => {});
   }
   return () => {
     listeners.delete(listener);
@@ -63,9 +65,9 @@ function apiSubscribe(listener: () => void): () => void {
 }
 
 const apiRefresh = (): Promise<number> =>
-  fetchQuoteRest()
-    .then((q) => {
-      apply(q);
+  fetchQuotesRest()
+    .then((qs) => {
+      qs.forEach(apply);
       return lastUpdate;
     })
     .catch(() => lastUpdate);

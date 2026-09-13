@@ -100,8 +100,8 @@ export const getAccount = () => api<{ account: ApiAccount }>('/account').then((r
 
 export const getPositions = () => api<{ positions: ApiPosition[] }>('/positions').then((r) => r.positions);
 
-export const getQuote = () =>
-  api<{ quotes: ApiQuote[] }>('/quotes', { auth: false }).then((r) => r.quotes[0]);
+export const getQuotes = () =>
+  api<{ quotes: ApiQuote[] }>('/quotes', { auth: false }).then((r) => r.quotes);
 
 export const getCandles = (timeframe: string, count = 300) =>
   api<{ bars: ApiCandle[] }>('/candles', { query: { timeframe, count } }).then((r) => r.bars);

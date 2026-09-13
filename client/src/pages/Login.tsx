@@ -12,7 +12,7 @@ import { ACCOUNT } from '@/mocks/account';
 import { IS_API } from '@/config';
 import { login as apiLogin } from '@/api/auth';
 
-const SERVERS = ['AlfaForexRU-Real', 'AlfaForexRU-Demo'];
+const SERVERS = ['AlfaForexRU-Real'];
 
 /** Mock credentials (auth.md §4): any non-empty login + password «demo». */
 const DEMO_PASSWORD = 'demo';

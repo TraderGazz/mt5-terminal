@@ -8,6 +8,11 @@ const BASE = (process.env.MT5_BRIDGE_URL || 'http://mt5:8890/v1').replace(/\/$/,
 const WS_URL = process.env.MT5_BRIDGE_WS || 'ws://mt5:8890';
 const SYMBOL = process.env.MT5_SYMBOL || 'EURUSD';
 const TIMEOUT_MS = Number(process.env.MT5_BRIDGE_TIMEOUT_MS) || 8000;
+// Полный список котировок для Market Watch (первый — основной символ счёта).
+const WATCH_SYMBOLS = (process.env.MT5_WATCH_SYMBOLS || `${SYMBOL},USDRUBrfd,XAUUSDrfd,GBPUSDrfd`)
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 async function get(path, params, timeoutMs = TIMEOUT_MS) {
   const url = new URL(BASE + path);
@@ -84,6 +89,20 @@ export class RealBridge extends EventEmitter {
     return get('/quote', { symbol: this.symbol });
   }
 
+  // Котировки по всему списку Market Watch (не только основной символ).
+  // Последовательно — EA однопоточный, параллельные запросы валит в 500.
+  async getQuotes() {
+    const out = [];
+    for (const symbol of WATCH_SYMBOLS) {
+      try {
+        out.push(await get('/quote', { symbol }));
+      } catch (err) {
+        console.error(`[mt5-bridge] котировка ${symbol}:`, err.message);
+      }
+    }
+    return out;
+  }
+
   start() {
     if (this.ws || this.closing) return;
     const WS = globalThis.WebSocket || NodeWebSocket;
@@ -98,8 +117,8 @@ export class RealBridge extends EventEmitter {
     this.ws.addEventListener('open', () => {
       this.connected = true;
       console.log('[mt5-bridge] WS подключён', WS_URL);
-      // подписки: цены EURUSD, свечи M5, события сделок
-      this.#send({ endpoint: '/v1/track/prices', symbols: [this.symbol] });
+      // подписки: цены всего Market Watch, свечи M5 основного символа, события сделок
+      this.#send({ endpoint: '/v1/track/prices', symbols: WATCH_SYMBOLS });
       this.#send({ endpoint: '/v1/track/ohlc', ohlc: [{ time_frame: 'M5', symbol: this.symbol, depth: 2 }] });
       this.#send({ endpoint: '/v1/track/orders', enabled: 'true' });
       this.emit('event', { type: 'bridge_status', connected: true });

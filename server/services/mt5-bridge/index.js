@@ -90,6 +90,15 @@ class Bridge extends EventEmitter {
     return N.normalizeQuote(await this.impl.getQuote());
   }
 
+  // Котировки всего Market Watch (реальный мост — несколько символов; мок —
+  // просто основной символ, у него отдельный список не нужен).
+  async quotes() {
+    if (typeof this.impl.getQuotes === 'function') {
+      return (await this.impl.getQuotes()).map(N.normalizeQuote);
+    }
+    return [await this.quote()];
+  }
+
   status() {
     const staleMs = this.lastEventAt ? Date.now() - this.lastEventAt : null;
     return {

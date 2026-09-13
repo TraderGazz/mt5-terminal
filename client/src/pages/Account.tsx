@@ -16,7 +16,6 @@ const BALANCE_LABEL = '62 636 454.73 RUB';
 
 const BADGES = [
   { label: 'Read Only', color: '#8E8E93' },
-  { label: 'Demo', color: '#34C759' },
   { label: 'Hedge', color: '#007AFF' },
 ] as const;
 
