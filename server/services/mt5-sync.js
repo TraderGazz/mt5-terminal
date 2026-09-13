@@ -8,7 +8,7 @@ import { getBridge } from './mt5-bridge/index.js';
 import { query, isDbReady } from '../db.js';
 
 const INTERVAL_MS = Number(process.env.MT5_SYNC_INTERVAL_MS) || 30_000;
-const HISTORY_MONTHS = Number(process.env.MT5_SYNC_HISTORY_MONTHS) || 12;
+const HISTORY_MONTHS = Number(process.env.MT5_SYNC_HISTORY_MONTHS) || 120; // вся история счёта, не только год
 
 let running = false;
 let timer = null;
