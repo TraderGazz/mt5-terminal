@@ -108,27 +108,39 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const atUtcMidnight = (d) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 
+// Замечено: буфер EA (~110КБ) иногда обрывается РОВНО на границе записи —
+// тогда JSON получается формально валидным, но НЕПОЛНЫМ, без единой ошибки.
+// ~380 байт/запись → предел примерно 289 записей. Поэтому любой ответ
+// длиной >= SUSPICIOUS_LEN считаем потенциально урезанным и дробим дальше
+// принудительно, даже если он успешно распарсился.
+const SUSPICIOUS_LEN = 250;
+
 async function fetchHistoryChunked(bridge, from, to, retry = true) {
   await sleep(120); // EA однопоточный — не бомбим его запросами впритык
+  const days = Math.round((to.getTime() - from.getTime()) / DAY_MS);
+  let result;
   try {
-    return await bridge.history({ from: from.toISOString(), to: to.toISOString() });
+    result = await bridge.history({ from: from.toISOString(), to: to.toISOString() });
+    if (result.length < SUSPICIOUS_LEN || days <= 1) return result;
+    // Похоже на тихий обрыв буфера — раздробим и сверим со сложенной суммой,
+    // на всякий случай берём то, что даёт больше строк.
   } catch (err) {
     if (retry) {
       await sleep(300);
       return fetchHistoryChunked(bridge, from, to, false);
     }
-    const days = Math.round((to.getTime() - from.getTime()) / DAY_MS);
     if (days <= 1) {
       console.error(`[mt5-sync] история: день не влезает целиком (${from.toISOString().slice(0, 10)}):`, err.message);
       return [];
     }
-    const midDays = Math.floor(days / 2) || 1;
-    const mid = new Date(from.getTime() + midDays * DAY_MS);
-    // Последовательно (не Promise.all) — EA не тянет параллельные запросы.
-    const a = await fetchHistoryChunked(bridge, from, mid);
-    const b = await fetchHistoryChunked(bridge, mid, to);
-    return [...a, ...b];
   }
+  const midDays = Math.floor(days / 2) || 1;
+  const mid = new Date(from.getTime() + midDays * DAY_MS);
+  // Последовательно (не Promise.all) — EA не тянет параллельные запросы.
+  const a = await fetchHistoryChunked(bridge, from, mid);
+  const b = await fetchHistoryChunked(bridge, mid, to);
+  const split = [...a, ...b];
+  return result && result.length > split.length ? result : split;
 }
 
 // Обычная (частая) синхронизация — узкое окно, дешёво и почти всегда без дробления.
