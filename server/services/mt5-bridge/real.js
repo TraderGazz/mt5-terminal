@@ -9,10 +9,10 @@ const WS_URL = process.env.MT5_BRIDGE_WS || 'ws://mt5:8890';
 const SYMBOL = process.env.MT5_SYMBOL || 'EURUSD';
 const TIMEOUT_MS = Number(process.env.MT5_BRIDGE_TIMEOUT_MS) || 8000;
 
-async function get(path, params) {
+async function get(path, params, timeoutMs = TIMEOUT_MS) {
   const url = new URL(BASE + path);
   for (const [k, v] of Object.entries(params || {})) if (v != null) url.searchParams.set(k, String(v));
-  const ctl = AbortSignal.timeout(TIMEOUT_MS);
+  const ctl = AbortSignal.timeout(timeoutMs);
   const res = await fetch(url, { signal: ctl });
   if (!res.ok) throw new Error(`bridge ${path} → HTTP ${res.status}`);
   return res.json();
@@ -39,11 +39,15 @@ export class RealBridge extends EventEmitter {
   async getHistory({ from, to } = {}) {
     const toDate = to ? new Date(to) : new Date();
     const fromDate = from ? new Date(from) : new Date(toDate.getTime() - 180 * 24 * 60 * 60 * 1000);
-    return get('/history/orders', {
-      mode: 'positions',
-      from_date: fromDate.toISOString().slice(0, 10),
-      to_date: toDate.toISOString().slice(0, 10),
-    });
+    return get(
+      '/history/orders',
+      {
+        mode: 'positions',
+        from_date: fromDate.toISOString().slice(0, 10),
+        to_date: toDate.toISOString().slice(0, 10),
+      },
+      45_000, // очень плотные по сделкам дни EA считает заметно дольше обычного
+    );
   }
 
   async getCandles({ timeframe = 'M5', from, to } = {}) {
