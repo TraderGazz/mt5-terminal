@@ -24,7 +24,7 @@ function RequireAuth() {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/mobile">
       <Routes>
         {/* Tabbed pages with app chrome (NavBar slot + TabBar) */}
         <Route element={<RequireAuth />}>
