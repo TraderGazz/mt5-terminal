@@ -72,6 +72,14 @@ class Bridge extends EventEmitter {
     return list.map(N.normalizeDeal).filter((d) => d.ticket);
   }
 
+  // Сырые deals (без реконструкции в позиции на стороне EA — там баг).
+  // Только для реального моста; для мока просто нет смысла (свои моки уже
+  // готовые "позиции", реконструкция им не нужна).
+  async dealsRaw({ from, to } = {}) {
+    if (typeof this.impl.getDealsRaw !== 'function') return [];
+    return this.impl.getDealsRaw({ from, to });
+  }
+
   async candles({ timeframe = 'M5', from, to, count } = {}) {
     const res = await this.impl.getCandles({ timeframe, from, to, count });
     const list = Array.isArray(res) ? res : res.bars || res.data || res.rates || [];

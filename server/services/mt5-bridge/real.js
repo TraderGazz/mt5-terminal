@@ -36,6 +36,25 @@ export class RealBridge extends EventEmitter {
     return get('/order/list');
   }
 
+  // Сырые deals за диапазон (без реконструкции в позиции на стороне EA —
+  // там баг, теряет ~10-15% на плотных периодах). Использует mt5-sync для
+  // полного бэкфилла: копит все deals по всему периоду и один раз сшивает
+  // сам, без разрыва на границах суточных чанков.
+  async getDealsRaw({ from, to }) {
+    const toDate = new Date(to);
+    const fromDate = new Date(from);
+    const res = await get(
+      '/history/orders',
+      {
+        mode: 'deals',
+        from_date: fromDate.toISOString().slice(0, 10),
+        to_date: toDate.toISOString().slice(0, 10),
+      },
+      45_000,
+    );
+    return Array.isArray(res) ? res : res.data || [];
+  }
+
   async getHistory({ from, to } = {}) {
     const toDate = to ? new Date(to) : new Date();
     const fromDate = from ? new Date(from) : new Date(toDate.getTime() - 180 * 24 * 60 * 60 * 1000);

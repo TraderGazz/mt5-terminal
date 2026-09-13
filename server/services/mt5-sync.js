@@ -5,6 +5,7 @@
 //
 // Запускается при старте, по интервалу и по событию 'trade' от моста.
 import { getBridge } from './mt5-bridge/index.js';
+import { normalizeDeal } from './mt5-bridge/normalize.js';
 import { query, isDbReady } from '../db.js';
 
 const INTERVAL_MS = Number(process.env.MT5_SYNC_INTERVAL_MS) || 30_000;
@@ -143,6 +144,77 @@ async function fetchHistoryChunked(bridge, from, to, retry = true) {
   return result && result.length > split.length ? result : split;
 }
 
+// EA-реконструкция "positions" из deals теряет ~10-15% на плотных периодах
+// (проверено: 159 закрытий в сырых deals vs 136 у EA в mode=positions за тот
+// же день) — баг в MQL5-коде EA (O(n²) сопоставление IN/OUT по position_id).
+// Поэтому для полного бэкфилла тянем СЫРЫЕ deals и сшиваем позиции сами —
+// здесь такой ошибки нет. Копим ВСЕ deals по всему периоду в один массив и
+// сшиваем один раз в конце — так открытие и закрытие, попавшие в разные
+// суточные чанки, всё равно корректно находят друг друга по position_id.
+async function fetchDealsChunked(bridge, from, to, retry = true) {
+  await sleep(120);
+  const days = Math.round((to.getTime() - from.getTime()) / DAY_MS);
+  let result;
+  try {
+    result = await bridge.dealsRaw({ from: from.toISOString(), to: to.toISOString() });
+    if (result.length < SUSPICIOUS_LEN || days <= 1) return result;
+  } catch (err) {
+    if (retry) {
+      await sleep(300);
+      return fetchDealsChunked(bridge, from, to, false);
+    }
+    if (days <= 1) {
+      console.error(`[mt5-sync] deals: день не влезает целиком (${from.toISOString().slice(0, 10)}):`, err.message);
+      return [];
+    }
+  }
+  const midDays = Math.floor(days / 2) || 1;
+  const mid = new Date(from.getTime() + midDays * DAY_MS);
+  const a = await fetchDealsChunked(bridge, from, mid);
+  const b = await fetchDealsChunked(bridge, mid, to);
+  const split = [...a, ...b];
+  return result && result.length > split.length ? result : split;
+}
+
+// Сшивает сырые deals (DEAL_ENTRY_IN/OUT по position_id) в записи в формате
+// исходного mode=positions — дальше идёт через тот же normalizeDeal.
+function buildPositionsFromDeals(deals) {
+  const byPos = new Map();
+  for (const d of deals) {
+    const pid = Number(d.position_id) || 0;
+    if (!pid) continue; // балансовые операции и т.п. — не позиции
+    if (!byPos.has(pid)) byPos.set(pid, []);
+    byPos.get(pid).push(d);
+  }
+  const out = [];
+  for (const group of byPos.values()) {
+    const ins = group.filter((d) => d.entry === 'DEAL_ENTRY_IN');
+    const outs = group.filter((d) => d.entry === 'DEAL_ENTRY_OUT');
+    if (!ins.length || !outs.length) continue; // ещё открыта, либо не нашли пару
+    const openDeal = ins.reduce((a, b) => (a.time < b.time ? a : b));
+    for (const closeDeal of outs) {
+      out.push({
+        ticket: closeDeal.ticket,
+        position_id: closeDeal.position_id,
+        symbol: closeDeal.symbol || openDeal.symbol,
+        type: closeDeal.type,
+        volume: closeDeal.volume,
+        open_price: openDeal.price,
+        close_price: closeDeal.price,
+        sl_price: closeDeal.sl_price,
+        tp_price: closeDeal.tp_price,
+        swap: closeDeal.swap,
+        commission: closeDeal.commission,
+        profit: closeDeal.profit,
+        open_time: openDeal.time,
+        close_time: closeDeal.time,
+        comment: closeDeal.comment,
+      });
+    }
+  }
+  return out;
+}
+
 // Обычная (частая) синхронизация — узкое окно, дешёво и почти всегда без дробления.
 const SYNC_WINDOW_DAYS = Number(process.env.MT5_SYNC_WINDOW_DAYS) || 3;
 
@@ -170,9 +242,19 @@ export async function backfillHistory() {
   const from = new Date(to);
   from.setUTCMonth(from.getUTCMonth() - HISTORY_MONTHS);
   try {
-    const deals = await fetchHistoryChunked(bridge, from, to);
-    const n = await saveDeals(deals);
-    console.log(`[mt5-sync] бэкфилл истории за ${HISTORY_MONTHS} мес. — ${n} строк`);
+    if (bridge.mode === 'real') {
+      const rawDeals = await fetchDealsChunked(bridge, from, to);
+      const positions = buildPositionsFromDeals(rawDeals);
+      const deals = positions.map(normalizeDeal).filter((d) => d.ticket);
+      const n = await saveDeals(deals);
+      console.log(
+        `[mt5-sync] бэкфилл истории (deals) за ${HISTORY_MONTHS} мес. — ${rawDeals.length} deals → ${positions.length} позиций → ${n} строк в БД`,
+      );
+    } else {
+      const deals = await fetchHistoryChunked(bridge, from, to);
+      const n = await saveDeals(deals);
+      console.log(`[mt5-sync] бэкфилл истории за ${HISTORY_MONTHS} мес. — ${n} строк`);
+    }
   } catch (err) {
     console.error('[mt5-sync] ошибка бэкфилла истории:', err.message);
   } finally {
