@@ -93,13 +93,12 @@ export default function TradePage() {
     () => positions.map((p) => toLive(p, quoteMap.get(p.symbol))),
     [positions, quoteMap],
   );
-  const totalProfit = useMemo(
-    () => live.reduce((acc, l) => acc + l.profit + (l.position.swap ?? 0) + (l.position.commission ?? 0), 0),
-    [live],
-  );
-
-  const equity = account.balance + totalProfit;
-  const freeMargin = equity - account.margin;
+  // Итоги (шапка/hero) берём готовыми со счёта — там уже учтены своп и
+  // комиссия (equity/freeMargin от MT5 всегда точны). Клиентский live[]
+  // пересчёт остаётся только для анимации отдельных строк позиций.
+  const equity = account.equity;
+  const freeMargin = account.freeMargin;
+  const totalProfit = equity - account.balance;
 
   // Hero count-up on first mount (0 → value, 600ms ease-out)
   const initialTotalRef = useRef(totalProfit);
