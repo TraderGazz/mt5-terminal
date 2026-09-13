@@ -104,6 +104,7 @@ const MIN_CHUNK_MS = 5 * 60 * 1000; // мельче 5 минут не дроби
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function fetchHistoryChunked(bridge, from, to, retry = true) {
+  await sleep(120); // EA однопоточный — не бомбим его запросами впритык
   try {
     return await bridge.history({ from: from.toISOString(), to: to.toISOString() });
   } catch (err) {
@@ -143,6 +144,12 @@ let backfilled = false;
 export async function backfillHistory() {
   if (backfilled || !isDbReady()) return;
   backfilled = true;
+  // Занимаем тот же замок, что и syncNow: обычный интервальный синк (каждые
+  // 30с) не должен дёргать EA параллельно с бэкфиллом — EA однопоточный и
+  // валится в HTTP 500 от одновременных запросов, даже с ретраями внутри
+  // самого бэкфилла.
+  while (running) await sleep(500);
+  running = true;
   const bridge = getBridge();
   const to = new Date();
   const from = new Date(to);
@@ -153,6 +160,8 @@ export async function backfillHistory() {
     console.log(`[mt5-sync] бэкфилл истории за ${HISTORY_MONTHS} мес. — ${n} строк`);
   } catch (err) {
     console.error('[mt5-sync] ошибка бэкфилла истории:', err.message);
+  } finally {
+    running = false;
   }
 }
 
