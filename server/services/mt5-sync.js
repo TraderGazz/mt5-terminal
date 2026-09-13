@@ -75,7 +75,7 @@ async function syncPositions(bridge) {
 async function syncHistory(bridge) {
   const from = new Date();
   from.setMonth(from.getMonth() - HISTORY_MONTHS);
-  const deals = await bridge.history({ from: from.toISOString() });
+  const deals = await bridge.history({ from: from.toISOString(), to: new Date().toISOString() });
   for (const d of deals) {
     await query(
       `INSERT INTO trades

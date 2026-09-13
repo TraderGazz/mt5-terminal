@@ -2,6 +2,7 @@
 // Интерфейс идентичен MockBridge. Формы ответов EA будут выверены на Этапе 4
 // против живого моста — здесь заложены ожидаемые эндпоинты по документации.
 import { EventEmitter } from 'node:events';
+import NodeWebSocket from 'ws';
 
 const BASE = (process.env.MT5_BRIDGE_URL || 'http://mt5:8890/v1').replace(/\/$/, '');
 const WS_URL = process.env.MT5_BRIDGE_WS || 'ws://mt5:8890';
@@ -36,19 +37,23 @@ export class RealBridge extends EventEmitter {
   }
 
   async getHistory({ from, to } = {}) {
+    const toDate = to ? new Date(to) : new Date();
+    const fromDate = from ? new Date(from) : new Date(toDate.getTime() - 180 * 24 * 60 * 60 * 1000);
     return get('/history/orders', {
       mode: 'positions',
-      from_date: from ? String(from).slice(0, 10) : undefined,
-      to_date: to ? String(to).slice(0, 10) : undefined,
+      from_date: fromDate.toISOString().slice(0, 10),
+      to_date: toDate.toISOString().slice(0, 10),
     });
   }
 
   async getCandles({ timeframe = 'M5', from, to } = {}) {
+    const toDate = to ? new Date(to) : new Date();
+    const fromDate = from ? new Date(from) : new Date(toDate.getTime() - 90 * 24 * 60 * 60 * 1000);
     return get('/history/prices', {
       symbol: this.symbol,
       time_frame: timeframe,
-      from_date: from ? String(from).slice(0, 10) : undefined,
-      to_date: to ? String(to).slice(0, 10) : undefined,
+      from_date: fromDate.toISOString().slice(0, 10),
+      to_date: toDate.toISOString().slice(0, 10),
     });
   }
 
@@ -58,14 +63,7 @@ export class RealBridge extends EventEmitter {
 
   start() {
     if (this.ws || this.closing) return;
-    let WS;
-    try {
-      WS = globalThis.WebSocket; // Node 22+/24
-    } catch { /* noop */ }
-    if (!WS) {
-      console.error('[mt5-bridge] global WebSocket недоступен — обнови Node или добавь ws');
-      return;
-    }
+    const WS = globalThis.WebSocket || NodeWebSocket;
     try {
       this.ws = new WS(WS_URL);
     } catch (err) {

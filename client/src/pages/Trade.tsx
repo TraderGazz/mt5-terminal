@@ -93,7 +93,10 @@ export default function TradePage() {
     () => positions.map((p) => toLive(p, quoteMap.get(p.symbol))),
     [positions, quoteMap],
   );
-  const totalProfit = useMemo(() => live.reduce((acc, l) => acc + l.profit, 0), [live]);
+  const totalProfit = useMemo(
+    () => live.reduce((acc, l) => acc + l.profit + (l.position.swap ?? 0) + (l.position.commission ?? 0), 0),
+    [live],
+  );
 
   const equity = account.balance + totalProfit;
   const freeMargin = equity - account.margin;

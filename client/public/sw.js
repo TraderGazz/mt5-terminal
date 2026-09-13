@@ -1,5 +1,5 @@
 /* Minimal cache-first service worker for the app shell (design.md §9). */
-const CACHE = 'terminal-shell-v1';
+const CACHE = 'terminal-shell-v2';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './favicon.png'];
 
 self.addEventListener('install', (event) => {
@@ -21,6 +21,13 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET' || !request.url.startsWith(self.location.origin)) return;
+
+  const url = new URL(request.url);
+  // API и WS — всегда напрямую с сервера, никогда не кэшируем (живые данные счёта).
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/ws')) {
+    event.respondWith(fetch(request));
+    return;
+  }
 
   // Cache-first with background population; network response updates the cache.
   event.respondWith(
