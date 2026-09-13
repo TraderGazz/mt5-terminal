@@ -116,6 +116,13 @@ const atUtcMidnight = (d) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth
 // принудительно, даже если он успешно распарсился.
 const SUSPICIOUS_LEN = 250;
 
+// Дни, на которых бэкфилл сдался даже на суточной гранулярности (например,
+// 11.09 — там физически больше данных, чем помещается в буфер EA). Частый
+// синк не должен их перепроверять — иначе одно и то же зависание/500
+// повторяется каждые 30с и кладёт однопоточный EA, ломая заодно live-пуш
+// баланса/позиций через WS. Заполняется backfillHistory().
+const KNOWN_BAD_DAYS = new Set();
+
 async function fetchHistoryChunked(bridge, from, to, retry = true) {
   await sleep(120); // EA однопоточный — не бомбим его запросами впритык
   const days = Math.round((to.getTime() - from.getTime()) / DAY_MS);
@@ -131,6 +138,7 @@ async function fetchHistoryChunked(bridge, from, to, retry = true) {
       return fetchHistoryChunked(bridge, from, to, false);
     }
     if (days <= 1) {
+      KNOWN_BAD_DAYS.add(from.toISOString().slice(0, 10));
       console.error(`[mt5-sync] история: день не влезает целиком (${from.toISOString().slice(0, 10)}):`, err.message);
       return [];
     }
@@ -164,6 +172,7 @@ async function fetchDealsChunked(bridge, from, to, retry = true) {
       return fetchDealsChunked(bridge, from, to, false);
     }
     if (days <= 1) {
+      KNOWN_BAD_DAYS.add(from.toISOString().slice(0, 10));
       console.error(`[mt5-sync] deals: день не влезает целиком (${from.toISOString().slice(0, 10)}):`, err.message);
       return [];
     }
@@ -215,23 +224,42 @@ function buildPositionsFromDeals(deals) {
   return out;
 }
 
-// Обычная (частая) синхронизация — узкое окно, дешёво и почти всегда без дробления.
-const SYNC_WINDOW_DAYS = Number(process.env.MT5_SYNC_WINDOW_DAYS) || 14;
+// Обычная (частая) синхронизация — узкое окно, БЕЗ дробления/ретраев на
+// известных "плохих" днях (KNOWN_BAD_DAYS): та тяжёлая retry-логика годится
+// только для одноразового бэкфилла. Если гонять её каждые 30с на диапазоне,
+// в который постоянно попадает day, что и так не влезает в буфер EA, —
+// однопоточный EA захлёбывается повторными провалами и перестаёт вовремя
+// отвечать даже на обычные запросы счёта/позиций (из-за чего "живые" цифры
+// на сайте замирают). Поэтому здесь — по одному быстрому запросу на день,
+// без сна и без повторных попыток; неудачный день просто пропускается.
+const SYNC_WINDOW_DAYS = Number(process.env.MT5_SYNC_WINDOW_DAYS) || 3;
+
+async function fetchDayFast(bridge, day, real) {
+  const dateStr = day.toISOString().slice(0, 10);
+  if (KNOWN_BAD_DAYS.has(dateStr)) return [];
+  const next = new Date(day.getTime() + DAY_MS);
+  try {
+    if (real) {
+      const rawDeals = await bridge.dealsRaw({ from: day.toISOString(), to: next.toISOString() });
+      return buildPositionsFromDeals(rawDeals).map(normalizeDeal).filter((d) => d.ticket);
+    }
+    return await bridge.history({ from: day.toISOString(), to: next.toISOString() });
+  } catch (err) {
+    console.error(`[mt5-sync] история (${dateStr}) пропущена:`, err.message);
+    return [];
+  }
+}
 
 async function syncHistory(bridge) {
-  const to = atUtcMidnight(new Date(Date.now() + DAY_MS)); // включая сегодня целиком
-  const from = new Date(to.getTime() - SYNC_WINDOW_DAYS * DAY_MS);
-  if (bridge.mode === 'real') {
-    // Тот же путь, что и в бэкфилле (deals + своя сборка) — mode=positions
-    // у EA теряет записи и использует другую нумерацию тикетов (deal ticket
-    // vs position ticket), что при смешивании с бэкфиллом даёт дубли.
-    const rawDeals = await fetchDealsChunked(bridge, from, to);
-    const positions = buildPositionsFromDeals(rawDeals);
-    const deals = positions.map(normalizeDeal).filter((d) => d.ticket);
-    return saveDeals(deals);
+  const to = atUtcMidnight(new Date());
+  const real = bridge.mode === 'real';
+  let all = [];
+  for (let i = 0; i < SYNC_WINDOW_DAYS; i++) {
+    const day = new Date(to.getTime() - i * DAY_MS);
+    await sleep(120); // EA однопоточный — не бомбим впритык
+    all = all.concat(await fetchDayFast(bridge, day, real));
   }
-  const deals = await fetchHistoryChunked(bridge, from, to);
-  return saveDeals(deals);
+  return saveDeals(all);
 }
 
 // Полная выгрузка истории за HISTORY_MONTHS — один раз при старте (не по таймеру),
