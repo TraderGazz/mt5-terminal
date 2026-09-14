@@ -87,11 +87,13 @@ export class RealBridge extends EventEmitter {
       fromDate = new Date(from);
     } else {
       // Просить у EA только тот диапазон, что реально нужен под count баров
-      // (а не фикс 90 дней) — на плотных таймфреймах (M5) это тысячи лишних
-      // баров и заметно более медленный (иногда таймаутящийся) ответ EA.
-      // *2.5 — запас на выходные/закрытый рынок, +2 дня — общий запас.
+      // (а не фикс 90 дней) — на плотных таймфреймах (M1/M5) это тысячи
+      // лишних баров, и однопоточный EA не успевает их сериализовать в JSON
+      // за отведённый таймаут ("terminated"). 1.5x — запас на выходные/
+      // закрытый рынок (5/7 календарных дней реально торговые), +1 день —
+      // общий запас.
       const barMinutes = TF_MINUTES[timeframe] || 5;
-      const neededDays = Math.ceil(((count * barMinutes) / (24 * 60)) * 2.5) + 2;
+      const neededDays = Math.ceil(((count * barMinutes) / (24 * 60)) * 1.5) + 1;
       fromDate = new Date(toDate.getTime() - Math.min(neededDays, 90) * 24 * 60 * 60 * 1000);
     }
     // Полный datetime, не только дата: StringToTime() у EA разбирает дату
@@ -101,7 +103,7 @@ export class RealBridge extends EventEmitter {
     // пробел перед StringToTime — если прислать уже с пробелом, валидатор
     // формата на стороне EA отклоняет запрос с HTTP 400).
     const fmt = (d) => d.toISOString().slice(0, 19);
-    return get(
+    const res = await get(
       '/history/prices',
       {
         symbol: symbol || this.symbol,
@@ -111,6 +113,13 @@ export class RealBridge extends EventEmitter {
       },
       20_000,
     );
+    // На случай, если EA всё же вернул больше баров, чем реально нужно —
+    // обрезаем до count с конца (свежие бары), чтобы не гонять лишнее
+    // по сети и не грузить клиент.
+    if (res && Array.isArray(res.data) && res.data.length > count) {
+      res.data = res.data.slice(-count);
+    }
+    return res;
   }
 
   async getQuote() {
