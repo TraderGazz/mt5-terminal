@@ -140,6 +140,19 @@ const CANCELED_ORDERS: HistoryOrder[] = [
 
 const digitsOf = (symbol: string) => getSymbolMeta(symbol)?.digits ?? 5;
 
+/** Зафиксированные итоги «за весь период» (isWidestPeriod, «Последний
+ *  год» — единственный доступный на сайте прокси для «всё время»,
+ *  отдельного пункта в фильтре нет) — выверены заказчиком под реальный
+ *  счёт, менять только по его запросу. Остальные периоды считаются
+ *  из реальных данных. */
+const FIXED_TOTALS = {
+  deposit: 26220000,
+  withdrawal: 2821985.75,
+  profit: 49109434.55,
+  swap: -7647929.23,
+  commission: 0,
+} as const;
+
 /** Floating 40px light-gray circle button (MT5 iOS trade/history chrome). */
 function CircleButton({
   label,
@@ -195,6 +208,13 @@ export default function HistoryPage() {
   const pullRef = useRef<{ startY: number; pulling: boolean }>({ startY: 0, pulling: false });
 
   const range = useMemo(() => periodRange(filter), [filter]);
+
+  // «Последний год» — единственный доступный на сайте прокси для «за весь
+  // период» (отдельного пункта «всё время» в фильтре нет). Заказчик прямо
+  // попросил: для остальных периодов итоги — реальные (считаются из
+  // данных), но именно на этом (и только на нём) — зафиксированные цифры,
+  // выверенные под реальный счёт на момент презентации.
+  const isWidestPeriod = filter.period === 'year';
 
   // Reads through editStore so edits from TradeEdit («(изм.)», changed
   // profit/swap/commission) are reflected here immediately.
@@ -324,8 +344,12 @@ export default function HistoryPage() {
 
   // Итоги считаются из реальных данных (deals/balanceOps уже отфильтрованы
   // по выбранному периоду и символу выше) — как в оригинале, меняются вместе
-  // с фильтром периода.
+  // с фильтром периода. Исключение — isWidestPeriod, см. выше.
   const totals = useMemo(() => {
+    if (isWidestPeriod) {
+      const { profit, swap, commission } = FIXED_TOTALS;
+      return { profit, swap, commission, total: profit + swap + commission };
+    }
     let profit = 0;
     let swap = 0;
     let commission = 0;
@@ -335,9 +359,14 @@ export default function HistoryPage() {
       commission += d.commission;
     }
     return { profit, swap, commission, total: profit + swap + commission };
-  }, [deals]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deals, isWidestPeriod]);
 
   const balTotals = useMemo(() => {
+    if (isWidestPeriod) {
+      const { deposit, withdrawal } = FIXED_TOTALS;
+      return { deposit, withdrawal, net: deposit - withdrawal };
+    }
     let deposit = 0;
     let withdrawal = 0;
     for (const d of balanceOps) {
@@ -345,14 +374,16 @@ export default function HistoryPage() {
       else deposit += d.profit;
     }
     return { deposit, withdrawal, net: deposit - withdrawal };
-  }, [balanceOps]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [balanceOps, isWidestPeriod]);
 
-  const cfdTotal = useMemo(() => cfdOps.reduce((s, d) => s + d.profit, 0), [cfdOps]);
+  const cfdTotal = useMemo(
+    () => (isWidestPeriod ? 0 : cfdOps.reduce((s, d) => s + d.profit, 0)),
+    [cfdOps, isWidestPeriod],
+  );
 
-  // «Снятие» / «CFD» rows: always shown for the widest period («Последний
-  // год» — there is no explicit "all time" option), otherwise only when the
-  // period actually contains non-zero operations of that kind.
-  const isWidestPeriod = filter.period === 'year';
+  // «Снятие» / «CFD» rows: always shown for the widest period, otherwise
+  // only when the period actually contains non-zero operations of that kind.
   const showWithdrawal = isWidestPeriod || balTotals.withdrawal !== 0;
   const showCfd = isWidestPeriod || cfdTotal !== 0;
   const grandTotal = balTotals.net + totals.total + cfdTotal;
