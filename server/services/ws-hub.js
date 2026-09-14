@@ -148,6 +148,33 @@ export function attachWsHub(server) {
 
   bridge.on('status', (s) => broadcast('status', { ...bridge.status(), ...s }));
 
+  // ---- аварийный поллинг (страховка на случай, если у EA не работает
+  // push тиков по WS — REST у него надёжнее) ----
+  // Раз в POLL_INTERVAL_MS дёргаем REST напрямую и рассылаем всем
+  // подписанным клиентам — не полагаемся только на bridge.on('quote').
+  const POLL_INTERVAL_MS = 2000;
+  let pollInFlight = false;
+  async function pollLive() {
+    if (pollInFlight) return;
+    if (!anySubscribed('quote') && !anySubscribed('account') && !anySubscribed('positions')) return;
+    pollInFlight = true;
+    try {
+      if (anySubscribed('quote')) {
+        try {
+          const quotes = await bridge.quotes();
+          for (const q of quotes) broadcast('quote', q);
+        } catch { /* noop */ }
+      }
+      if (anySubscribed('positions')) await pushPositions();
+      if (anySubscribed('account')) await pushAccount();
+    } finally {
+      pollInFlight = false;
+    }
+  }
+  const pollTimer = setInterval(pollLive, POLL_INTERVAL_MS);
+  pollTimer.unref?.();
+  wss.on('close', () => clearInterval(pollTimer));
+
   // ---- heartbeat ----
   const hb = setInterval(() => {
     for (const ws of clients) {
