@@ -67,6 +67,8 @@ async function refresh() {
   }
 }
 
+const POLL_MS = 20_000;
+
 function ensureStarted() {
   if (started) return;
   started = true;
@@ -75,6 +77,11 @@ function ensureStarted() {
     // событие сделки — подтянуть свежую историю (с задержкой, дать backend записать)
     setTimeout(refresh, 800);
   });
+  // Аварийный поллинг: у EA не работает push события 'trade' по WS, поэтому
+  // без него новые закрытые сделки не появлялись бы до перезагрузки страницы.
+  setInterval(() => {
+    if (listeners.size) void refresh();
+  }, POLL_MS);
 }
 
 function apiSubscribe(cb: () => void): () => void {
