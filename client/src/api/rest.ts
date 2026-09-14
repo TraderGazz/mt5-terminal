@@ -103,8 +103,10 @@ export const getPositions = () => api<{ positions: ApiPosition[] }>('/positions'
 export const getQuotes = () =>
   api<{ quotes: ApiQuote[] }>('/quotes', { auth: false }).then((r) => r.quotes);
 
-export const getCandles = (timeframe: string, count = 300) =>
-  api<{ bars: ApiCandle[] }>('/candles', { query: { timeframe, count } }).then((r) => r.bars);
+export const getCandles = (symbol: string, timeframe: string, count = 300) =>
+  api<{ bars: ApiCandle[] }>('/candles', { query: { symbol, timeframe, count } }).then(
+    (r) => r.bars,
+  );
 
 export interface HistoryQuery {
   tab?: 'deals' | 'positions' | 'orders';

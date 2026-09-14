@@ -277,16 +277,7 @@ export default function TradePage() {
                     {formatPrice(l.close, l.digits)}
                   </div>
                 </div>
-                <div
-                  key={l.tick}
-                  className={`shrink-0 rounded-[4px] px-1 py-0.5 text-right ${
-                    l.direction === 'up'
-                      ? 'animate-flash-up'
-                      : l.direction === 'down'
-                        ? 'animate-flash-down'
-                        : ''
-                  }`}
-                >
+                <div className="shrink-0 rounded-[4px] px-1 py-0.5 text-right">
                   <div
                     className={`tnum text-[20px] font-medium leading-[26px] ${
                       l.profit < 0 ? 'text-loss' : 'text-accent'

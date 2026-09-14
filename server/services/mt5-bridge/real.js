@@ -74,11 +74,11 @@ export class RealBridge extends EventEmitter {
     );
   }
 
-  async getCandles({ timeframe = 'M5', from, to } = {}) {
+  async getCandles({ symbol, timeframe = 'M5', from, to } = {}) {
     const toDate = to ? new Date(to) : new Date();
     const fromDate = from ? new Date(from) : new Date(toDate.getTime() - 90 * 24 * 60 * 60 * 1000);
     return get('/history/prices', {
-      symbol: this.symbol,
+      symbol: symbol || this.symbol,
       time_frame: timeframe,
       from_date: fromDate.toISOString().slice(0, 10),
       to_date: toDate.toISOString().slice(0, 10),

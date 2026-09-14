@@ -13,14 +13,16 @@ router.get('/', authRequired, async (req, res) => {
   if (!TF.has(timeframe)) {
     return res.status(400).json({ error: `timeframe: ${[...TF].join(', ')}` });
   }
+  const symbol = req.query.symbol ? String(req.query.symbol) : bridge.symbol;
   try {
     const bars = await bridge.candles({
+      symbol,
       timeframe,
       from: req.query.from,
       to: req.query.to,
       count: Math.min(Number(req.query.count) || 300, 1000),
     });
-    res.json({ symbol: bridge.symbol, timeframe, bars, source: bridge.status() });
+    res.json({ symbol, timeframe, bars, source: bridge.status() });
   } catch (err) {
     console.error('[candles] error:', err.message);
     res.status(502).json({ error: 'MT5-мост недоступен', detail: err.message });

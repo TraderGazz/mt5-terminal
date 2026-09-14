@@ -80,8 +80,8 @@ class Bridge extends EventEmitter {
     return this.impl.getDealsRaw({ from, to });
   }
 
-  async candles({ timeframe = 'M5', from, to, count } = {}) {
-    const res = await this.impl.getCandles({ timeframe, from, to, count });
+  async candles({ symbol, timeframe = 'M5', from, to, count } = {}) {
+    const res = await this.impl.getCandles({ symbol, timeframe, from, to, count });
     const list = Array.isArray(res) ? res : res.bars || res.data || res.rates || [];
     return list.map(N.normalizeCandle).filter((b) => b.time);
   }

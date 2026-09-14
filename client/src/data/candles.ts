@@ -24,7 +24,7 @@ async function load(symbol: string, tf: Timeframe, digits: number) {
   if (inflight.has(k)) return;
   inflight.add(k);
   try {
-    const bars = await fetchCandles(tf);
+    const bars = await fetchCandles(symbol, tf);
     const rounded = bars.map((b) => ({
       time: b.time,
       open: round(b.open, digits),

@@ -52,7 +52,7 @@ async function loadDeals(range) {
   // Источник правды — БД (с правками). Если пусто/недоступна — берём из моста.
   if (isDbReady()) {
     try {
-      const { rows } = await query('SELECT * FROM trades ORDER BY close_time DESC NULLS LAST, id DESC LIMIT 5000');
+      const { rows } = await query('SELECT * FROM trades ORDER BY close_time DESC NULLS LAST, id DESC');
       if (rows.length) return { deals: rows.map(dbRowToDeal), from: 'db' };
     } catch { /* fall through */ }
   }
