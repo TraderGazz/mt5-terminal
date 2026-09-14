@@ -9,7 +9,6 @@ import {
   createSeriesMarkers,
 } from 'lightweight-charts';
 import type {
-  AutoscaleInfo,
   BarData,
   IChartApi,
   IPriceLine,
@@ -22,7 +21,6 @@ import { TF_SECONDS, type MockCandle, type Timeframe } from './candles';
 import { getCandleSeries, useCandleData } from '@/data/candles';
 import { computeFractals, computeIchimoku, type IndicatorPoint } from './indicators';
 import type { Quote } from '@/data/quotes';
-import { usePositions } from '@/data/positions';
 import type { SymbolMeta } from '@/mocks/symbols';
 import { formatPrice } from '@/lib/format';
 
@@ -79,8 +77,7 @@ interface CandleChartProps {
 /**
  * Lightweight Charts candlestick canvas (MT5 iOS chart screen): green/red
  * candles on white, barely-visible #F0F0F3 grid, green (#34C759) dashed
- * current-price line with a green pill on the price scale, solid red
- * (#FF3B30) price lines for open positions of the symbol, pinch-zoom /
+ * current-price line with a green pill on the price scale, pinch-zoom /
  * drag-scroll, double-tap resets zoom to the latest 60 candles. The last
  * candle morphs on every quote tick and rolls over when a new period starts.
  * The dashed #8E8E93 magnet crosshair (with OHLC readout) is only visible
@@ -99,12 +96,6 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
   const crosshairOnRef = useRef(crosshairOn);
   const [ohlc, setOhlc] = useState<{ bar: BarData<Time>; visible: boolean } | null>(null);
   const candleVersion = useCandleData(meta.symbol, timeframe, meta.digits);
-  // Live positions (real data in api mode, mock fallback otherwise) — read
-  // reactively but deliberately NOT in the chart-rebuild effect's deps
-  // (same pattern as quote/meta.baseBid below): a full rebuild on every
-  // position poll tick would flicker/reset zoom. The price lines just
-  // reflect whatever was live the last time the chart was (re)built.
-  const positions = usePositions();
 
   // Keep the ref current so chart-created closures see the latest toggle.
   useEffect(() => {
@@ -184,13 +175,6 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
       handleScale: { pinch: true, mouseWheel: true, axisPressedMouseMove: true },
     });
 
-    // Open-position levels of this symbol must stay on screen (MT5 iOS shows
-    // them with red price pills), so the autoscale range is widened to cover
-    // every position price plus a small padding.
-    const positionPrices = positions.filter((p) => p.symbol === meta.symbol).map(
-      (p) => p.openPrice,
-    );
-
     const series = chart.addSeries(CandlestickSeries, {
       upColor: '#34C759',
       downColor: '#FF3B30',
@@ -200,17 +184,6 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
       priceLineVisible: false,
       lastValueVisible: false,
       priceFormat: { type: 'price', precision: digits, minMove: Math.pow(10, -digits) },
-      autoscaleInfoProvider: (original: () => AutoscaleInfo | null) => {
-        const info = original();
-        if (info?.priceRange && positionPrices.length > 0) {
-          const min = Math.min(info.priceRange.minValue, ...positionPrices);
-          const max = Math.max(info.priceRange.maxValue, ...positionPrices);
-          const pad = Math.max((max - min) * 0.02, Math.pow(10, -digits) * 10);
-          info.priceRange.minValue = min - pad;
-          info.priceRange.maxValue = max + pad;
-        }
-        return info;
-      },
     });
     series.setData(candles.map((c) => ({ ...c, time: c.time as UTCTimestamp })));
     // By time, not array index: the charting library can silently coalesce
@@ -240,19 +213,6 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
       axisLabelVisible: true,
       title: '',
     });
-
-    // Open positions of this symbol → solid red level + red price pill.
-    for (const pos of positions) {
-      if (pos.symbol !== meta.symbol) continue;
-      series.createPriceLine({
-        price: pos.openPrice,
-        color: '#FF3B30',
-        lineWidth: 1,
-        lineStyle: LineStyle.Solid,
-        axisLabelVisible: true,
-        title: '',
-      });
-    }
 
     // --- Индикаторы MT5: Ichimoku Kinko Hyo (9, 26, 52) + Fractals ---
     // Значения считаются из тех же свечей, что строят график (indicators.ts).
