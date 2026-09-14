@@ -189,13 +189,37 @@ async function fetchDealsChunked(bridge, from, to, retry = true) {
 // исходного mode=positions — дальше идёт через тот же normalizeDeal.
 function buildPositionsFromDeals(deals) {
   const byPos = new Map();
+  const out = [];
   for (const d of deals) {
     const pid = Number(d.position_id) || 0;
-    if (!pid) continue; // балансовые операции и т.п. — не позиции
+    if (!pid) {
+      // Балансовые операции (пополнение/снятие) — не привязаны к позиции,
+      // но нужны для итогов "Депозит/Прибыль/Баланс" на странице Истории.
+      const type = String(d.type || '');
+      if (type.includes('BALANCE') || type.includes('DEPOSIT') || type.includes('WITHDRAW') || type.includes('CREDIT')) {
+        out.push({
+          ticket: d.ticket,
+          position_id: 0,
+          symbol: '',
+          type: d.type,
+          volume: 0,
+          open_price: 0,
+          close_price: 0,
+          sl_price: 0,
+          tp_price: 0,
+          swap: 0,
+          commission: 0,
+          profit: d.profit,
+          open_time: d.time,
+          close_time: d.time,
+          comment: d.comment,
+        });
+      }
+      continue;
+    }
     if (!byPos.has(pid)) byPos.set(pid, []);
     byPos.get(pid).push(d);
   }
-  const out = [];
   for (const group of byPos.values()) {
     const ins = group.filter((d) => d.entry === 'DEAL_ENTRY_IN');
     const outs = group.filter((d) => d.entry === 'DEAL_ENTRY_OUT');
