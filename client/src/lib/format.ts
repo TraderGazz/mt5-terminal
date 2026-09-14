@@ -59,22 +59,30 @@ export function formatVolume(value: number): string {
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
+// UTC getters, not local: the stored timestamp already carries the MT5
+// server-time reading (EA сам присылает время сервера) — reading it back
+// through the VIEWER's own browser timezone double-shifts the displayed
+// clock (confirmed: site showed a quote 3h later than the same tick in the
+// real terminal, on top of an existing EA-side offset). UTC getters render
+// the stored value as-is, matching the server/terminal regardless of the
+// viewer's own timezone.
+
 /** "14:32:05" */
 export function formatTime(d: number | Date): string {
   const dt = typeof d === 'number' ? new Date(d) : d;
-  return `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}:${pad2(dt.getSeconds())}`;
+  return `${pad2(dt.getUTCHours())}:${pad2(dt.getUTCMinutes())}:${pad2(dt.getUTCSeconds())}`;
 }
 
 /** "14:32" */
 export function formatTimeShort(d: number | Date): string {
   const dt = typeof d === 'number' ? new Date(d) : d;
-  return `${pad2(dt.getHours())}:${pad2(dt.getMinutes())}`;
+  return `${pad2(dt.getUTCHours())}:${pad2(dt.getUTCMinutes())}`;
 }
 
 /** "12.05.2025" */
 export function formatDate(d: number | Date): string {
   const dt = typeof d === 'number' ? new Date(d) : d;
-  return `${pad2(dt.getDate())}.${pad2(dt.getMonth() + 1)}.${dt.getFullYear()}`;
+  return `${pad2(dt.getUTCDate())}.${pad2(dt.getUTCMonth() + 1)}.${dt.getUTCFullYear()}`;
 }
 
 /** "12.05.2025 14:32" (MT5 history style) */

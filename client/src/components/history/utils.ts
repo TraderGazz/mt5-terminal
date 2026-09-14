@@ -30,10 +30,14 @@ export function formatSignedMoneyMT5(value: number): string {
   return `${value < 0 ? '' : '+'}${formatMoneyMT5(value)}`;
 }
 
+// UTC getters, not local: same MT5 server-time convention as lib/format.ts
+// (the stored timestamp already IS the server-time reading — reading it
+// back through the viewer's own browser timezone double-shifts it).
+
 /** "02.09 10:15" — compact day+time used inside history rows. */
 export function formatDayTime(ts: number): string {
   const d = new Date(ts);
-  return `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)} ${formatTimeShort(d)}`;
+  return `${pad2(d.getUTCDate())}.${pad2(d.getUTCMonth() + 1)} ${formatTimeShort(d)}`;
 }
 
 const MONTHS_GEN = [
@@ -57,7 +61,7 @@ export function daySectionLabel(ts: number, now: number = Date.now()): string {
   if (day === startOfDay(now)) return 'СЕГОДНЯ';
   if (day === startOfDay(now - DAY)) return 'ВЧЕРА';
   const d = new Date(ts);
-  return `${d.getDate()} ${MONTHS_GEN[d.getMonth()]}`.toUpperCase();
+  return `${d.getUTCDate()} ${MONTHS_GEN[d.getUTCMonth()]}`.toUpperCase();
 }
 
 const MONTHS_SHORT = [
@@ -84,7 +88,7 @@ export function formatRuShortDate(ts: number): string {
 /** "2026.08.28 23:45:03" — MT5 iOS history row timestamp (yyyy.mm.dd hh:mm:ss). */
 export function formatFullDateTime(ts: number): string {
   const d = new Date(ts);
-  return `${d.getFullYear()}.${pad2(d.getMonth() + 1)}.${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+  return `${d.getUTCFullYear()}.${pad2(d.getUTCMonth() + 1)}.${pad2(d.getUTCDate())} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}:${pad2(d.getUTCSeconds())}`;
 }
 
 /** "2026-09-04" — value format of <input type="date">. */
