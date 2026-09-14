@@ -14,18 +14,29 @@ const pick = (obj, ...keys) => {
   return undefined;
 };
 
+// EA/сервер брокера отдаёт время своих суток (UTC+3), без явной временнОй
+// зоны в значении — ни разу не UTC, хотя выглядит как "чистые" числа.
+// Подтверждено на живых данных: котировка от EA была помечена "19:38:13",
+// когда системные часы (истинный UTC) показывали "16:38:15" — ровно +3ч.
+// Храним везде истинный UTC (вычитаем этот сдвиг на входе); "брокерское"
+// время показываем клиенту, прибавляя его обратно только при отображении.
+const BROKER_UTC_OFFSET_MS = 3 * 3600 * 1000;
+
 // MT5 время бывает: unix-секунды, unix-мс, "YYYY.MM.DD HH:MM:SS" (серверное), ISO.
 export function toIso(v) {
   if (v == null || v === '' || v === 0) return null;
   if (typeof v === 'number') {
     const ms = v > 1e12 ? v : v * 1000;
-    return new Date(ms).toISOString();
+    return new Date(ms - BROKER_UTC_OFFSET_MS).toISOString();
   }
   const s = String(v).trim();
   if (/^\d+$/.test(s)) return toIso(Number(s));
-  // "2025.08.06 01:32:08" → "2025-08-06T01:32:08Z"
+  // "2025.08.06 01:32:08" (серверное, UTC+3) → true-UTC ISO
   const m = s.match(/^(\d{4})[.\-/](\d{2})[.\-/](\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
-  if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0))).toISOString();
+  if (m) {
+    const raw = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0));
+    return new Date(raw - BROKER_UTC_OFFSET_MS).toISOString();
+  }
   const d = new Date(s);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }

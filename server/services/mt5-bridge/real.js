@@ -14,6 +14,13 @@ const WATCH_SYMBOLS = (process.env.MT5_WATCH_SYMBOLS || `${SYMBOL},USDRUBrfd,XAU
   .map((s) => s.trim())
   .filter(Boolean);
 const TF_MINUTES = { M1: 1, M5: 5, M15: 15, M30: 30, H1: 60, H4: 240, D1: 1440 };
+// EA/сервер брокера трактует любые даты в запросах как СВОЁ локальное время
+// (UTC+3), без пересчёта — зеркально normalize.js:toIso(), которая на выходе
+// из EA вычитает этот же сдвиг. Поэтому исходящие from_date/to_date нужно
+// сдвигать на +3ч (наши Date-объекты — истинный UTC), иначе EA считает
+// "сейчас" на 3 часа раньше своего реального текущего момента.
+const BROKER_UTC_OFFSET_MS = 3 * 3600 * 1000;
+const brokerDate = (d) => new Date(d.getTime() + BROKER_UTC_OFFSET_MS);
 
 async function get(path, params, timeoutMs = TIMEOUT_MS) {
   const url = new URL(BASE + path);
@@ -58,8 +65,8 @@ export class RealBridge extends EventEmitter {
       '/history/orders',
       {
         mode: 'deals',
-        from_date: fromDate.toISOString().slice(0, 10),
-        to_date: toDate.toISOString().slice(0, 10),
+        from_date: brokerDate(fromDate).toISOString().slice(0, 10),
+        to_date: brokerDate(toDate).toISOString().slice(0, 10),
       },
       45_000,
     );
@@ -73,8 +80,8 @@ export class RealBridge extends EventEmitter {
       '/history/orders',
       {
         mode: 'positions',
-        from_date: fromDate.toISOString().slice(0, 10),
-        to_date: toDate.toISOString().slice(0, 10),
+        from_date: brokerDate(fromDate).toISOString().slice(0, 10),
+        to_date: brokerDate(toDate).toISOString().slice(0, 10),
       },
       45_000, // очень плотные по сделкам дни EA считает заметно дольше обычного
     );
@@ -102,7 +109,7 @@ export class RealBridge extends EventEmitter {
     // Формат должен быть строго ISO8601 c литерой "T" (EA сам меняет её на
     // пробел перед StringToTime — если прислать уже с пробелом, валидатор
     // формата на стороне EA отклоняет запрос с HTTP 400).
-    const fmt = (d) => d.toISOString().slice(0, 19);
+    const fmt = (d) => brokerDate(d).toISOString().slice(0, 19);
     const res = await get(
       '/history/prices',
       {

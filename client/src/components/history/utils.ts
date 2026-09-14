@@ -30,14 +30,19 @@ export function formatSignedMoneyMT5(value: number): string {
   return `${value < 0 ? '' : '+'}${formatMoneyMT5(value)}`;
 }
 
-// UTC getters, not local: same MT5 server-time convention as lib/format.ts
-// (the stored timestamp already IS the server-time reading — reading it
-// back through the viewer's own browser timezone double-shifts it).
+// Same MT5 server-time (UTC+3) display convention as lib/format.ts: stored
+// timestamps are true UTC (mt5-bridge normalize.js corrects the EA's own
+// +3h broker-clock offset on ingest), so reading them back for display
+// needs +3h shifted in before UTC getters — otherwise this shows true UTC
+// instead of the terminal's own server-time clock.
+const BROKER_OFFSET_MS = 3 * 3600 * 1000;
+const toBroker = (ts: number) => new Date(ts + BROKER_OFFSET_MS);
 
 /** "02.09 10:15" — compact day+time used inside history rows. */
 export function formatDayTime(ts: number): string {
-  const d = new Date(ts);
-  return `${pad2(d.getUTCDate())}.${pad2(d.getUTCMonth() + 1)} ${formatTimeShort(d)}`;
+  const d = toBroker(ts);
+  // formatTimeShort applies its own +3h broker shift, so pass the raw ts.
+  return `${pad2(d.getUTCDate())}.${pad2(d.getUTCMonth() + 1)} ${formatTimeShort(ts)}`;
 }
 
 const MONTHS_GEN = [
@@ -60,7 +65,7 @@ export function daySectionLabel(ts: number, now: number = Date.now()): string {
   const day = startOfDay(ts);
   if (day === startOfDay(now)) return 'СЕГОДНЯ';
   if (day === startOfDay(now - DAY)) return 'ВЧЕРА';
-  const d = new Date(ts);
+  const d = toBroker(ts);
   return `${d.getUTCDate()} ${MONTHS_GEN[d.getUTCMonth()]}`.toUpperCase();
 }
 
@@ -87,7 +92,7 @@ export function formatRuShortDate(ts: number): string {
 
 /** "2026.08.28 23:45:03" — MT5 iOS history row timestamp (yyyy.mm.dd hh:mm:ss). */
 export function formatFullDateTime(ts: number): string {
-  const d = new Date(ts);
+  const d = toBroker(ts);
   return `${d.getUTCFullYear()}.${pad2(d.getUTCMonth() + 1)}.${pad2(d.getUTCDate())} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}:${pad2(d.getUTCSeconds())}`;
 }
 

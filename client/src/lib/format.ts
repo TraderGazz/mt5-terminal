@@ -59,29 +59,29 @@ export function formatVolume(value: number): string {
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
-// UTC getters, not local: the stored timestamp already carries the MT5
-// server-time reading (EA сам присылает время сервера) — reading it back
-// through the VIEWER's own browser timezone double-shifts the displayed
-// clock (confirmed: site showed a quote 3h later than the same tick in the
-// real terminal, on top of an existing EA-side offset). UTC getters render
-// the stored value as-is, matching the server/terminal regardless of the
-// viewer's own timezone.
+// Stored timestamps are true UTC (server/mt5-bridge normalize.js corrects
+// for the EA's own +3h broker-clock offset on the way in) — display in MT5
+// server time (UTC+3) by shifting +3h and reading UTC getters, so the clock
+// shown matches the terminal regardless of the VIEWER's own browser
+// timezone (local getters would show the viewer's own zone instead).
+const BROKER_OFFSET_MS = 3 * 3600 * 1000;
+const toBroker = (d: Date) => new Date(d.getTime() + BROKER_OFFSET_MS);
 
 /** "14:32:05" */
 export function formatTime(d: number | Date): string {
-  const dt = typeof d === 'number' ? new Date(d) : d;
+  const dt = toBroker(typeof d === 'number' ? new Date(d) : d);
   return `${pad2(dt.getUTCHours())}:${pad2(dt.getUTCMinutes())}:${pad2(dt.getUTCSeconds())}`;
 }
 
 /** "14:32" */
 export function formatTimeShort(d: number | Date): string {
-  const dt = typeof d === 'number' ? new Date(d) : d;
+  const dt = toBroker(typeof d === 'number' ? new Date(d) : d);
   return `${pad2(dt.getUTCHours())}:${pad2(dt.getUTCMinutes())}`;
 }
 
 /** "12.05.2025" */
 export function formatDate(d: number | Date): string {
-  const dt = typeof d === 'number' ? new Date(d) : d;
+  const dt = toBroker(typeof d === 'number' ? new Date(d) : d);
   return `${pad2(dt.getUTCDate())}.${pad2(dt.getUTCMonth() + 1)}.${dt.getUTCFullYear()}`;
 }
 

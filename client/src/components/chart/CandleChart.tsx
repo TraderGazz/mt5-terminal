@@ -42,12 +42,17 @@ const MONTHS_EN = [
   'Dec',
 ];
 
+// Candle times (from the backend) are true UTC; MT5's own terminal/EA runs
+// on the broker's server clock (UTC+3) with no timezone awareness, so all
+// display AND period-boundary math needs this same shift applied.
+const BROKER_OFFSET_SEC = 3 * 3600;
+
 /** «d MMM HH:mm» in server time (UTC+3), e.g. «28 Aug 17:10». Shared by the
  *  axis tick formatter and the crosshair/OHLC time label so both agree —
  *  lightweight-charts' own crosshair label defaults to unadjusted UTC
  *  otherwise, which looked 3h off next to the axis. */
 function formatServerTime(time: Time): string {
-  const d = new Date((Number(time) + 3 * 3600) * 1000);
+  const d = new Date((Number(time) + BROKER_OFFSET_SEC) * 1000);
   const dayMonth = `${d.getUTCDate()} ${MONTHS_EN[d.getUTCMonth()]}`;
   return `${dayMonth} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
 }
@@ -56,7 +61,7 @@ function formatServerTime(time: Time): string {
  *  («28 Aug 17:10») for M1–H4, «d MMM» for D1. */
 function makeTickMarkFormatter(tf: Timeframe) {
   return (time: Time): string => {
-    const d = new Date((Number(time) + 3 * 3600) * 1000);
+    const d = new Date((Number(time) + BROKER_OFFSET_SEC) * 1000);
     const dayMonth = `${d.getUTCDate()} ${MONTHS_EN[d.getUTCMonth()]}`;
     if (tf === 'D1') return dayMonth;
     return `${dayMonth} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
@@ -373,7 +378,12 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
     const tfSec = TF_SECONDS[timeframe];
     const price = quote.bid;
     const nowSec = Math.floor(Date.now() / 1000);
-    const currentTime = Math.floor(nowSec / tfSec) * tfSec;
+    // Candle times are true UTC, but MT5/broker buckets H1/H4/D1 periods by
+    // its OWN server clock (UTC+3), not true-UTC boundaries — e.g. a real
+    // H4 bar rolls over at broker 20:00, which is true-UTC 17:00. Flooring
+    // raw UTC would roll our bar an offset-sized chunk early/late vs the
+    // real terminal. Shift into broker time before flooring, then back.
+    const currentTime = Math.floor((nowSec + BROKER_OFFSET_SEC) / tfSec) * tfSec - BROKER_OFFSET_SEC;
 
     let candle: MockCandle;
     if (currentTime > last.time) {
