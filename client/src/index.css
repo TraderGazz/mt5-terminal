@@ -104,13 +104,6 @@
   div:has(> #app-scroll > .page-white) {
     background-color: #ffffff !important;
   }
-  /* Decorative iOS status bar is hidden when installed as a PWA
-     (the real iOS status bar takes over) */
-  @media (display-mode: standalone) {
-    .browser-only {
-      display: none;
-    }
-  }
 }
 
 @layer utilities {

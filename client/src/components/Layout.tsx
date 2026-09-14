@@ -4,8 +4,8 @@ import TabBar from '@/components/TabBar';
 
 /**
  * App layout for all tabbed pages (design.md §7): phone-column AppShell with
- * the decorative StatusBar, a transparent scrollable content slot, and the
- * floating MT5-style TabBar pill overlaid at the bottom of the column.
+ * a transparent scrollable content slot and the floating MT5-style TabBar
+ * pill overlaid at the bottom of the column.
  *
  * Pages render their own <NavBar/> as the FIRST child of their content — it
  * sticks to the top of the scroll container (`sticky top-0`). Pages must not
