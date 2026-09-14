@@ -196,9 +196,28 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
     // count doesn't always match candles.length — an index-based range then
     // lands short of the true end. Time-based range is immune to that.
     const lastBarTime = candles[candles.length - 1].time;
-    chart.timeScale().setVisibleRange({
-      from: (lastBarTime - 59 * TF_SECONDS[timeframe]) as UTCTimestamp,
-      to: lastBarTime as UTCTimestamp,
+    const applyZoom = () => {
+      chart.timeScale().setVisibleRange({
+        from: (lastBarTime - 59 * TF_SECONDS[timeframe]) as UTCTimestamp,
+        to: lastBarTime as UTCTimestamp,
+      });
+    };
+    applyZoom();
+    // eslint-disable-next-line no-console
+    console.log('[chart-debug] applied', {
+      timeframe,
+      count: candles.length,
+      lastBarTime,
+      lastDate: new Date(lastBarTime * 1000).toISOString(),
+      visibleAfterSet: chart.timeScale().getVisibleRange(),
+    });
+    requestAnimationFrame(() => {
+      applyZoom();
+      // eslint-disable-next-line no-console
+      console.log('[chart-debug] after-raf', {
+        timeframe,
+        visibleAfterRaf: chart.timeScale().getVisibleRange(),
+      });
     });
 
     // Current price: MT5 iOS green dashed line + green pill on the scale.
