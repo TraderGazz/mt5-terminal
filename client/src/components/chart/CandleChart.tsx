@@ -42,6 +42,16 @@ const MONTHS_EN = [
   'Dec',
 ];
 
+/** «d MMM HH:mm» in server time (UTC+3), e.g. «28 Aug 17:10». Shared by the
+ *  axis tick formatter and the crosshair/OHLC time label so both agree —
+ *  lightweight-charts' own crosshair label defaults to unadjusted UTC
+ *  otherwise, which looked 3h off next to the axis. */
+function formatServerTime(time: Time): string {
+  const d = new Date((Number(time) + 3 * 3600) * 1000);
+  const dayMonth = `${d.getUTCDate()} ${MONTHS_EN[d.getUTCMonth()]}`;
+  return `${dayMonth} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
+}
+
 /** Axis time labels in server time (UTC+3), MT5 iOS style: «d MMM HH:mm»
  *  («28 Aug 17:10») for M1–H4, «d MMM» for D1. */
 function makeTickMarkFormatter(tf: Timeframe) {
@@ -129,6 +139,7 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
         vertLines: { color: '#F0F0F3' },
         horzLines: { color: '#F0F0F3' },
       },
+      localization: { timeFormatter: formatServerTime },
       rightPriceScale: { borderVisible: false },
       timeScale: {
         borderVisible: false,
