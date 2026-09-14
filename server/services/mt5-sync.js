@@ -260,14 +260,15 @@ function buildPositionsFromDeals(deals) {
   return out;
 }
 
-// Обычная (частая) синхронизация — узкое окно, БЕЗ дробления/ретраев на
-// известных "плохих" днях (KNOWN_BAD_DAYS): та тяжёлая retry-логика годится
-// только для одноразового бэкфилла. Если гонять её каждые 30с на диапазоне,
-// в который постоянно попадает day, что и так не влезает в буфер EA, —
-// однопоточный EA захлёбывается повторными провалами и перестаёт вовремя
-// отвечать даже на обычные запросы счёта/позиций (из-за чего "живые" цифры
-// на сайте замирают). Поэтому здесь — по одному быстрому запросу на день,
-// без сна и без повторных попыток; неудачный день просто пропускается.
+// Обычная (частая) синхронизация — узкое окно (последние SYNC_WINDOW_DAYS
+// дней). Использует те же fetchDealsChunked/fetchHistoryChunked, что и
+// бэкфилл: для обычного (не плотного) дня это ровно ОДИН быстрый запрос —
+// дробление включается только если день действительно не влезает в буфер
+// EA, и тогда именно этот день займёт больше времени, а не весь цикл
+// синхронизации (KNOWN_BAD_DAYS всё ещё коротко замыкает уже подтверждённо
+// безнадёжные окна). Известные "плохие" дни (после исчерпания MIN_CHUNK_MS)
+// пропускаются, не блокируя остальные SYNC_WINDOW_DAYS дней и не мешая
+// счёту/позициям (те синкаются отдельно, до истории — см. syncNow).
 const SYNC_WINDOW_DAYS = Number(process.env.MT5_SYNC_WINDOW_DAYS) || 3;
 
 async function fetchDayFast(bridge, day, real) {
@@ -276,10 +277,10 @@ async function fetchDayFast(bridge, day, real) {
   const next = new Date(day.getTime() + DAY_MS);
   try {
     if (real) {
-      const rawDeals = await bridge.dealsRaw({ from: day.toISOString(), to: next.toISOString() });
+      const rawDeals = await fetchDealsChunked(bridge, day, next);
       return buildPositionsFromDeals(rawDeals).map(normalizeDeal).filter((d) => d.ticket);
     }
-    return await bridge.history({ from: day.toISOString(), to: next.toISOString() });
+    return await fetchHistoryChunked(bridge, day, next);
   } catch (err) {
     console.error(`[mt5-sync] история (${dateStr}) пропущена:`, err.message);
     return [];
