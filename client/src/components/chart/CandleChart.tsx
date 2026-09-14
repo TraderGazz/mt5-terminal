@@ -191,7 +191,15 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
       },
     });
     series.setData(candles.map((c) => ({ ...c, time: c.time as UTCTimestamp })));
-    chart.timeScale().setVisibleLogicalRange({ from: candles.length - 60, to: candles.length - 1 });
+    // By time, not array index: the charting library can silently coalesce
+    // duplicate/out-of-order points from setData, so the post-render bar
+    // count doesn't always match candles.length — an index-based range then
+    // lands short of the true end. Time-based range is immune to that.
+    const lastBarTime = candles[candles.length - 1].time;
+    chart.timeScale().setVisibleRange({
+      from: (lastBarTime - 59 * TF_SECONDS[timeframe]) as UTCTimestamp,
+      to: lastBarTime as UTCTimestamp,
+    });
 
     // Current price: MT5 iOS green dashed line + green pill on the scale.
     const priceLine = series.createPriceLine({
@@ -295,8 +303,12 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
 
     // Double-tap / double-click → reset zoom to the latest 60 candles.
     const resetZoom = () => {
-      const len = dataLenRef.current;
-      chart.timeScale().setVisibleLogicalRange({ from: len - 60, to: len - 1 });
+      const lastTime = lastCandleRef.current?.time;
+      if (lastTime == null) return;
+      chart.timeScale().setVisibleRange({
+        from: (lastTime - 59 * TF_SECONDS[timeframe]) as UTCTimestamp,
+        to: lastTime as UTCTimestamp,
+      });
     };
     let lastTap = 0;
     const onTouchEnd = () => {
