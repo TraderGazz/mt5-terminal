@@ -203,22 +203,11 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
       });
     };
     applyZoom();
-    // eslint-disable-next-line no-console
-    console.log('[chart-debug] applied', {
-      timeframe,
-      count: candles.length,
-      lastBarTime,
-      lastDate: new Date(lastBarTime * 1000).toISOString(),
-      visibleAfterSet: chart.timeScale().getVisibleRange(),
-    });
-    requestAnimationFrame(() => {
-      applyZoom();
-      // eslint-disable-next-line no-console
-      console.log('[chart-debug] after-raf', {
-        timeframe,
-        visibleAfterRaf: chart.timeScale().getVisibleRange(),
-      });
-    });
+    // The chart can still be mid-layout (container not yet at its final
+    // size) the instant it's created, especially when switching timeframe
+    // from an open action sheet — setVisibleRange silently lands short of
+    // the true end in that case. Re-apply after layout settles.
+    requestAnimationFrame(() => requestAnimationFrame(applyZoom));
 
     // Current price: MT5 iOS green dashed line + green pill on the scale.
     const priceLine = series.createPriceLine({
