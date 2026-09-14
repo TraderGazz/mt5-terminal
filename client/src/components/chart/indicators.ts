@@ -18,8 +18,11 @@
 import type { MockCandle } from './candles';
 
 export interface IndicatorPoint {
-  /** UNIX seconds (UTC), aligned to the timeframe grid (may be in the future). */
-  time: number;
+  /** Позиция на временной сетке графика: индекс исходного бара в candles[],
+   *  либо candles.length + N для точек, спроецированных за его пределы
+   *  (Senkou Span, сдвиг вперёд) — оба случая CandleChart переводит в
+   *  синтетическое (без разрывов по выходным) время сам через synOf(). */
+  index: number;
   value: number;
 }
 
@@ -32,7 +35,7 @@ export interface IchimokuData {
 }
 
 export interface FractalPoint {
-  time: number;
+  index: number;
   /** 'up' — фрактал над баром (▲), 'down' — под баром (▼). */
   dir: 'up' | 'down';
 }
@@ -50,12 +53,11 @@ function donchianMid(candles: MockCandle[], end: number, period: number): number
 }
 
 /**
- * Ichimoku Kinko Hyo (9, 26, 52) со сдвигом 26. Senkou-линии продлены в
- * будущее по шагу таймфрейма `tfSec` (облако впереди цены, как в MT5).
+ * Ichimoku Kinko Hyo (9, 26, 52) со сдвигом 26 баров (индексов, не времени —
+ * CandleChart сам переводит индекс в синтетическое без-разрывное время).
  */
 export function computeIchimoku(
   candles: MockCandle[],
-  tfSec: number,
   tenkanPeriod = 9,
   kijunPeriod = 26,
   senkouBPeriod = 52,
@@ -71,16 +73,16 @@ export function computeIchimoku(
     const t = donchianMid(candles, i, tenkanPeriod);
     const k = donchianMid(candles, i, kijunPeriod);
     const b = donchianMid(candles, i, senkouBPeriod);
-    if (t != null) tenkan.push({ time: candles[i].time, value: t });
-    if (k != null) kijun.push({ time: candles[i].time, value: k });
+    if (t != null) tenkan.push({ index: i, value: t });
+    if (k != null) kijun.push({ index: i, value: k });
     if (t != null && k != null) {
-      senkouA.push({ time: candles[i].time + displacement * tfSec, value: (t + k) / 2 });
+      senkouA.push({ index: i + displacement, value: (t + k) / 2 });
     }
     if (b != null) {
-      senkouB.push({ time: candles[i].time + displacement * tfSec, value: b });
+      senkouB.push({ index: i + displacement, value: b });
     }
     if (i >= displacement) {
-      chikou.push({ time: candles[i - displacement].time, value: candles[i].close });
+      chikou.push({ index: i - displacement, value: candles[i].close });
     }
   }
 
@@ -101,7 +103,7 @@ export function computeFractals(candles: MockCandle[]): FractalPoint[] {
       c.high > candles[i + 1].high &&
       c.high > candles[i + 2].high
     ) {
-      out.push({ time: c.time, dir: 'up' });
+      out.push({ index: i, dir: 'up' });
     }
     if (
       c.low < candles[i - 1].low &&
@@ -109,7 +111,7 @@ export function computeFractals(candles: MockCandle[]): FractalPoint[] {
       c.low < candles[i + 1].low &&
       c.low < candles[i + 2].low
     ) {
-      out.push({ time: c.time, dir: 'down' });
+      out.push({ index: i, dir: 'down' });
     }
   }
   return out;

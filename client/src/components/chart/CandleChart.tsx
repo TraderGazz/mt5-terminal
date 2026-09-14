@@ -45,25 +45,56 @@ const MONTHS_EN = [
 // display AND period-boundary math needs this same shift applied.
 const BROKER_OFFSET_SEC = 3 * 3600;
 
-/** «d MMM HH:mm» in server time (UTC+3), e.g. «28 Aug 17:10». Shared by the
- *  axis tick formatter and the crosshair/OHLC time label so both agree —
- *  lightweight-charts' own crosshair label defaults to unadjusted UTC
- *  otherwise, which looked 3h off next to the axis. */
-function formatServerTime(time: Time): string {
-  const d = new Date((Number(time) + BROKER_OFFSET_SEC) * 1000);
+/** «d MMM HH:mm» in server time (UTC+3) from a REAL (not synthetic — see
+ *  buildSynthetic below) unix-seconds timestamp. Used by the crosshair/OHLC
+ *  time label, which (unlike axis ticks) always shows the time-of-day. */
+function formatRealTime(realSec: number): string {
+  const d = new Date((realSec + BROKER_OFFSET_SEC) * 1000);
   const dayMonth = `${d.getUTCDate()} ${MONTHS_EN[d.getUTCMonth()]}`;
   return `${dayMonth} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
 }
 
-/** Axis time labels in server time (UTC+3), MT5 iOS style: «d MMM HH:mm»
- *  («28 Aug 17:10») for M1–H4, «d MMM» for D1. */
-function makeTickMarkFormatter(tf: Timeframe) {
-  return (time: Time): string => {
-    const d = new Date((Number(time) + BROKER_OFFSET_SEC) * 1000);
-    const dayMonth = `${d.getUTCDate()} ${MONTHS_EN[d.getUTCMonth()]}`;
-    if (tf === 'D1') return dayMonth;
-    return `${dayMonth} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
+/** Axis tick label: same as formatRealTime, but «d MMM» only (no time) for
+ *  D1, MT5 iOS style. */
+function formatRealTickMark(realSec: number, tf: Timeframe): string {
+  if (tf !== 'D1') return formatRealTime(realSec);
+  const d = new Date((realSec + BROKER_OFFSET_SEC) * 1000);
+  return `${d.getUTCDate()} ${MONTHS_EN[d.getUTCMonth()]}`;
+}
+
+/**
+ * lightweight-charts spaces numeric-timestamp bars proportionally to real
+ * elapsed time — real forex data has none on weekends, so any intraday
+ * chart using real timestamps directly shows a visible blank gap every
+ * Fri→Mon (confirmed against the library's own docs: this is the default,
+ * not a bug — "whitespace" gaps are exactly what real time gaps render as).
+ * MT5's own chart has no such gap: candles sit flush together regardless of
+ * the calendar hole between them.
+ *
+ * Fix: plot on a SYNTHETIC, perfectly uniform time axis (index × tfSec) —
+ * gapless by construction — and keep a parallel real-time lookup purely for
+ * axis/crosshair LABELS (which must still show the true broker date/time).
+ * `synOf(i)` is the synthetic time for candles[i] (or any projected index,
+ * e.g. Ichimoku's Senkou spans 26 bars into the future); `realTimeForIndex`
+ * reverses that (real time for a synthetic time's index), extrapolating by
+ * flat tfSec steps for indices beyond the real data (future projections,
+ * and new bars appended live by the rollover effect below — both cases are
+ * verified single, gap-free tfSec steps already, see that effect).
+ */
+function buildSynthetic(candles: MockCandle[], tfSec: number) {
+  const realTimeOf = candles.map((c) => c.time);
+  const synBase = realTimeOf[0] ?? 0;
+  const synOf = (index: number): number => synBase + index * tfSec;
+  const realTimeForIndex = (index: number): number => {
+    if (index >= 0 && index < realTimeOf.length) return realTimeOf[index];
+    const lastIdx = realTimeOf.length - 1;
+    const anchorIdx = index >= realTimeOf.length ? lastIdx : 0;
+    const anchor = realTimeOf[anchorIdx] ?? synBase;
+    return anchor + (index - anchorIdx) * tfSec;
   };
+  const indexOfSyn = (synTime: number): number => Math.round((synTime - synBase) / tfSec);
+  const realTimeForSyn = (synTime: number): number => realTimeForIndex(indexOfSyn(synTime));
+  return { synOf, realTimeForIndex, realTimeForSyn };
 }
 
 interface CandleChartProps {
@@ -91,7 +122,11 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const priceLineRef = useRef<IPriceLine | null>(null);
+  // lastCandleRef.time is SYNTHETIC (chart-plotted) time; lastRealTimeRef is
+  // the corresponding REAL time, tracked separately purely to detect period
+  // rollovers against the real wall clock — see buildSynthetic above.
   const lastCandleRef = useRef<MockCandle | null>(null);
+  const lastRealTimeRef = useRef(0);
   const dataLenRef = useRef(0);
   const crosshairOnRef = useRef(crosshairOn);
   const [ohlc, setOhlc] = useState<{ bar: BarData<Time>; visible: boolean } | null>(null);
@@ -123,8 +158,12 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
     const digits = meta.digits;
     const bid = quote?.bid ?? meta.baseBid;
     const candles = getCandleSeries(meta.symbol, timeframe, digits, bid);
+    const tfSec = TF_SECONDS[timeframe];
+    const { synOf, realTimeForSyn } = buildSynthetic(candles, tfSec);
     dataLenRef.current = candles.length;
-    lastCandleRef.current = candles[candles.length - 1];
+    const lastIdx = candles.length - 1;
+    lastCandleRef.current = { ...candles[lastIdx], time: synOf(lastIdx) };
+    lastRealTimeRef.current = candles[lastIdx].time;
 
     const chart: IChartApi = createChart(el, {
       width: Math.max(1, el.clientWidth),
@@ -141,14 +180,16 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
         vertLines: { color: '#F0F0F3' },
         horzLines: { color: '#F0F0F3' },
       },
-      localization: { timeFormatter: formatServerTime },
+      localization: {
+        timeFormatter: (time: Time) => formatRealTime(realTimeForSyn(Number(time))),
+      },
       rightPriceScale: { borderVisible: false },
       timeScale: {
         borderVisible: false,
         timeVisible: true,
         secondsVisible: false,
         rightOffset: 4,
-        tickMarkFormatter: makeTickMarkFormatter(timeframe),
+        tickMarkFormatter: (time: Time) => formatRealTickMark(realTimeForSyn(Number(time)), timeframe),
       },
       crosshair: {
         mode: crosshairOnRef.current ? CrosshairMode.Magnet : CrosshairMode.Normal,
@@ -185,16 +226,15 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
       lastValueVisible: false,
       priceFormat: { type: 'price', precision: digits, minMove: Math.pow(10, -digits) },
     });
-    series.setData(candles.map((c) => ({ ...c, time: c.time as UTCTimestamp })));
-    // By time, not array index: the charting library can silently coalesce
-    // duplicate/out-of-order points from setData, so the post-render bar
-    // count doesn't always match candles.length — an index-based range then
-    // lands short of the true end. Time-based range is immune to that.
-    const lastBarTime = candles[candles.length - 1].time;
+    series.setData(candles.map((c, i) => ({ ...c, time: synOf(i) as UTCTimestamp })));
+    // Synthetic time is gap-free and strictly one tfSec step per index, so
+    // (unlike the old real-time version of this code) a plain N-bars-back
+    // subtraction is always exact — no risk of landing short/long across a
+    // weekend hole.
     const applyZoom = () => {
       chart.timeScale().setVisibleRange({
-        from: (lastBarTime - 59 * TF_SECONDS[timeframe]) as UTCTimestamp,
-        to: lastBarTime as UTCTimestamp,
+        from: synOf(lastIdx - 59) as UTCTimestamp,
+        to: synOf(lastIdx) as UTCTimestamp,
       });
     };
     applyZoom();
@@ -219,9 +259,9 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
     // Линии без ценовых меток/маркеров перекрестия, чтобы не мусорить на
     // шкале; autoscale свечей (с расширением под позиции) не затрагивается —
     // значения индикаторов лежат внутри ценового диапазона баров.
-    const ichimoku = computeIchimoku(candles, TF_SECONDS[timeframe]);
+    const ichimoku = computeIchimoku(candles);
     const toLineData = (pts: IndicatorPoint[]) =>
-      pts.map((p) => ({ time: p.time as UTCTimestamp, value: p.value }));
+      pts.map((p) => ({ time: synOf(p.index) as UTCTimestamp, value: p.value }));
     const indicatorLineOpts = {
       lineWidth: 1 as const,
       priceLineVisible: false,
@@ -260,7 +300,7 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
     createSeriesMarkers(
       series,
       computeFractals(candles).map((f) => ({
-        time: f.time as UTCTimestamp,
+        time: synOf(f.index) as UTCTimestamp,
         position: f.dir === 'up' ? ('aboveBar' as const) : ('belowBar' as const),
         shape: f.dir === 'up' ? ('arrowUp' as const) : ('arrowDown' as const),
         color: '#8E8E93',
@@ -292,6 +332,7 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
     chart.subscribeCrosshairMove(onCrosshairMove);
 
     // Double-tap / double-click → reset zoom to the latest 60 candles.
+    // lastCandleRef.time is synthetic (see buildSynthetic) — exact math.
     const resetZoom = () => {
       const lastTime = lastCandleRef.current?.time;
       if (lastTime == null) return;
@@ -349,11 +390,13 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
     // H4 bar rolls over at broker 20:00, which is true-UTC 17:00. Flooring
     // raw UTC would roll our bar an offset-sized chunk early/late vs the
     // real terminal. Shift into broker time before flooring, then back.
-    const currentTime = Math.floor((nowSec + BROKER_OFFSET_SEC) / tfSec) * tfSec - BROKER_OFFSET_SEC;
+    // Compared against lastRealTimeRef (REAL time), not last.time (which is
+    // the chart's gap-free SYNTHETIC time — see buildSynthetic above).
+    const currentRealTime = Math.floor((nowSec + BROKER_OFFSET_SEC) / tfSec) * tfSec - BROKER_OFFSET_SEC;
 
     let candle: MockCandle;
-    if (currentTime > last.time) {
-      const gapPeriods = Math.round((currentTime - last.time) / tfSec);
+    if (currentRealTime > lastRealTimeRef.current) {
+      const gapPeriods = Math.round((currentRealTime - lastRealTimeRef.current) / tfSec);
       if (gapPeriods > 1) {
         // Real history-sync gap (weekend, EA/terminal lag, etc.), not a
         // normal tick-to-tick rollover: we don't know what actually
@@ -365,13 +408,17 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
         priceLine.applyOptions({ price });
         return;
       }
+      // Verified above to be exactly one real tfSec step (gapPeriods <= 1),
+      // so advancing the synthetic time by one tfSec step too keeps it
+      // gap-free and in sync with the real clock — see buildSynthetic.
       candle = {
-        time: currentTime,
+        time: last.time + tfSec,
         open: last.close,
         high: Math.max(last.close, price),
         low: Math.min(last.close, price),
         close: price,
       };
+      lastRealTimeRef.current = currentRealTime;
       dataLenRef.current += 1;
     } else {
       candle = {
