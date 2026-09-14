@@ -57,7 +57,14 @@ export class RealBridge extends EventEmitter {
   // Сырые deals за диапазон (без реконструкции в позиции на стороне EA —
   // там баг, теряет ~10-15% на плотных периодах). Использует mt5-sync для
   // полного бэкфилла: копит все deals по всему периоду и один раз сшивает
-  // сам, без разрыва на границах суточных чанков.
+  // сам, без разрыва на границах чанков (в т.ч. дробящихся мельче суток).
+  //
+  // Полный datetime, не только дата: ValidateDateRange у EA общая для
+  // /history/prices и /history/orders и одинаково разбирает
+  // "YYYY-MM-DDTHH:MM:SS" для обоих — mt5-sync теперь дробит плотные дни
+  // мельче суток (см. fetchDealsChunked), и если тут обрезать до даты, эта
+  // подстройка до EA не долетает и любой суточный чанк снова видит все deals
+  // за весь день целиком.
   async getDealsRaw({ from, to }) {
     const toDate = new Date(to);
     const fromDate = new Date(from);
@@ -65,8 +72,8 @@ export class RealBridge extends EventEmitter {
       '/history/orders',
       {
         mode: 'deals',
-        from_date: brokerDate(fromDate).toISOString().slice(0, 10),
-        to_date: brokerDate(toDate).toISOString().slice(0, 10),
+        from_date: brokerDate(fromDate).toISOString().slice(0, 19),
+        to_date: brokerDate(toDate).toISOString().slice(0, 19),
       },
       45_000,
     );
@@ -80,8 +87,8 @@ export class RealBridge extends EventEmitter {
       '/history/orders',
       {
         mode: 'positions',
-        from_date: brokerDate(fromDate).toISOString().slice(0, 10),
-        to_date: brokerDate(toDate).toISOString().slice(0, 10),
+        from_date: brokerDate(fromDate).toISOString().slice(0, 19),
+        to_date: brokerDate(toDate).toISOString().slice(0, 19),
       },
       45_000, // очень плотные по сделкам дни EA считает заметно дольше обычного
     );

@@ -98,14 +98,27 @@ async function saveDeals(deals) {
   return deals.length;
 }
 
-// EA принимает from_date/to_date только как ДАТЫ (без времени) и падает в
-// HTTP 500, если from_date === to_date (пустой/нулевой диапазон — похоже на
-// баг самого EA, а не на размер ответа). Поэтому дробим строго по целым
-// суткам (никогда не давая from_date == to_date), а не по времени внутри дня.
-// Отдельно — EA всё ещё может обрезать ответ на ~110КБ на очень плотный по
-// сделкам день; если не помещается даже один день — отдаём как есть (мельче
-// суток дробить нечем, у API нет параметра времени).
+// EA принимает from_date/to_date как полный ISO8601 datetime (не только
+// дату — ValidateDateRange у EA общая для /history/prices и /history/orders
+// и разбирает "YYYY-MM-DDTHH:MM:SS" одинаково для обоих), так что дробить
+// можно по ЛЮБОЙ границе, а не только по целым суткам.
+//
+// Настоящая причина зависаний на плотных днях (проверено напрямую curl'ом
+// в обход backend): у EA фиксированный буфер ответа — ЛЮБОЙ запрос, чей
+// результат не влезает в него, обрывается РОВНО на одной и той же длине
+// (109949 байт что для целого дня, что для его половины — совпадение
+// байт-в-байт исключает "медленно строит JSON", это переполнение буфера).
+// Тело при этом отдаётся с HTTP 200 и Content-Length на полный (не
+// обрезанный) размер, поэтому Node/undici видит недостачу байт и роняет
+// fetch с "terminated" — curl молча возвращает то же самое как невалидный
+// обрубленный JSON. Раньше это лечили отказом от дня целиком (дробить
+// мельче было "некуда" при допущении "только даты") — реальный fix:
+// продолжать дробить временными окнами и НИЖЕ суток, пока каждый кусок не
+// поместится в буфер.
 const DAY_MS = 24 * 60 * 60 * 1000;
+// Ниже этого окна не дробим — при подтверждённой пустой/малой плотности
+// дальше почти всегда бессмысленно (upstream-сбой, а не переполнение).
+const MIN_CHUNK_MS = 15 * 60 * 1000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const atUtcMidnight = (d) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 
@@ -116,20 +129,21 @@ const atUtcMidnight = (d) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth
 // принудительно, даже если он успешно распарсился.
 const SUSPICIOUS_LEN = 250;
 
-// Дни, на которых бэкфилл сдался даже на суточной гранулярности (например,
-// 11.09 — там физически больше данных, чем помещается в буфер EA). Частый
-// синк не должен их перепроверять — иначе одно и то же зависание/500
-// повторяется каждые 30с и кладёт однопоточный EA, ломая заодно live-пуш
-// баланса/позиций через WS. Заполняется backfillHistory().
+// Дни, на которых бэкфилл сдался даже на минимальной гранулярности
+// (MIN_CHUNK_MS) — значит проблема не в переполнении буфера, а в чём-то
+// ином (EA недоступен и т.п.). Частый синк не должен их перепроверять —
+// иначе одно и то же зависание/500 повторяется каждые 30с и кладёт
+// однопоточный EA, ломая заодно live-пуш баланса/позиций через WS.
+// Заполняется backfillHistory().
 const KNOWN_BAD_DAYS = new Set();
 
 async function fetchHistoryChunked(bridge, from, to, retry = true) {
   await sleep(120); // EA однопоточный — не бомбим его запросами впритык
-  const days = Math.round((to.getTime() - from.getTime()) / DAY_MS);
+  const spanMs = to.getTime() - from.getTime();
   let result;
   try {
     result = await bridge.history({ from: from.toISOString(), to: to.toISOString() });
-    if (result.length < SUSPICIOUS_LEN || days <= 1) return result;
+    if (result.length < SUSPICIOUS_LEN || spanMs <= MIN_CHUNK_MS) return result;
     // Похоже на тихий обрыв буфера — раздробим и сверим со сложенной суммой,
     // на всякий случай берём то, что даёт больше строк.
   } catch (err) {
@@ -137,14 +151,13 @@ async function fetchHistoryChunked(bridge, from, to, retry = true) {
       await sleep(300);
       return fetchHistoryChunked(bridge, from, to, false);
     }
-    if (days <= 1) {
+    if (spanMs <= MIN_CHUNK_MS) {
       KNOWN_BAD_DAYS.add(from.toISOString().slice(0, 10));
-      console.error(`[mt5-sync] история: день не влезает целиком (${from.toISOString().slice(0, 10)}):`, err.message);
+      console.error(`[mt5-sync] история: окно не влезает (${from.toISOString()}..${to.toISOString()}):`, err.message);
       return [];
     }
   }
-  const midDays = Math.floor(days / 2) || 1;
-  const mid = new Date(from.getTime() + midDays * DAY_MS);
+  const mid = new Date(from.getTime() + Math.floor(spanMs / 2));
   // Последовательно (не Promise.all) — EA не тянет параллельные запросы.
   const a = await fetchHistoryChunked(bridge, from, mid);
   const b = await fetchHistoryChunked(bridge, mid, to);
@@ -161,24 +174,23 @@ async function fetchHistoryChunked(bridge, from, to, retry = true) {
 // суточные чанки, всё равно корректно находят друг друга по position_id.
 async function fetchDealsChunked(bridge, from, to, retry = true) {
   await sleep(120);
-  const days = Math.round((to.getTime() - from.getTime()) / DAY_MS);
+  const spanMs = to.getTime() - from.getTime();
   let result;
   try {
     result = await bridge.dealsRaw({ from: from.toISOString(), to: to.toISOString() });
-    if (result.length < SUSPICIOUS_LEN || days <= 1) return result;
+    if (result.length < SUSPICIOUS_LEN || spanMs <= MIN_CHUNK_MS) return result;
   } catch (err) {
     if (retry) {
       await sleep(300);
       return fetchDealsChunked(bridge, from, to, false);
     }
-    if (days <= 1) {
+    if (spanMs <= MIN_CHUNK_MS) {
       KNOWN_BAD_DAYS.add(from.toISOString().slice(0, 10));
-      console.error(`[mt5-sync] deals: день не влезает целиком (${from.toISOString().slice(0, 10)}):`, err.message);
+      console.error(`[mt5-sync] deals: окно не влезает (${from.toISOString()}..${to.toISOString()}):`, err.message);
       return [];
     }
   }
-  const midDays = Math.floor(days / 2) || 1;
-  const mid = new Date(from.getTime() + midDays * DAY_MS);
+  const mid = new Date(from.getTime() + Math.floor(spanMs / 2));
   const a = await fetchDealsChunked(bridge, from, mid);
   const b = await fetchDealsChunked(bridge, mid, to);
   const split = [...a, ...b];
