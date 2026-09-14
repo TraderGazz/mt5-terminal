@@ -38,6 +38,7 @@ const PERIOD_ROWS: readonly { value: PeriodKind; label: string }[] = [
 // Последний год, остальные скрыть выбор (не тап, серым) до отдельного
 // разрешения включить обратно.
 const TEMP_DISABLED_PERIODS = new Set<PeriodKind>(['week', 'month', '3m', '6m', 'custom']);
+const VISIBLE_PERIOD_ROWS = PERIOD_ROWS.filter((row) => !TEMP_DISABLED_PERIODS.has(row.value));
 
 // ВРЕМЕННО (тот же запрос): «Создать торговый отчёт» пока просто показывает
 // «Режим просмотра» вместо реальной генерации HTML/CSV — снять флаг, чтобы
@@ -269,23 +270,19 @@ export default function HistoryPeriodPage() {
           </button>
         </Card>
 
-        {/* Periods */}
+        {/* Periods — ВРЕМЕННО только Сегодня/Последний год (см.
+            TEMP_DISABLED_PERIODS): остальные строки скрыты целиком, не
+            просто неактивны, по прямому запросу заказчика. */}
         <Card>
-          {PERIOD_ROWS.map((row, i) => {
-            const disabled = TEMP_DISABLED_PERIODS.has(row.value);
-            return (
-              <RadioRow
-                key={row.value}
-                label={row.label}
-                selected={period === row.value}
-                last={i === PERIOD_ROWS.length - 1}
-                disabled={disabled}
-                onSelect={() => {
-                  if (!disabled) setPeriod(row.value);
-                }}
-              />
-            );
-          })}
+          {VISIBLE_PERIOD_ROWS.map((row, i) => (
+            <RadioRow
+              key={row.value}
+              label={row.label}
+              selected={period === row.value}
+              last={i === VISIBLE_PERIOD_ROWS.length - 1}
+              onSelect={() => setPeriod(row.value)}
+            />
+          ))}
         </Card>
 
         {/* Custom range (only for «Выбрать период») */}
