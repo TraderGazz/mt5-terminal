@@ -18,6 +18,11 @@ const TF_MINUTES = { M1: 1, M5: 5, M15: 15, M30: 30, H1: 60, H4: 240, D1: 1440 }
 async function get(path, params, timeoutMs = TIMEOUT_MS) {
   const url = new URL(BASE + path);
   for (const [k, v] of Object.entries(params || {})) if (v != null) url.searchParams.set(k, String(v));
+  // EA's HTTP-параметры парсятся наивным StringSplit без URL-decode — %3A
+  // (закодированное URLSearchParams двоеточие из ISO-дат) там не превращается
+  // обратно в ':', и валидатор формата даты отклоняет запрос. ':' не входит
+  // в reserved-набор RFC 3986 для query — безопасно отправить его как есть.
+  url.search = url.search.replace(/%3A/gi, ':');
   const ctl = AbortSignal.timeout(timeoutMs);
   const res = await fetch(url, { signal: ctl });
   if (!res.ok) throw new Error(`bridge ${path} → HTTP ${res.status}`);
