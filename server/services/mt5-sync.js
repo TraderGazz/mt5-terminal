@@ -242,7 +242,13 @@ function buildPositionsFromDeals(deals) {
         ticket: closeDeal.ticket,
         position_id: closeDeal.position_id,
         symbol: closeDeal.symbol || openDeal.symbol,
-        type: closeDeal.type,
+        // Направление ПОЗИЦИИ, не закрывающей сделки: MT5 закрывает buy
+        // противоположной (sell) транзакцией и наоборот — closeDeal.type
+        // всегда обратный реальному направлению позиции. Подтверждено
+        // напрямую сырыми данными EA: позиция с closeDeal.type=SELL имела
+        // openDeal.type=BUY, и профит (реальный убыток на падении цены)
+        // сходился именно с BUY, а не с тем, что показывал closeDeal.type.
+        type: openDeal.type,
         volume: closeDeal.volume,
         open_price: openDeal.price,
         close_price: closeDeal.price,
