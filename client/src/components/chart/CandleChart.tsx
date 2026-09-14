@@ -22,7 +22,7 @@ import { TF_SECONDS, type MockCandle, type Timeframe } from './candles';
 import { getCandleSeries, useCandleData } from '@/data/candles';
 import { computeFractals, computeIchimoku, type IndicatorPoint } from './indicators';
 import type { Quote } from '@/data/quotes';
-import { POSITIONS } from '@/mocks/positions';
+import { usePositions } from '@/data/positions';
 import type { SymbolMeta } from '@/mocks/symbols';
 import { formatPrice } from '@/lib/format';
 
@@ -99,6 +99,12 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
   const crosshairOnRef = useRef(crosshairOn);
   const [ohlc, setOhlc] = useState<{ bar: BarData<Time>; visible: boolean } | null>(null);
   const candleVersion = useCandleData(meta.symbol, timeframe, meta.digits);
+  // Live positions (real data in api mode, mock fallback otherwise) — read
+  // reactively but deliberately NOT in the chart-rebuild effect's deps
+  // (same pattern as quote/meta.baseBid below): a full rebuild on every
+  // position poll tick would flicker/reset zoom. The price lines just
+  // reflect whatever was live the last time the chart was (re)built.
+  const positions = usePositions();
 
   // Keep the ref current so chart-created closures see the latest toggle.
   useEffect(() => {
@@ -181,7 +187,7 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
     // Open-position levels of this symbol must stay on screen (MT5 iOS shows
     // them with red price pills), so the autoscale range is widened to cover
     // every position price plus a small padding.
-    const positionPrices = POSITIONS.filter((p) => p.symbol === meta.symbol).map(
+    const positionPrices = positions.filter((p) => p.symbol === meta.symbol).map(
       (p) => p.openPrice,
     );
 
@@ -236,7 +242,7 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
     });
 
     // Open positions of this symbol → solid red level + red price pill.
-    for (const pos of POSITIONS) {
+    for (const pos of positions) {
       if (pos.symbol !== meta.symbol) continue;
       series.createPriceLine({
         price: pos.openPrice,
