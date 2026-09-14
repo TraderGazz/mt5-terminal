@@ -366,18 +366,23 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
 
     let candle: MockCandle;
     if (currentTime > last.time) {
-      // Roll over to a new candle. If more than one period is missing —
-      // a real history-sync gap (weekend, EA/terminal lag, etc.), not a
-      // normal tick-to-tick rollover — don't bridge last.close → price in
-      // one bar: that fabricates a huge fake move that never happened.
-      // Start the new candle flat at the live price instead.
       const gapPeriods = Math.round((currentTime - last.time) / tfSec);
-      const open = gapPeriods <= 1 ? last.close : price;
+      if (gapPeriods > 1) {
+        // Real history-sync gap (weekend, EA/terminal lag, etc.), not a
+        // normal tick-to-tick rollover: we don't know what actually
+        // happened in the missing periods. Don't fabricate a bar that
+        // visually absorbs the whole gap's price move into one candle
+        // (reads as a candle from a much higher timeframe) — leave the
+        // last real bar alone and only move the price line. A fresh
+        // candle refetch will backfill the real bars once available.
+        priceLine.applyOptions({ price });
+        return;
+      }
       candle = {
         time: currentTime,
-        open,
-        high: Math.max(open, price),
-        low: Math.min(open, price),
+        open: last.close,
+        high: Math.max(last.close, price),
+        low: Math.min(last.close, price),
         close: price,
       };
       dataLenRef.current += 1;

@@ -62,15 +62,24 @@ export function getCandleSeries(
   return generateCandles(symbol, tf, digits, bid);
 }
 
-/** Триггерит загрузку реальных свечей (api) и возвращает счётчик обновлений. */
+const REFRESH_MS = 60_000;
+
+/** Триггерит загрузку реальных свечей (api) и возвращает счётчик обновлений.
+ *  Переопрашивает раз в минуту — терминал не всегда досинхронизирует
+ *  историю в реальном времени сам по себе (не по каждому символу/ТФ держит
+ *  открытый график), так что живая дорисовка последней свечи может уйти в
+ *  разрыв от давно устаревших данных; периодический рефетч подтягивает
+ *  реальные бары и ограничивает, насколько большим может стать этот разрыв. */
 export function useCandleData(symbol: string, tf: Timeframe, digits: number): number {
   const [version, setVersion] = useState(0);
   useEffect(() => {
     if (!IS_API) return;
     bump = () => setVersion((v) => v + 1);
     void load(symbol, tf, digits);
+    const timer = setInterval(() => void load(symbol, tf, digits), REFRESH_MS);
     return () => {
       bump = null;
+      clearInterval(timer);
     };
   }, [symbol, tf, digits]);
   return version;
