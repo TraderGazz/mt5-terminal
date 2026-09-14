@@ -89,13 +89,17 @@ export class RealBridge extends EventEmitter {
       const neededDays = Math.ceil(((count * barMinutes) / (24 * 60)) * 2.5) + 2;
       fromDate = new Date(toDate.getTime() - Math.min(neededDays, 90) * 24 * 60 * 60 * 1000);
     }
+    // Полный datetime, не только дата: StringToTime() у EA разбирает дату
+    // без времени как полночь ("2026-09-14" -> "2026-09-14 00:00:00") — то
+    // есть to_date=сегодня всегда обрезал бары полуночью вместо "сейчас".
+    const fmt = (d) => d.toISOString().slice(0, 19).replace('T', ' ');
     return get(
       '/history/prices',
       {
         symbol: symbol || this.symbol,
         time_frame: timeframe,
-        from_date: fromDate.toISOString().slice(0, 10),
-        to_date: toDate.toISOString().slice(0, 10),
+        from_date: fmt(fromDate),
+        to_date: fmt(toDate),
       },
       20_000,
     );
