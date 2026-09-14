@@ -92,7 +92,10 @@ export class RealBridge extends EventEmitter {
     // Полный datetime, не только дата: StringToTime() у EA разбирает дату
     // без времени как полночь ("2026-09-14" -> "2026-09-14 00:00:00") — то
     // есть to_date=сегодня всегда обрезал бары полуночью вместо "сейчас".
-    const fmt = (d) => d.toISOString().slice(0, 19).replace('T', ' ');
+    // Формат должен быть строго ISO8601 c литерой "T" (EA сам меняет её на
+    // пробел перед StringToTime — если прислать уже с пробелом, валидатор
+    // формата на стороне EA отклоняет запрос с HTTP 400).
+    const fmt = (d) => d.toISOString().slice(0, 19);
     return get(
       '/history/prices',
       {
