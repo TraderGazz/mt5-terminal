@@ -190,20 +190,45 @@ export default function HistoryPage() {
   // MT5 iOS opens History already scrolled to the very bottom (latest
   // entries + the totals block visible). Scroll the app scroll container
   // (Layout#app-scroll — not window) once, after the first render settles.
-  // Double rAF waits for layout; 'auto' behaviour = instant jump, no
-  // animation. Runs ONLY on the initial page mount — switching the
-  // Позиции/Ордера/Сделки segments keeps the user's scroll position.
+  // 'auto' behaviour = instant jump, no animation. Runs ONLY on the initial
+  // page mount — switching the Позиции/Ордера/Сделки segments keeps the
+  // user's scroll position.
+  //
+  // With thousands of rows (real backfilled history) a fixed double-rAF
+  // isn't always enough — layout of that many nodes can take a few more
+  // frames, so the single scrollTo landed short of the true bottom. Keep
+  // re-issuing scrollTo(bottom) every frame until scrollHeight stops
+  // growing for a few consecutive frames (layout settled), capped so a
+  // stuck/slow render can't loop forever.
   useEffect(() => {
-    let raf2 = 0;
-    const raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => {
-        const el = document.getElementById('app-scroll');
-        if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'auto' });
-      });
-    });
+    let cancelled = false;
+    let rafId = 0;
+    let frames = 0;
+    let lastHeight = -1;
+    let stable = 0;
+    const MAX_FRAMES = 120; // ~2s at 60fps safety cap
+
+    const tick = () => {
+      if (cancelled) return;
+      const el = document.getElementById('app-scroll');
+      if (el) {
+        el.scrollTo({ top: el.scrollHeight, behavior: 'auto' });
+        if (el.scrollHeight === lastHeight) {
+          stable += 1;
+        } else {
+          stable = 0;
+          lastHeight = el.scrollHeight;
+        }
+      }
+      frames += 1;
+      if (stable >= 4 || frames >= MAX_FRAMES) return;
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+
     return () => {
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
+      cancelled = true;
+      cancelAnimationFrame(rafId);
     };
   }, []);
 
