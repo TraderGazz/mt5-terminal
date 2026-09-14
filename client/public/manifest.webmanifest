@@ -1,6 +1,6 @@
 {
-  "name": "MetaTrader 5",
-  "short_name": "MetaTrader 5",
+  "name": "MetaTrader",
+  "short_name": "MetaTrader",
   "description": "Мобильный торговый терминал",
   "display": "standalone",
   "background_color": "#FFFFFF",
