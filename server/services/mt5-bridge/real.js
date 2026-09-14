@@ -140,6 +140,13 @@ export class RealBridge extends EventEmitter {
     return get('/quote', { symbol: this.symbol });
   }
 
+  // Котировка произвольного символа (не только основного) — используется
+  // для пересчёта profit sell-позиций (курс USDRUB), независимо от того,
+  // подписан ли сейчас кто-то из клиентов на канал котировок.
+  async getQuoteFor(symbol) {
+    return get('/quote', { symbol });
+  }
+
   // Котировки по всему списку Market Watch (не только основной символ).
   // Последовательно — EA однопоточный, параллельные запросы валит в 500.
   async getQuotes() {

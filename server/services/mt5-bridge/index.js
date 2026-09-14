@@ -24,9 +24,13 @@ class Bridge extends EventEmitter {
     this.connected = this.mode === 'mock';
     this.lastEventAt = null;
     // Последние живые котировки по символу (нужно для пересчёта profit —
-    // см. #fixSellProfit), наполняется из push price_update по всем
-    // подписанным Market Watch символам (не только основному).
+    // см. #fixSellProfit). Push price_update по WS у EA ненадёжен (та же
+    // история, что и с трейд-событиями — см. mt5-sync.js), поэтому это
+    // только best-effort кэш; настоящее наполнение — активный REST-запрос
+    // в #ensureUsdRub(), не зависящий от того, подписан ли кто-то из
+    // клиентов на канал котировок.
     this.lastQuotes = new Map();
+    this.usdRubFetchedAt = 0;
 
     this.impl.on('event', (raw) => this.#onRaw(raw));
   }
@@ -69,7 +73,24 @@ class Bridge extends EventEmitter {
   async positions() {
     const res = await this.impl.getPositions();
     const list = Array.isArray(res) ? res : res.opened || res.positions || res.data || [];
-    return list.map(N.normalizePosition).filter((p) => p.id).map((p) => this.#fixSellProfit(p));
+    const normalized = list.map(N.normalizePosition).filter((p) => p.id);
+    if (normalized.some((p) => p.type === 'sell' && p.symbol === this.symbol)) {
+      await this.#ensureUsdRub();
+    }
+    return normalized.map((p) => this.#fixSellProfit(p));
+  }
+
+  // Активно подтягивает курс USDRUB REST-запросом (с коротким TTL-кэшем),
+  // не полагаясь на WS push — тот ненадёжен, а курс нужен даже когда никто
+  // из клиентов сейчас не смотрит на вкладку Котировки.
+  async #ensureUsdRub() {
+    if (Date.now() - this.usdRubFetchedAt < 5000) return;
+    if (typeof this.impl.getQuoteFor !== 'function') return;
+    this.usdRubFetchedAt = Date.now();
+    try {
+      const q = N.normalizeQuote(await this.impl.getQuoteFor('USDRUBrfd'));
+      this.lastQuotes.set(q.symbol, q);
+    } catch { /* используем то, что уже есть в кэше (если есть) */ }
   }
 
   // EA's /order/list считает profit для SELL-позиций по битой формуле —
