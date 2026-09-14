@@ -68,9 +68,10 @@ interface SortableRow {
   profit: number;
 }
 
-/** Newest-first by close time is the MT5 default; other keys fall back to it. */
+/** Oldest-first by close time is the MT5 default — the list ends on the
+ *  newest deal, which is what the auto-scroll-to-bottom lands on. */
 function compareRows(key: SortKey): (a: SortableRow, b: SortableRow) => number {
-  const byCloseTime = (a: SortableRow, b: SortableRow) => b.closeTime - a.closeTime;
+  const byCloseTime = (a: SortableRow, b: SortableRow) => a.closeTime - b.closeTime;
   switch (key) {
     case 'symbol':
       return (a, b) => a.symbol.localeCompare(b.symbol) || byCloseTime(a, b);
