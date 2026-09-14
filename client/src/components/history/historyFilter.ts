@@ -47,12 +47,14 @@ export function startOfWeek(ts: number): number {
 
 function defaultState(): HistoryFilterState {
   const now = Date.now();
-  // Default period: «Последние 6 месяцев» (MT5 iOS).
+  // ВРЕМЕННО «Последний год» вместо «6 месяцев» — период 6m сейчас скрыт
+  // из выбора (HistoryPeriod.tsx TEMP_DISABLED_PERIODS), дефолт не должен
+  // указывать на недоступный вариант. Вернуть на '6m' вместе с тем флагом.
   const sixMonthsAgo = new Date(now);
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
   return {
     symbol: null,
-    period: '6m',
+    period: 'year',
     customFrom: startOfDay(sixMonthsAgo.getTime()),
     customTo: endOfDay(now),
   };

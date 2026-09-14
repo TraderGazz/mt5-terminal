@@ -33,6 +33,17 @@ const PERIOD_ROWS: readonly { value: PeriodKind; label: string }[] = [
   { value: 'custom', label: 'Выбрать период' },
 ];
 
+// ВРЕМЕННО (по просьбе заказчика, пока подключён инвестор): отображение по
+// этим периодам ещё не выверено до конца — оставить выбор только Сегодня и
+// Последний год, остальные скрыть выбор (не тап, серым) до отдельного
+// разрешения включить обратно.
+const TEMP_DISABLED_PERIODS = new Set<PeriodKind>(['week', 'month', '3m', '6m', 'custom']);
+
+// ВРЕМЕННО (тот же запрос): «Создать торговый отчёт» пока просто показывает
+// «Режим просмотра» вместо реальной генерации HTML/CSV — снять флаг, чтобы
+// вернуть рабочий выбор формата (код ниже не тронут).
+const TEMP_REPORT_DISABLED = true;
+
 /** White iOS card (radius 14, 16px margins) on the grouped gray background. */
 function Card({ children, first }: { children: ReactNode; first?: boolean }) {
   return (
@@ -61,16 +72,20 @@ interface RadioRowProps {
   label: string;
   selected: boolean;
   last?: boolean;
+  disabled?: boolean;
   onSelect: () => void;
 }
 
-function RadioRow({ label, selected, last, onSelect }: RadioRowProps) {
+function RadioRow({ label, selected, last, disabled, onSelect }: RadioRowProps) {
   return (
     <div className="bg-white">
       <button
         type="button"
+        disabled={disabled}
         onClick={onSelect}
-        className="flex h-12 w-full items-center justify-between px-4 text-left active:bg-[#D9D9DE]"
+        className={`flex h-12 w-full items-center justify-between px-4 text-left ${
+          disabled ? 'opacity-40' : 'active:bg-[#D9D9DE]'
+        }`}
       >
         <span className="text-[17px] leading-[22px] tracking-[-0.41px]">{label}</span>
         <AnimatePresence>{selected && <RowCheck />}</AnimatePresence>
@@ -256,15 +271,21 @@ export default function HistoryPeriodPage() {
 
         {/* Periods */}
         <Card>
-          {PERIOD_ROWS.map((row, i) => (
-            <RadioRow
-              key={row.value}
-              label={row.label}
-              selected={period === row.value}
-              last={i === PERIOD_ROWS.length - 1}
-              onSelect={() => setPeriod(row.value)}
-            />
-          ))}
+          {PERIOD_ROWS.map((row, i) => {
+            const disabled = TEMP_DISABLED_PERIODS.has(row.value);
+            return (
+              <RadioRow
+                key={row.value}
+                label={row.label}
+                selected={period === row.value}
+                last={i === PERIOD_ROWS.length - 1}
+                disabled={disabled}
+                onSelect={() => {
+                  if (!disabled) setPeriod(row.value);
+                }}
+              />
+            );
+          })}
         </Card>
 
         {/* Custom range (only for «Выбрать период») */}
@@ -290,7 +311,7 @@ export default function HistoryPeriodPage() {
         <Card>
           <button
             type="button"
-            onClick={() => setReportSheet(true)}
+            onClick={() => (TEMP_REPORT_DISABLED ? setToast('Режим просмотра') : setReportSheet(true))}
             className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left active:bg-[#D9D9DE]"
           >
             <span className="min-w-0">

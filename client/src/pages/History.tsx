@@ -7,6 +7,7 @@ import Toast from '@/components/Toast';
 import type { Deal } from '@/data/history';
 import { getCfdOps, getDeals, useDealsVersion } from '@/data/history';
 import { depositTotalsForRange } from '@/data/depositLedger';
+import { useAccount } from '@/data/account';
 import { getSymbolMeta } from '@/mocks/symbols';
 import { formatMoneyMT5 } from '@/components/history/utils';
 import SegmentedControl from '@/components/history/SegmentedControl';
@@ -189,6 +190,10 @@ function TotalRow({ label, value }: { label: string; value: string }) {
 export default function HistoryPage() {
   const navigate = useNavigate();
   const filter = useHistoryFilter();
+  // «Баланс» в итогах — всегда живой текущий баланс счёта (тот же источник,
+  // что вкладка Торговля), а не расчёт по периоду: иначе они расходятся
+  // между вкладками, что заказчик пометил багом.
+  const account = useAccount();
 
   const [tab, setTab] = useState<TabKey>('deals');
   const [tabDir, setTabDir] = useState(1);
@@ -378,7 +383,6 @@ export default function HistoryPage() {
   // only when the period actually contains non-zero operations of that kind.
   const showWithdrawal = isWidestPeriod || balTotals.withdrawal !== 0;
   const showCfd = isWidestPeriod || cfdTotal !== 0;
-  const grandTotal = balTotals.net + totals.total + cfdTotal;
 
   const orderStats = useMemo(
     () => ({
@@ -645,7 +649,7 @@ export default function HistoryPage() {
                   {showCfd && <TotalRow label="CFD" value={formatMoneyMT5(cfdTotal)} />}
                   <TotalRow label="Своп" value={formatMoneyMT5(totals.swap)} />
                   <TotalRow label="Комиссия" value={formatMoneyMT5(totals.commission)} />
-                  <TotalRow label="Баланс" value={formatMoneyMT5(grandTotal)} />
+                  <TotalRow label="Баланс" value={formatMoneyMT5(account.balance)} />
                 </>
               )}
             </div>
