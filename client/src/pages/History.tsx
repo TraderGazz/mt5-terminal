@@ -495,36 +495,6 @@ export default function HistoryPage() {
         </svg>
       </div>
 
-      {/* Итоги — сразу под шапкой, а не в конце списка: при тысячах записей
-          долистать до конца нереально, заказчик попросил показывать сразу. */}
-      {showTotals && (
-        <div className="bg-white pb-4">
-          <div className="h-px bg-[#C6C6C8]" />
-          <div className="px-2 py-[14px]">
-            {tab === 'orders' ? (
-              <>
-                <TotalRow label="Всего" value={String(orderStats.total)} />
-                <TotalRow label="Исполнено" value={String(orderStats.filled)} />
-                <TotalRow label="Отменено" value={String(orderStats.canceled)} />
-              </>
-            ) : (
-              <>
-                <TotalRow label="Депозит" value={formatMoneyMT5(balTotals.deposit)} />
-                {showWithdrawal && (
-                  <TotalRow label="Снятие" value={formatMoneyMT5(balTotals.withdrawal)} />
-                )}
-                <TotalRow label="Прибыль" value={formatMoneyMT5(totals.profit)} />
-                {showCfd && <TotalRow label="CFD" value={formatMoneyMT5(cfdTotal)} />}
-                <TotalRow label="Своп" value={formatMoneyMT5(totals.swap)} />
-                <TotalRow label="Комиссия" value={formatMoneyMT5(totals.commission)} />
-                <TotalRow label="Баланс" value={formatMoneyMT5(grandTotal)} />
-              </>
-            )}
-          </div>
-          <div className="h-px bg-[#C6C6C8]" />
-        </div>
-      )}
-
       {/* Tab content */}
       <div className="relative flex-1 pb-4">
         <AnimatePresence mode="popLayout" initial={false} custom={tabDir}>
@@ -592,6 +562,36 @@ export default function HistoryPage() {
 
           </motion.div>
         </AnimatePresence>
+
+        {/* Flat MT5 iOS totals block at the end of the list, framed by
+            full-width hairlines above «Депозит» and below «Баланс». */}
+        {showTotals && (
+          <div className="bg-white pb-4">
+            <div className="h-px bg-[#C6C6C8]" />
+            <div className="px-2 py-[14px]">
+              {tab === 'orders' ? (
+                <>
+                  <TotalRow label="Всего" value={String(orderStats.total)} />
+                  <TotalRow label="Исполнено" value={String(orderStats.filled)} />
+                  <TotalRow label="Отменено" value={String(orderStats.canceled)} />
+                </>
+              ) : (
+                <>
+                  <TotalRow label="Депозит" value={formatMoneyMT5(balTotals.deposit)} />
+                  {showWithdrawal && (
+                    <TotalRow label="Снятие" value={formatMoneyMT5(balTotals.withdrawal)} />
+                  )}
+                  <TotalRow label="Прибыль" value={formatMoneyMT5(totals.profit)} />
+                  {showCfd && <TotalRow label="CFD" value={formatMoneyMT5(cfdTotal)} />}
+                  <TotalRow label="Своп" value={formatMoneyMT5(totals.swap)} />
+                  <TotalRow label="Комиссия" value={formatMoneyMT5(totals.commission)} />
+                  <TotalRow label="Баланс" value={formatMoneyMT5(grandTotal)} />
+                </>
+              )}
+            </div>
+            <div className="h-px bg-[#C6C6C8]" />
+          </div>
+        )}
       </div>
 
       {/* Long-press deal sheet */}
