@@ -5,7 +5,8 @@ import { Check, Clock } from 'lucide-react';
 import ActionSheet from '@/components/ActionSheet';
 import Toast from '@/components/Toast';
 import type { Deal } from '@/data/history';
-import { getBalanceOps, getCfdOps, getDeals, useDealsVersion } from '@/data/history';
+import { getCfdOps, getDeals, useDealsVersion } from '@/data/history';
+import { depositTotalsForRange } from '@/data/depositLedger';
 import { getSymbolMeta } from '@/mocks/symbols';
 import { formatMoneyMT5 } from '@/components/history/utils';
 import SegmentedControl from '@/components/history/SegmentedControl';
@@ -323,13 +324,6 @@ export default function HistoryPage() {
     return [...all].sort((a, b) => cmp(asSortable(a), asSortable(b)));
   }, [deals, filter.symbol, range, sort]);
 
-  // Balance operations (deposits/withdrawals) feed ONLY the totals block —
-  // the «Баланс» tab was removed per the MT5 iOS original (3 tabs only).
-  const balanceOps = useMemo(
-    () => getBalanceOps().filter((d) => d.closeTime >= range.from && d.closeTime <= range.to),
-    [range, dealsVersion],
-  );
-
   // CFD adjustments for the «CFD» totals row (respects symbol + period).
   const cfdOps = useMemo(
     () =>
@@ -362,20 +356,18 @@ export default function HistoryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deals, isWidestPeriod]);
 
+  // Депозит/снятие считаются из официальной выписки брокера
+  // (depositLedger.ts), не из данных биржи (mt5-sync) — те, как выяснилось,
+  // не совпадают с выпиской (заказчик прислал её отдельно, «для
+  // расчета.xlsx», для сверки по периодам).
   const balTotals = useMemo(() => {
     if (isWidestPeriod) {
       const { deposit, withdrawal } = FIXED_TOTALS;
       return { deposit, withdrawal, net: deposit - withdrawal };
     }
-    let deposit = 0;
-    let withdrawal = 0;
-    for (const d of balanceOps) {
-      if (d.profit < 0) withdrawal += -d.profit;
-      else deposit += d.profit;
-    }
+    const { deposit, withdrawal } = depositTotalsForRange(range.from, range.to);
     return { deposit, withdrawal, net: deposit - withdrawal };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [balanceOps, isWidestPeriod]);
+  }, [range, isWidestPeriod]);
 
   const cfdTotal = useMemo(
     () => (isWidestPeriod ? 0 : cfdOps.reduce((s, d) => s + d.profit, 0)),
