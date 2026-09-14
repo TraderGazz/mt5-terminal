@@ -319,7 +319,15 @@ export function startMt5Sync() {
   const bridge = getBridge();
   // первый прогон — после того, как проба БД завершится
   setTimeout(() => syncNow('startup'), 4000).unref?.();
-  setTimeout(() => backfillHistory(), 6000).unref?.();
+  // Бэкфилл — тяжёлая одноразовая операция (сотни запросов к однопоточному
+  // EA с ретраями на "плотных" днях). Раньше запускался при КАЖДОМ рестарте
+  // backend (флаг backfilled сбрасывается в памяти), что при частых рестартах
+  // (например, во время отладки) перегружало EA повторно и роняло даже
+  // обычные REST-запросы по таймауту. История уже собрана один раз — включать
+  // явно через MT5_RUN_BACKFILL=1, когда действительно нужно дособрать заново.
+  if (process.env.MT5_RUN_BACKFILL === '1') {
+    setTimeout(() => backfillHistory(), 6000).unref?.();
+  }
   timer = setInterval(() => syncNow('interval'), INTERVAL_MS);
   timer.unref?.();
   bridge.on('trade', () => syncNow('trade-event'));
