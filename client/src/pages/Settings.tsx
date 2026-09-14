@@ -85,7 +85,7 @@ const CARD_CLS = 'mx-5 overflow-hidden rounded-[20px] bg-white';
 /**
  * Настройки (`/settings`) — визуальная копия MT5 iOS: карточка профиля
  * (тап → `/account`), далее белые карточки-группы. Все пункты — заглушки
- * «В разработке»; «Интерфейс» открывает ActionSheet с языком.
+ * «Режим просмотра»; «Интерфейс» открывает ActionSheet с языком.
  */
 export default function SettingsPage() {
   const navigate = useNavigate();

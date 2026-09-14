@@ -76,7 +76,7 @@ export default function AccountPage() {
         <div className="mt-6 bg-bg">
           <button
             type="button"
-            onClick={() => setToast('В разработке')}
+            onClick={() => setToast('Режим просмотра')}
             className={ROW_CLS}
           >
             <span className="text-[17px] tracking-[-0.41px] text-black">Компания</span>
@@ -110,7 +110,7 @@ export default function AccountPage() {
         <div className="mt-6 bg-bg">
           <button
             type="button"
-            onClick={() => setToast('В разработке')}
+            onClick={() => setToast('Режим просмотра')}
             className={ROW_CLS}
           >
             <span className="min-w-0 flex-1 truncate text-[17px] tracking-[-0.41px] text-black">
@@ -141,7 +141,7 @@ export default function AccountPage() {
           {
             label: 'Удалить счет',
             destructive: true,
-            onSelect: () => setToast('В разработке'),
+            onSelect: () => setToast('Режим просмотра'),
           },
         ]}
         onClose={() => setDeleteSheet(false)}

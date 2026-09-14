@@ -8,7 +8,7 @@ interface StubModalProps {
 }
 
 /**
- * «В разработке» stub modal (settings.md §4): centered iOS-alert card,
+ * «Режим просмотра» stub modal (settings.md §4): centered iOS-alert card,
  * scale 0.9→1 + opacity spring 250ms, closes on OK / backdrop tap.
  * Scoped to the phone column.
  */
@@ -41,7 +41,7 @@ export default function StubModal({ row, onClose }: StubModalProps) {
                   {row.label}
                 </p>
                 <p className="mt-1 text-[13px] leading-[16px] tracking-[-0.08px] text-text-secondary">
-                  В разработке
+                  Режим просмотра
                 </p>
               </div>
               <div className="border-t-[0.5px] border-separator">

@@ -122,7 +122,7 @@ export default function ChartPage() {
           >
             <Crosshair size={24} strokeWidth={1.5} />
           </IconButton>
-          <IconButton label="Индикаторы" onClick={() => setToast('В разработке')}>
+          <IconButton label="Индикаторы" onClick={() => setToast('Режим просмотра')}>
             <span className="font-serif text-[24px] italic leading-none">ƒ</span>
           </IconButton>
           <IconButton label="Периоды графика" onClick={() => setSheet('period')}>
