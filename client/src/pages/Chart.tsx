@@ -62,7 +62,7 @@ type SheetKind = 'symbol' | 'period';
 export default function ChartPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const rawSymbol = (searchParams.get('symbol') ?? 'EURUSDrfd').toUpperCase();
+  const rawSymbol = searchParams.get('symbol') ?? 'EURUSDrfd';
   const meta = getSymbolMeta(rawSymbol) ?? getSymbolMeta('EURUSDrfd')!;
   const symbol = meta.symbol;
   const quote = useQuote(symbol);
