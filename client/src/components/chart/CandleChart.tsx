@@ -111,6 +111,16 @@ export default function CandleChart({ meta, timeframe, quote, crosshairOn }: Can
     const digits = meta.digits;
     const bid = quote?.bid ?? meta.baseBid;
     const candles = getCandleSeries(meta.symbol, timeframe, digits, bid);
+    // eslint-disable-next-line no-console
+    console.log('[chart-debug]', {
+      symbol: meta.symbol,
+      timeframe,
+      count: candles.length,
+      lastTime: candles[candles.length - 1]?.time,
+      lastDate: candles[candles.length - 1]
+        ? new Date(candles[candles.length - 1].time * 1000).toISOString()
+        : null,
+    });
     dataLenRef.current = candles.length;
     lastCandleRef.current = candles[candles.length - 1];
 
