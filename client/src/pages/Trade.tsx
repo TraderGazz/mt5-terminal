@@ -197,8 +197,10 @@ export default function TradePage() {
         </svg>
       </div>
 
-      {/* Floating account P/L hero + new-order (read-only) button */}
-      <div className="relative pb-[22px] pt-4">
+      {/* Floating account P/L hero + new-order (read-only) button — sticky:
+          stays pinned at the top while the positions list scrolls beneath it,
+          matching the real MT5 app. */}
+      <div className="sticky top-0 z-20 bg-white pb-[22px] pt-4">
         <div className="text-center">
           <motion.div
             key={Math.round(heroValue * 100)}
