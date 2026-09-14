@@ -187,51 +187,6 @@ export default function HistoryPage() {
     hasMountedOnce = true;
   }, []);
 
-  // MT5 iOS opens History already scrolled to the very bottom (latest
-  // entries + the totals block visible). Scroll the app scroll container
-  // (Layout#app-scroll — not window) once, after the first render settles.
-  // 'auto' behaviour = instant jump, no animation. Runs ONLY on the initial
-  // page mount — switching the Позиции/Ордера/Сделки segments keeps the
-  // user's scroll position.
-  //
-  // With thousands of rows (real backfilled history) a fixed double-rAF
-  // isn't always enough — layout of that many nodes can take a few more
-  // frames, so the single scrollTo landed short of the true bottom. Keep
-  // re-issuing scrollTo(bottom) every frame until scrollHeight stops
-  // growing for a few consecutive frames (layout settled), capped so a
-  // stuck/slow render can't loop forever.
-  useEffect(() => {
-    let cancelled = false;
-    let rafId = 0;
-    let frames = 0;
-    let lastHeight = -1;
-    let stable = 0;
-    const MAX_FRAMES = 120; // ~2s at 60fps safety cap
-
-    const tick = () => {
-      if (cancelled) return;
-      const el = document.getElementById('app-scroll');
-      if (el) {
-        el.scrollTo({ top: el.scrollHeight, behavior: 'auto' });
-        if (el.scrollHeight === lastHeight) {
-          stable += 1;
-        } else {
-          stable = 0;
-          lastHeight = el.scrollHeight;
-        }
-      }
-      frames += 1;
-      if (stable >= 4 || frames >= MAX_FRAMES) return;
-      rafId = requestAnimationFrame(tick);
-    };
-    rafId = requestAnimationFrame(tick);
-
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(rafId);
-    };
-  }, []);
-
   // Pull-to-refresh state
   const [pull, setPull] = useState(0);
   const [pulling, setPulling] = useState(false);
@@ -265,6 +220,56 @@ export default function HistoryPage() {
     if (sort === 'default') return aggregated;
     return [...aggregated].sort(compareRows(sort));
   }, [deals, sort]);
+
+  // MT5 iOS opens History already scrolled to the very bottom (latest
+  // entries + the totals block visible). Scroll the app scroll container
+  // (Layout#app-scroll — not window) the first time real data is in —
+  // 'auto' behaviour = instant jump, no animation. Guarded by a ref so it
+  // fires once per page visit, not on every 20s history-poll refresh, and
+  // doesn't fight the user's own scrolling afterwards.
+  //
+  // Real history loads asynchronously (history.ts fetches /history/raw
+  // after mount) — a plain mount-time effect ran and settled on an empty
+  // list before the fetch resolved, so it never reached the true bottom
+  // once thousands of rows arrived. Depending on `deals` re-runs this once
+  // data shows up; with thousands of DOM rows layout can still take a few
+  // extra frames, so scrollTo(bottom) is re-issued each frame until
+  // scrollHeight stops growing (capped so a stuck render can't loop).
+  const autoScrolledRef = useRef(false);
+  useEffect(() => {
+    if (autoScrolledRef.current || deals.length === 0) return;
+    autoScrolledRef.current = true;
+
+    let cancelled = false;
+    let rafId = 0;
+    let frames = 0;
+    let lastHeight = -1;
+    let stable = 0;
+    const MAX_FRAMES = 120; // ~2s at 60fps safety cap
+
+    const tick = () => {
+      if (cancelled) return;
+      const el = document.getElementById('app-scroll');
+      if (el) {
+        el.scrollTo({ top: el.scrollHeight, behavior: 'auto' });
+        if (el.scrollHeight === lastHeight) {
+          stable += 1;
+        } else {
+          stable = 0;
+          lastHeight = el.scrollHeight;
+        }
+      }
+      frames += 1;
+      if (stable >= 4 || frames >= MAX_FRAMES) return;
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafId);
+    };
+  }, [deals]);
 
   const orders = useMemo<HistoryOrder[]>(() => {
     const filled: HistoryOrder[] = deals.map((d) => ({
