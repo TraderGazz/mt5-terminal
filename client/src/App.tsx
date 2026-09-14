@@ -6,7 +6,6 @@ import QuotesPage from '@/pages/Quotes';
 import ChartPage from '@/pages/Chart';
 import TradePage from '@/pages/Trade';
 import TradeDetailPage from '@/pages/TradeDetail';
-import TradeEditPage from '@/pages/TradeEdit';
 import HistoryPage from '@/pages/History';
 import HistoryPeriodPage from '@/pages/HistoryPeriod';
 import SettingsPage from '@/pages/Settings';
@@ -33,7 +32,6 @@ export default function App() {
             <Route path="chart" element={<ChartPage />} />
             <Route path="trade" element={<TradePage />} />
             <Route path="trade/:id" element={<TradeDetailPage />} />
-            <Route path="trade/:id/edit" element={<TradeEditPage />} />
             <Route path="history" element={<HistoryPage />} />
             <Route path="history/period" element={<HistoryPeriodPage />} />
             <Route path="settings" element={<SettingsPage />} />

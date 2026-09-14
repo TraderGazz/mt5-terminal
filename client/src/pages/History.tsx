@@ -297,12 +297,17 @@ export default function HistoryPage() {
   // после того, как соберём полную историю депозитов/сделок.
   const totals = useMemo(() => {
     void deals;
-    return { profit: 3851934.6, swap: -7646751.67, commission: 0, total: 3851934.6 - 7646751.67 };
+    return {
+      profit: 49109434.55,
+      swap: -7647929.23,
+      commission: 0,
+      total: 49109434.55 - 7647929.23,
+    };
   }, [deals]);
 
   const balTotals = useMemo(() => {
     void balanceOps;
-    return { deposit: 68698787.4, withdrawal: 0, net: 68698787.4 };
+    return { deposit: 26220000, withdrawal: 2821985.75, net: 26220000 - 2821985.75 };
   }, [balanceOps]);
 
   const cfdTotal = useMemo(() => cfdOps.reduce((s, d) => s + d.profit, 0), [cfdOps]);

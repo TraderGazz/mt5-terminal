@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router';
+import { useState } from 'react';
+import { useNavigate, useParams } from 'react-router';
 import { motion } from 'framer-motion';
 import { Briefcase } from 'lucide-react';
 import NavBar, { BackButton } from '@/components/NavBar';
@@ -27,7 +27,6 @@ function signedColoredMoney(value: number): { text: string; className: string } 
 export default function TradeDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
   const ticket = Number(id);
 
   // Re-render when the edit store mutates this deal («(изм.)», new values).
@@ -36,15 +35,6 @@ export default function TradeDetailPage() {
   const deal = getDeal(ticket);
 
   const [toast, setToast] = useState<string | null>(null);
-
-  // Returning from the editor after a successful save.
-  useEffect(() => {
-    if ((location.state as { saved?: boolean } | null)?.saved) {
-      setToast('Сохранено');
-      navigate(location.pathname, { replace: true, state: null });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const copy = (value: string) => {
     void navigator.clipboard?.writeText(value).catch(() => undefined);
@@ -68,7 +58,7 @@ export default function TradeDetailPage() {
           <p className="text-[13px] text-text-secondary">Проверьте номер тикета</p>
         </div>
       ) : (
-        <DealBody deal={deal} digits={digits} onCopy={copy} onEdit={() => navigate(`/trade/${deal.ticket}/edit`)} />
+        <DealBody deal={deal} digits={digits} onCopy={copy} />
       )}
 
       <Toast message={toast} onClose={() => setToast(null)} />
@@ -80,12 +70,10 @@ function DealBody({
   deal,
   digits,
   onCopy,
-  onEdit,
 }: {
   deal: Deal;
   digits: number;
   onCopy: (value: string) => void;
-  onEdit: () => void;
 }) {
   const isBalance = deal.type === 'balance';
   const profit = signedColoredMoney(deal.profit);
@@ -221,19 +209,6 @@ function DealBody({
           />
         </RowGroup>
       </motion.div>
-
-      {/* Edit button */}
-      <div className="mx-4 mt-2">
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.97, opacity: 0.85 }}
-          transition={{ duration: 0.12 }}
-          onClick={onEdit}
-          className="h-[50px] w-full rounded-[12px] bg-accent text-[17px] font-semibold text-white"
-        >
-          Редактировать
-        </motion.button>
-      </div>
     </div>
   );
 }
