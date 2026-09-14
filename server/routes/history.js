@@ -17,7 +17,14 @@ function resolveRange({ period, from, to }) {
   };
   switch (period) {
     case 'today': return { from: new Date(new Date().setHours(0, 0, 0, 0)).toISOString(), to: null, period };
-    case 'week': return { from: new Date(now - 7 * 86400e3).toISOString(), to: null, period };
+    case 'week': {
+      // Понедельник 00:00 текущей недели, не скользящие 7 суток назад.
+      const d = new Date(now);
+      const day = d.getDay(); // 0=вс..6=сб
+      d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+      d.setHours(0, 0, 0, 0);
+      return { from: d.toISOString(), to: null, period };
+    }
     case 'month': return { from: back((d) => d.setMonth(d.getMonth() - 1)), to: null, period };
     case '3m': return { from: back((d) => d.setMonth(d.getMonth() - 3)), to: null, period };
     case 'year': return { from: back((d) => d.setFullYear(d.getFullYear() - 1)), to: null, period };

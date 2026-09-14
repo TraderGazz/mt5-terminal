@@ -34,6 +34,17 @@ export function endOfDay(ts: number): number {
   return d.getTime();
 }
 
+/** Monday 00:00 of the calendar week containing ts (MT5-style «На этой
+ *  неделе», not a rolling 7-day lookback). */
+export function startOfWeek(ts: number): number {
+  const d = new Date(ts);
+  const day = d.getDay(); // 0=Sun..6=Sat
+  const diffToMonday = day === 0 ? 6 : day - 1;
+  d.setDate(d.getDate() - diffToMonday);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
 function defaultState(): HistoryFilterState {
   const now = Date.now();
   // Default period: «Последние 6 месяцев» (MT5 iOS).
@@ -84,7 +95,7 @@ export function periodRange(f: HistoryFilterState, now: number = Date.now()): Pe
     case 'today':
       return { from: startOfDay(now), to: now };
     case 'week':
-      return { from: now - 7 * DAY, to: now };
+      return { from: startOfWeek(now), to: now };
     case 'month': {
       const d = new Date(now);
       d.setMonth(d.getMonth() - 1);
