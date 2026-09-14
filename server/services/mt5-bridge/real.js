@@ -13,6 +13,7 @@ const WATCH_SYMBOLS = (process.env.MT5_WATCH_SYMBOLS || `${SYMBOL},USDRUBrfd,XAU
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
+const TF_MINUTES = { M1: 1, M5: 5, M15: 15, M30: 30, H1: 60, H4: 240, D1: 1440 };
 
 async function get(path, params, timeoutMs = TIMEOUT_MS) {
   const url = new URL(BASE + path);
@@ -74,15 +75,30 @@ export class RealBridge extends EventEmitter {
     );
   }
 
-  async getCandles({ symbol, timeframe = 'M5', from, to } = {}) {
+  async getCandles({ symbol, timeframe = 'M5', from, to, count = 300 } = {}) {
     const toDate = to ? new Date(to) : new Date();
-    const fromDate = from ? new Date(from) : new Date(toDate.getTime() - 90 * 24 * 60 * 60 * 1000);
-    return get('/history/prices', {
-      symbol: symbol || this.symbol,
-      time_frame: timeframe,
-      from_date: fromDate.toISOString().slice(0, 10),
-      to_date: toDate.toISOString().slice(0, 10),
-    });
+    let fromDate;
+    if (from) {
+      fromDate = new Date(from);
+    } else {
+      // Просить у EA только тот диапазон, что реально нужен под count баров
+      // (а не фикс 90 дней) — на плотных таймфреймах (M5) это тысячи лишних
+      // баров и заметно более медленный (иногда таймаутящийся) ответ EA.
+      // *2.5 — запас на выходные/закрытый рынок, +2 дня — общий запас.
+      const barMinutes = TF_MINUTES[timeframe] || 5;
+      const neededDays = Math.ceil(((count * barMinutes) / (24 * 60)) * 2.5) + 2;
+      fromDate = new Date(toDate.getTime() - Math.min(neededDays, 90) * 24 * 60 * 60 * 1000);
+    }
+    return get(
+      '/history/prices',
+      {
+        symbol: symbol || this.symbol,
+        time_frame: timeframe,
+        from_date: fromDate.toISOString().slice(0, 10),
+        to_date: toDate.toISOString().slice(0, 10),
+      },
+      20_000,
+    );
   }
 
   async getQuote() {
