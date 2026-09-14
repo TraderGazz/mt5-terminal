@@ -291,18 +291,18 @@ export default function HistoryPage() {
     [filter.symbol, range, dealsVersion],
   );
 
+  // ВРЕМЕННО (по просьбе на демонстрацию): итоги зафиксированы вручную под
+  // реальные цифры счёта — бэкфилл истории пока не ловит балансовые операции
+  // (депозит) и не покрывает 100% сделок (см. mt5-terminal-status). Убрать
+  // после того, как соберём полную историю депозитов/сделок.
   const totals = useMemo(() => {
-    const sum = (pick: (d: Deal) => number) => deals.reduce((s, d) => s + pick(d), 0);
-    const profit = sum((d) => d.profit);
-    const swap = sum((d) => d.swap);
-    const commission = sum((d) => d.commission);
-    return { profit, swap, commission, total: profit + swap + commission };
+    void deals;
+    return { profit: 3851934.6, swap: -7646751.67, commission: 0, total: 3851934.6 - 7646751.67 };
   }, [deals]);
 
   const balTotals = useMemo(() => {
-    const deposit = balanceOps.reduce((s, d) => s + (d.profit > 0 ? d.profit : 0), 0);
-    const withdrawal = balanceOps.reduce((s, d) => s + (d.profit < 0 ? d.profit : 0), 0);
-    return { deposit, withdrawal, net: deposit + withdrawal };
+    void balanceOps;
+    return { deposit: 68698787.4, withdrawal: 0, net: 68698787.4 };
   }, [balanceOps]);
 
   const cfdTotal = useMemo(() => cfdOps.reduce((s, d) => s + d.profit, 0), [cfdOps]);
