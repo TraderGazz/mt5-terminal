@@ -23,6 +23,10 @@ class Bridge extends EventEmitter {
     this.symbol = SYMBOL;
     this.connected = this.mode === 'mock';
     this.lastEventAt = null;
+    // Последние живые котировки по символу (нужно для пересчёта profit —
+    // см. #fixSellProfit), наполняется из push price_update по всем
+    // подписанным Market Watch символам (не только основному).
+    this.lastQuotes = new Map();
 
     this.impl.on('event', (raw) => this.#onRaw(raw));
   }
@@ -40,7 +44,9 @@ class Bridge extends EventEmitter {
     this.lastEventAt = Date.now();
     const t = raw && raw.type;
     if (t === 'price_update') {
-      this.emit('quote', N.normalizeQuote(raw));
+      const q = N.normalizeQuote(raw);
+      this.lastQuotes.set(q.symbol, q);
+      this.emit('quote', q);
     } else if (t === 'ohlc_update') {
       this.emit('candle', {
         timeframe: raw.timeframe || 'M5',
@@ -63,7 +69,28 @@ class Bridge extends EventEmitter {
   async positions() {
     const res = await this.impl.getPositions();
     const list = Array.isArray(res) ? res : res.opened || res.positions || res.data || [];
-    return list.map(N.normalizePosition).filter((p) => p.id);
+    return list.map(N.normalizePosition).filter((p) => p.id).map((p) => this.#fixSellProfit(p));
+  }
+
+  // EA's /order/list считает profit для SELL-позиций по битой формуле —
+  // подтверждено напрямую сырыми данными: у BUY-позиций (тот же аккаунт,
+  // тот же символ) отношение profit / ((current-open)*volume*100000)
+  // стабильно ~курсу USDRUB на ЛЮБОЙ строке; у SELL то же отношение
+  // скачет на 10-20% между соседними тикетами с похожими ценами открытия.
+  // Реальный терминал (расчёт не через этот эндпоинт EA) при этом даёт
+  // ровно ту же формулу/курс, что и у buy — то есть верна одна формула
+  // для buy/sell, просто у EA в этом конкретном поле баг именно на sell.
+  // Пересчитываем сами по проверенной формуле, только для основного
+  // символа счёта (где это подтверждено) и только когда есть живой курс
+  // USDRUB — иначе (символ незнакомый / курса ещё нет) отдаём как есть.
+  #fixSellProfit(p) {
+    if (p.type !== 'sell' || p.symbol !== this.symbol) return p;
+    const usdrub = this.lastQuotes.get('USDRUBrfd');
+    if (!usdrub) return p;
+    const rate = (usdrub.bid + usdrub.ask) / 2;
+    const CONTRACT_SIZE = 100000;
+    const profit = (p.openPrice - p.currentPrice) * p.volume * CONTRACT_SIZE * rate;
+    return { ...p, profit };
   }
 
   async history({ from, to } = {}) {
