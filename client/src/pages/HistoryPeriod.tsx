@@ -33,11 +33,11 @@ const PERIOD_ROWS: readonly { value: PeriodKind; label: string }[] = [
   { value: 'custom', label: 'Выбрать период' },
 ];
 
-// ВРЕМЕННО (по просьбе заказчика, пока подключён инвестор): отображение по
-// этим периодам ещё не выверено до конца — оставить выбор только Сегодня и
-// Последний год, остальные скрыть выбор (не тап, серым) до отдельного
-// разрешения включить обратно.
-const TEMP_DISABLED_PERIODS = new Set<PeriodKind>(['week', 'month', '3m', '6m', 'custom']);
+// Раньше временно скрывались (неделя/месяц/3м/6м/свой период считались
+// неверно — rolling вместо календарного якоря, см. historyFilter.ts).
+// Причина исправлена (startOfWeek/startOfMonthsAgo), заказчик разрешил
+// вернуть — список снова полный.
+const TEMP_DISABLED_PERIODS = new Set<PeriodKind>([]);
 const VISIBLE_PERIOD_ROWS = PERIOD_ROWS.filter((row) => !TEMP_DISABLED_PERIODS.has(row.value));
 
 // ВРЕМЕННО (тот же запрос): «Создать торговый отчёт» пока просто показывает
