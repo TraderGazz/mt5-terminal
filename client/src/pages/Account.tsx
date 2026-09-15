@@ -7,12 +7,10 @@ import ActionSheet from '@/components/ActionSheet';
 import Toast from '@/components/Toast';
 import BrokerLogo from '@/components/auth/BrokerLogo';
 import { useAccount } from '@/data/account';
+import { formatMoneyMT5 } from '@/components/history/utils';
 
 /** Company name with straight quotes, exactly as in MT5 iOS. */
 const COMPANY_TITLE = 'ООО "Альфа-Форекс"';
-
-/** Balance caption from the reference (mock ACCOUNT balance is a different snapshot). */
-const BALANCE_LABEL = '62 636 454.73 RUB';
 
 const BADGES = [
   { label: 'Read Only', color: '#8E8E93' },
@@ -57,7 +55,7 @@ export default function AccountPage() {
             {account.accountId} - {account.server}
           </p>
           <p className="tnum text-[13px] leading-[18px] tracking-[-0.08px] text-text-secondary">
-            {BALANCE_LABEL}
+            {formatMoneyMT5(account.balance)} {account.currency}
           </p>
           <div className="mt-2 flex items-center gap-2">
             {BADGES.map((b) => (
