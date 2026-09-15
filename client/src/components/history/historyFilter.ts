@@ -45,21 +45,6 @@ export function startOfWeek(ts: number): number {
   return d.getTime();
 }
 
-/** 00:00 on the 1st of the calendar month `monthsBack` months before ts's
- *  month (0 = this month) — same «anchor to the start of the current
- *  calendar unit» convention as startOfWeek, not a rolling N-months-back
- *  lookback. A rolling lookback (`now` minus N months, same day-of-month)
- *  starts LATER than MT5's own «Последний месяц»/«3 месяца»/«6 месяцев»,
- *  which anchor to the 1st — cutting off the earliest trades in the
- *  period (confirmed missing against the real terminal). */
-export function startOfMonthsAgo(ts: number, monthsBack: number): number {
-  const d = new Date(ts);
-  d.setDate(1);
-  d.setMonth(d.getMonth() - monthsBack);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-}
-
 function defaultState(): HistoryFilterState {
   const now = Date.now();
   // ВРЕМЕННО «Последний год» вместо «6 месяцев» — период 6m сейчас скрыт
@@ -113,12 +98,21 @@ export function periodRange(f: HistoryFilterState, now: number = Date.now()): Pe
       return { from: startOfDay(now), to: now };
     case 'week':
       return { from: startOfWeek(now), to: now };
-    case 'month':
-      return { from: startOfMonthsAgo(now, 0), to: now };
-    case '3m':
-      return { from: startOfMonthsAgo(now, 2), to: now };
-    case '6m':
-      return { from: startOfMonthsAgo(now, 5), to: now };
+    case 'month': {
+      const d = new Date(now);
+      d.setMonth(d.getMonth() - 1);
+      return { from: d.getTime(), to: now };
+    }
+    case '3m': {
+      const d = new Date(now);
+      d.setMonth(d.getMonth() - 3);
+      return { from: d.getTime(), to: now };
+    }
+    case '6m': {
+      const d = new Date(now);
+      d.setMonth(d.getMonth() - 6);
+      return { from: d.getTime(), to: now };
+    }
     case 'year': {
       const d = new Date(now);
       d.setFullYear(d.getFullYear() - 1);
