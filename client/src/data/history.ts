@@ -50,8 +50,11 @@ let version = 0;
 let started = false;
 // Пока первый /history/raw ещё не ответил, deals/balanceOps/cfdOps пусты —
 // страница истории рендерила это как «нет сделок» на несколько секунд.
-// loaded различает «правда пусто» от «ещё грузится».
+// loaded различает «правда пусто» от «ещё грузится». error — отдельно:
+// backend недоступен (напр. сервер приостановлен) не должен читаться как
+// «сделок действительно нет» — страница должна показать явную ошибку связи.
 let loaded = false;
+let hasError = false;
 const listeners = new Set<() => void>();
 
 function notify() {
@@ -66,9 +69,11 @@ async function refresh() {
     balanceOps = raw.balanceOps.map(toDeal);
     cfdOps = raw.cfdOps.map(toDeal);
     loaded = true;
+    hasError = false;
     notify();
   } catch {
     loaded = true;
+    hasError = true;
     notify();
   }
 }
@@ -105,6 +110,7 @@ function apiSubscribe(cb: () => void): () => void {
 
 const apiUseDealsVersion = () => useSyncExternalStore(apiSubscribe, () => version);
 const apiUseHistoryLoaded = () => useSyncExternalStore(apiSubscribe, () => loaded);
+const apiUseHistoryError = () => useSyncExternalStore(apiSubscribe, () => hasError);
 const apiGetDeals = (): Deal[] => deals;
 const apiGetDeal = (ticket: number): Deal | undefined => deals.find((d) => d.ticket === ticket);
 const apiGetBalanceOps = (): Deal[] => balanceOps;
@@ -149,3 +155,4 @@ export const getBalanceOps = IS_API ? apiGetBalanceOps : (): Deal[] => BALANCE_O
 export const getCfdOps = IS_API ? apiGetCfdOps : (): Deal[] => CFD_OPS;
 export const getAllRows = IS_API ? apiGetAllRows : (): Deal[] => HISTORY;
 export const useHistoryLoaded = IS_API ? apiUseHistoryLoaded : () => true;
+export const useHistoryError = IS_API ? apiUseHistoryError : () => false;

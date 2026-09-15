@@ -5,8 +5,16 @@ import { Check, Clock } from 'lucide-react';
 import ActionSheet from '@/components/ActionSheet';
 import Toast from '@/components/Toast';
 import PageLoading from '@/components/PageLoading';
+import ConnectionError from '@/components/ConnectionError';
 import type { Deal } from '@/data/history';
-import { getBalanceOps, getCfdOps, getDeals, useDealsVersion, useHistoryLoaded } from '@/data/history';
+import {
+  getBalanceOps,
+  getCfdOps,
+  getDeals,
+  useDealsVersion,
+  useHistoryLoaded,
+  useHistoryError,
+} from '@/data/history';
 import { depositTotalsForRange, LEDGER_END } from '@/data/depositLedger';
 import { getSymbolMeta } from '@/mocks/symbols';
 import { formatMoneyMT5 } from '@/components/history/utils';
@@ -191,6 +199,7 @@ export default function HistoryPage() {
   const navigate = useNavigate();
   const filter = useHistoryFilter();
   const historyLoaded = useHistoryLoaded();
+  const historyError = useHistoryError();
 
   const [tab, setTab] = useState<TabKey>('deals');
   const [tabDir, setTabDir] = useState(1);
@@ -478,6 +487,15 @@ export default function HistoryPage() {
   // seconds, and an empty state there reads as "history is broken", not
   // "still loading".
   if (!historyLoaded) return <PageLoading />;
+  // Backend unreachable — show that explicitly rather than an empty
+  // "Нет сделок" state, which reads as "this account has no trades". Only
+  // when we've never had ANY real data (raw, unfiltered by period) —
+  // a transient poll failure after a successful load just keeps showing
+  // the last good (if slightly stale) data instead of hiding it behind
+  // an error screen.
+  if (historyError && getDeals().length === 0 && getBalanceOps().length === 0) {
+    return <ConnectionError />;
+  }
 
   return (
     <div

@@ -23,18 +23,24 @@ function fromApi(a: ApiAccount): Account {
   };
 }
 
-// См. positions.ts readyStore — тот же приём: различить «ещё грузится»
-// (mock-заглушка ACCOUNT) от «это и есть реальный ответ».
+// См. positions.ts readyStore/errorStore — тот же приём: различить «ещё
+// грузится» (mock-заглушка ACCOUNT) от «это и есть реальный ответ», и не
+// показывать мок как настоящий счёт молча при недоступном backend.
 const readyStore = createStore<boolean>(!IS_API);
+const errorStore = createStore<boolean>(false);
 
 const store = createStore<Account>(ACCOUNT, (set) => {
   if (!IS_API) return;
   fetchAccount()
-    .then((a) => set(fromApi(a)))
-    .catch(() => {})
+    .then((a) => {
+      set(fromApi(a));
+      errorStore.set(false);
+    })
+    .catch(() => errorStore.set(true))
     .finally(() => readyStore.set(true));
   wsClient.on('account', (d) => {
     set(fromApi(d as ApiAccount));
+    errorStore.set(false);
     readyStore.set(true);
   });
 });
@@ -43,3 +49,4 @@ const store = createStore<Account>(ACCOUNT, (set) => {
 export const useAccount = store.useValue;
 export const getAccountSnapshot = store.get;
 export const useAccountReady = readyStore.useValue;
+export const useAccountError = errorStore.useValue;

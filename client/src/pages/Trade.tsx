@@ -3,9 +3,10 @@ import { animate, motion } from 'framer-motion';
 import { Briefcase, Plus } from 'lucide-react';
 import Toast from '@/components/Toast';
 import PageLoading from '@/components/PageLoading';
+import ConnectionError from '@/components/ConnectionError';
 import PositionSheet, { type LivePositionData } from '@/components/trade/PositionSheet';
-import { useAccount, useAccountReady } from '@/data/account';
-import { usePositions, usePositionsReady } from '@/data/positions';
+import { useAccount, useAccountReady, useAccountError } from '@/data/account';
+import { usePositions, usePositionsReady, usePositionsError } from '@/data/positions';
 import type { Position } from '@/data/positions';
 import { useQuotes } from '@/data/useQuotes';
 import { refreshQuotes, type Quote } from '@/data/quotes';
@@ -74,6 +75,7 @@ export default function TradePage() {
   const account = useAccount();
   const positions = usePositions();
   const dataReady = useAccountReady() && usePositionsReady();
+  const dataError = useAccountError() || usePositionsError();
   const quotes = useQuotes();
   const quoteMap = useMemo(() => new Map(quotes.map((q) => [q.symbol, q])), [quotes]);
 
@@ -167,6 +169,9 @@ export default function TradePage() {
   // Real account's first load: show a spinner, not the mock snapshot
   // (POSITIONS/ACCOUNT placeholders) flashing before live data replaces it.
   if (!dataReady) return <PageLoading />;
+  // Backend unreachable (e.g. paused server) — show that explicitly instead
+  // of silently falling back to the mock snapshot as if it were real data.
+  if (dataError) return <ConnectionError />;
 
   return (
     <div

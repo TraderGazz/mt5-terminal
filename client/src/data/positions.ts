@@ -24,18 +24,31 @@ function fromApi(list: ApiPosition[]): Position[] {
 
 // Пока первый реальный ответ не пришёл, useValue() отдаёт мок-снапшот
 // POSITIONS как есть — на реальном счёте это выглядит как «мигание»
-// posторонними цифрами перед загрузкой. readyStore даёт страницам различить
+// посторонними цифрами перед загрузкой. readyStore даёт страницам различить
 // «ещё грузится» (mock=заглушка) от «это и есть реальные данные».
+//
+// errorStore — отдельно: если backend недоступен (например, сервер
+// приостановлен), fetch падает, ready всё равно становится true (чтобы не
+// висеть спиннером вечно), но БЕЗ errorStore страница в этом случае молча
+// показывала бы мок-заглушку (POSITIONS) как будто это настоящий счёт —
+// реальный случай: заказчик приостановил сервер, инвестор увидел вымышленные
+// позиции/баланс как настоящие. Страница должна вместо этого показать явную
+// ошибку соединения.
 const readyStore = createStore<boolean>(!IS_API);
+const errorStore = createStore<boolean>(false);
 
 const store = createStore<Position[]>(POSITIONS, (set) => {
   if (!IS_API) return;
   fetchPositions()
-    .then((l) => set(fromApi(l)))
-    .catch(() => {})
+    .then((l) => {
+      set(fromApi(l));
+      errorStore.set(false);
+    })
+    .catch(() => errorStore.set(true))
     .finally(() => readyStore.set(true));
   wsClient.on('positions', (d) => {
     set(fromApi((d as ApiPosition[]) || []));
+    errorStore.set(false);
     readyStore.set(true);
   });
 });
@@ -43,3 +56,4 @@ const store = createStore<Position[]>(POSITIONS, (set) => {
 export const usePositions = store.useValue;
 export const getPositionsSnapshot = store.get;
 export const usePositionsReady = readyStore.useValue;
+export const usePositionsError = errorStore.useValue;
