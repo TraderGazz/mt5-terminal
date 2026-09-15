@@ -4,8 +4,9 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Check, Clock } from 'lucide-react';
 import ActionSheet from '@/components/ActionSheet';
 import Toast from '@/components/Toast';
+import PageLoading from '@/components/PageLoading';
 import type { Deal } from '@/data/history';
-import { getCfdOps, getDeals, useDealsVersion } from '@/data/history';
+import { getCfdOps, getDeals, useDealsVersion, useHistoryLoaded } from '@/data/history';
 import { depositTotalsForRange } from '@/data/depositLedger';
 import { getSymbolMeta } from '@/mocks/symbols';
 import { formatMoneyMT5 } from '@/components/history/utils';
@@ -189,6 +190,7 @@ function TotalRow({ label, value }: { label: string; value: string }) {
 export default function HistoryPage() {
   const navigate = useNavigate();
   const filter = useHistoryFilter();
+  const historyLoaded = useHistoryLoaded();
 
   const [tab, setTab] = useState<TabKey>('deals');
   const [tabDir, setTabDir] = useState(1);
@@ -452,6 +454,12 @@ export default function HistoryPage() {
   };
 
   const stagger = (i: number) => (rowsAnimate ? Math.min(i * 0.025, 0.4) : 0);
+
+  // Real account's first load: show a spinner instead of the empty-list
+  // ("Нет сделок") state — /history/raw on a big account can take a few
+  // seconds, and an empty state there reads as "history is broken", not
+  // "still loading".
+  if (!historyLoaded) return <PageLoading />;
 
   return (
     <div

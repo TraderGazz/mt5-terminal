@@ -23,12 +23,23 @@ function fromApi(a: ApiAccount): Account {
   };
 }
 
+// См. positions.ts readyStore — тот же приём: различить «ещё грузится»
+// (mock-заглушка ACCOUNT) от «это и есть реальный ответ».
+const readyStore = createStore<boolean>(!IS_API);
+
 const store = createStore<Account>(ACCOUNT, (set) => {
   if (!IS_API) return;
-  fetchAccount().then((a) => set(fromApi(a))).catch(() => {});
-  wsClient.on('account', (d) => set(fromApi(d as ApiAccount)));
+  fetchAccount()
+    .then((a) => set(fromApi(a)))
+    .catch(() => {})
+    .finally(() => readyStore.set(true));
+  wsClient.on('account', (d) => {
+    set(fromApi(d as ApiAccount));
+    readyStore.set(true);
+  });
 });
 
 /** Реактивный счёт. В mock — статический снапшот, в api — из REST + WS. */
 export const useAccount = store.useValue;
 export const getAccountSnapshot = store.get;
+export const useAccountReady = readyStore.useValue;

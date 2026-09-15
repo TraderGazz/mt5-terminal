@@ -2,9 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { animate, motion } from 'framer-motion';
 import { Briefcase, Plus } from 'lucide-react';
 import Toast from '@/components/Toast';
+import PageLoading from '@/components/PageLoading';
 import PositionSheet, { type LivePositionData } from '@/components/trade/PositionSheet';
-import { useAccount } from '@/data/account';
-import { usePositions } from '@/data/positions';
+import { useAccount, useAccountReady } from '@/data/account';
+import { usePositions, usePositionsReady } from '@/data/positions';
 import type { Position } from '@/data/positions';
 import { useQuotes } from '@/data/useQuotes';
 import { refreshQuotes, type Quote } from '@/data/quotes';
@@ -72,6 +73,7 @@ function AccountRow({ label, value }: { label: string; value: string }) {
 export default function TradePage() {
   const account = useAccount();
   const positions = usePositions();
+  const dataReady = useAccountReady() && usePositionsReady();
   const quotes = useQuotes();
   const quoteMap = useMemo(() => new Map(quotes.map((q) => [q.symbol, q])), [quotes]);
 
@@ -161,6 +163,10 @@ export default function TradePage() {
       setPull(0);
     }
   };
+
+  // Real account's first load: show a spinner, not the mock snapshot
+  // (POSITIONS/ACCOUNT placeholders) flashing before live data replaces it.
+  if (!dataReady) return <PageLoading />;
 
   return (
     <div

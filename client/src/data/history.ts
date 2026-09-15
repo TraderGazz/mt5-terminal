@@ -48,6 +48,10 @@ let balanceOps: Deal[] = [];
 let cfdOps: Deal[] = [];
 let version = 0;
 let started = false;
+// Пока первый /history/raw ещё не ответил, deals/balanceOps/cfdOps пусты —
+// страница истории рендерила это как «нет сделок» на несколько секунд.
+// loaded различает «правда пусто» от «ещё грузится».
+let loaded = false;
 const listeners = new Set<() => void>();
 
 function notify() {
@@ -61,9 +65,11 @@ async function refresh() {
     deals = raw.deals.map(toDeal);
     balanceOps = raw.balanceOps.map(toDeal);
     cfdOps = raw.cfdOps.map(toDeal);
+    loaded = true;
     notify();
   } catch {
-    /* оставляем что было */
+    loaded = true;
+    notify();
   }
 }
 
@@ -91,6 +97,7 @@ function apiSubscribe(cb: () => void): () => void {
 }
 
 const apiUseDealsVersion = () => useSyncExternalStore(apiSubscribe, () => version);
+const apiUseHistoryLoaded = () => useSyncExternalStore(apiSubscribe, () => loaded);
 const apiGetDeals = (): Deal[] => deals;
 const apiGetDeal = (ticket: number): Deal | undefined => deals.find((d) => d.ticket === ticket);
 const apiGetBalanceOps = (): Deal[] => balanceOps;
@@ -134,3 +141,4 @@ export const resetDeal = IS_API ? apiResetDeal : editStore.resetDeal;
 export const getBalanceOps = IS_API ? apiGetBalanceOps : (): Deal[] => BALANCE_OPS;
 export const getCfdOps = IS_API ? apiGetCfdOps : (): Deal[] => CFD_OPS;
 export const getAllRows = IS_API ? apiGetAllRows : (): Deal[] => HISTORY;
+export const useHistoryLoaded = IS_API ? apiUseHistoryLoaded : () => true;

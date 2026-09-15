@@ -22,11 +22,24 @@ function fromApi(list: ApiPosition[]): Position[] {
   }));
 }
 
+// Пока первый реальный ответ не пришёл, useValue() отдаёт мок-снапшот
+// POSITIONS как есть — на реальном счёте это выглядит как «мигание»
+// posторонними цифрами перед загрузкой. readyStore даёт страницам различить
+// «ещё грузится» (mock=заглушка) от «это и есть реальные данные».
+const readyStore = createStore<boolean>(!IS_API);
+
 const store = createStore<Position[]>(POSITIONS, (set) => {
   if (!IS_API) return;
-  fetchPositions().then((l) => set(fromApi(l))).catch(() => {});
-  wsClient.on('positions', (d) => set(fromApi((d as ApiPosition[]) || [])));
+  fetchPositions()
+    .then((l) => set(fromApi(l)))
+    .catch(() => {})
+    .finally(() => readyStore.set(true));
+  wsClient.on('positions', (d) => {
+    set(fromApi((d as ApiPosition[]) || []));
+    readyStore.set(true);
+  });
 });
 
 export const usePositions = store.useValue;
 export const getPositionsSnapshot = store.get;
+export const usePositionsReady = readyStore.useValue;
