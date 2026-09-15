@@ -73,6 +73,8 @@ interface TabDef {
   end?: boolean;
   /** Active tint — defaults to iOS blue; «Торговля» is red (#FF3B30) in MT5 iOS. */
   activeClassName?: string;
+  /** ВРЕМЕННО (по просьбе заказчика): рендерится серым, не тапается. */
+  disabled?: boolean;
 }
 
 /**
@@ -86,7 +88,7 @@ const TABS: TabDef[] = [
   { to: '/', label: 'Котировки', icon: ArrowDownUp, strokeWidth: 2, end: true },
   { to: '/chart', label: 'Чарт', icon: CandlesIcon, strokeWidth: 1.7 },
   { to: '/trade', label: 'Торговля', icon: TradeIcon, strokeWidth: 1.7, activeClassName: 'text-[#FF3B30]' },
-  { to: '/history', label: 'История', icon: History, strokeWidth: 1.7 },
+  { to: '/history', label: 'История', icon: History, strokeWidth: 1.7, disabled: true },
   { to: '/settings', label: 'Настройки', icon: Settings, strokeWidth: 1.7 },
 ];
 
@@ -110,40 +112,58 @@ export default function TabBar() {
       style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}
     >
       <div className="pointer-events-auto flex h-[74px] items-stretch rounded-[26px] bg-white/85 p-2 shadow-[0_8px_28px_rgba(0,0,0,0.14)] backdrop-blur-[20px] backdrop-saturate-[180%]">
-        {TABS.map(({ to, label, icon: Icon, strokeWidth, end, activeClassName = 'text-accent' }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            className="flex min-w-0 flex-1 items-center justify-center"
-          >
-            {({ isActive }) => (
+        {TABS.map(({ to, label, icon: Icon, strokeWidth, end, activeClassName = 'text-accent', disabled }) => {
+          if (disabled) {
+            return (
               <span
-                className={cn(
-                  'flex flex-col items-center justify-center gap-[3px] rounded-[20px] px-3 py-2 transition-colors duration-200',
-                  isActive && 'bg-[rgba(120,120,128,0.16)]',
-                )}
+                key={to}
+                aria-disabled="true"
+                className="flex min-w-0 flex-1 cursor-not-allowed items-center justify-center"
               >
-                <Icon
-                  size={22}
-                  strokeWidth={strokeWidth}
-                  className={cn(
-                    'shrink-0 transition-colors duration-200',
-                    isActive ? activeClassName : 'text-[#1C1C1E]',
-                  )}
-                />
-                <span
-                  className={cn(
-                    'whitespace-nowrap text-[11px] font-medium leading-[13px] transition-colors duration-200',
-                    isActive ? activeClassName : 'text-[#1C1C1E]',
-                  )}
-                >
-                  {label}
+                <span className="flex flex-col items-center justify-center gap-[3px] rounded-[20px] px-3 py-2 opacity-35">
+                  <Icon size={22} strokeWidth={strokeWidth} className="shrink-0 text-[#1C1C1E]" />
+                  <span className="whitespace-nowrap text-[11px] font-medium leading-[13px] text-[#1C1C1E]">
+                    {label}
+                  </span>
                 </span>
               </span>
-            )}
-          </NavLink>
-        ))}
+            );
+          }
+          return (
+            <NavLink
+              key={to}
+              to={to}
+              end={end}
+              className="flex min-w-0 flex-1 items-center justify-center"
+            >
+              {({ isActive }) => (
+                <span
+                  className={cn(
+                    'flex flex-col items-center justify-center gap-[3px] rounded-[20px] px-3 py-2 transition-colors duration-200',
+                    isActive && 'bg-[rgba(120,120,128,0.16)]',
+                  )}
+                >
+                  <Icon
+                    size={22}
+                    strokeWidth={strokeWidth}
+                    className={cn(
+                      'shrink-0 transition-colors duration-200',
+                      isActive ? activeClassName : 'text-[#1C1C1E]',
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      'whitespace-nowrap text-[11px] font-medium leading-[13px] transition-colors duration-200',
+                      isActive ? activeClassName : 'text-[#1C1C1E]',
+                    )}
+                  >
+                    {label}
+                  </span>
+                </span>
+              )}
+            </NavLink>
+          );
+        })}
       </div>
     </nav>
   );
