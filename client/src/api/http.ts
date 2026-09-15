@@ -50,6 +50,15 @@ export async function api<T>(path: string, opts: Options = {}): Promise<T> {
 
   if (res.status === 401 && auth) {
     clearAuth();
+    // JWT expires after 12h (server/routes/auth.js) — a session left open
+    // that long (or a token invalidated by a server restart) previously
+    // just left the page stuck rendering an error/mock state forever,
+    // since clearAuth() alone doesn't leave the authed route tree. Force
+    // back to the login screen instead of leaving a logged-out client
+    // sitting on a route that requires auth.
+    if (!window.location.pathname.endsWith('/login')) {
+      window.location.href = `${window.location.origin}/mobile/login`;
+    }
   }
 
   const text = await res.text();
