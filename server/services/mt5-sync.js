@@ -17,6 +17,16 @@ let timer = null;
 const iso = (v) => (v ? new Date(v).toISOString() : null);
 const tradeSide = (dealType) => (dealType === 'buy' || dealType === 'sell' ? dealType : null);
 
+// Данные открытия для позиций, которые ещё живы в /order/list — на случай,
+// если позиция провисит открытой дольше SYNC_WINDOW_DAYS, а закрывающая
+// сделка попадёт в окно синка раньше, чем откроется где-то в его пределах.
+// buildPositionsFromDeals() не может сшить такую close-сделку без открытия,
+// а окно узкое специально (лишний день = лишний проход по однопоточному EA
+// каждые 30с) — вместо расширения окна берём открытие из последнего снимка
+// живой позиции, снятого syncPositions() ДО того, как она закрылась.
+const BROKER_UTC_OFFSET_MS = 3 * 3600 * 1000;
+const openInfoCache = new Map(); // position_id (string) -> { symbol, type, open_price, open_time_iso, seenAt }
+
 async function syncAccount(bridge) {
   const a = await bridge.account();
   if (!a.login) return;
@@ -44,6 +54,19 @@ async function syncAccount(bridge) {
 
 async function syncPositions(bridge) {
   const positions = await bridge.positions();
+  const now = Date.now();
+  for (const p of positions) {
+    openInfoCache.set(String(p.id), {
+      symbol: p.symbol,
+      type: p.type,
+      open_price: p.openPrice,
+      open_time_iso: iso(p.openTime),
+      seenAt: now,
+    });
+  }
+  for (const [id, v] of openInfoCache) {
+    if (now - v.seenAt > 7 * DAY_MS) openInfoCache.delete(id);
+  }
   await query('BEGIN');
   try {
     if (positions.length) {
@@ -235,8 +258,22 @@ function buildPositionsFromDeals(deals) {
   for (const group of byPos.values()) {
     const ins = group.filter((d) => d.entry === 'DEAL_ENTRY_IN');
     const outs = group.filter((d) => d.entry === 'DEAL_ENTRY_OUT');
-    if (!ins.length || !outs.length) continue; // ещё открыта, либо не нашли пару
-    const openDeal = ins.reduce((a, b) => (a.time < b.time ? a : b));
+    if (!outs.length) continue; // ещё открыта
+    let openDeal;
+    if (ins.length) {
+      openDeal = ins.reduce((a, b) => (a.time < b.time ? a : b));
+    } else {
+      // Открывающая сделка старше окна синка — берём снимок, снятый
+      // syncPositions() пока позиция ещё была живой (см. openInfoCache).
+      const cached = openInfoCache.get(String(group[0].position_id));
+      if (!cached) continue; // ни сделки, ни кэша — правда нечем сшить
+      openDeal = {
+        symbol: cached.symbol,
+        type: cached.type,
+        price: cached.open_price,
+        time: Math.floor((Date.parse(cached.open_time_iso) + BROKER_UTC_OFFSET_MS) / 1000),
+      };
+    }
     for (const closeDeal of outs) {
       out.push({
         ticket: closeDeal.ticket,
