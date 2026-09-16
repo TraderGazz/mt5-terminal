@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { NavLink } from 'react-router';
 import { ArrowDownUp, History, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { currentRole } from '@/components/auth/session';
+import { useCurrentRole } from '@/components/auth/session';
 
 /** Props shared by lucide icons and the two custom inline-SVG icons below. */
 interface TabIconProps {
@@ -111,7 +111,7 @@ export default function TabBar() {
   // История временно скрыта только для viewer (инвесторский логин, заявка
   // заказчика: пока не разберёмся с расхождениями в данных, инвестор её не
   // видит) — admin и trader видят её как обычно.
-  const historyVisible = currentRole() !== 'viewer';
+  const historyVisible = useCurrentRole() !== 'viewer';
   return (
     <nav
       aria-label="Основная навигация"

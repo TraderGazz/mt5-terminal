@@ -2,6 +2,7 @@ import { ADMIN_USERS } from '@/mocks/admin';
 import type { UserRole } from '@/mocks/admin';
 import { IS_API } from '@/config';
 import { getAuthUser } from '@/api/auth';
+import { useLiveRole } from '@/data/authSession';
 
 /**
  * Mock auth session stored in localStorage (auth.md / settings.md).
@@ -55,6 +56,20 @@ export function currentRole(): UserRole {
 /** Инвестор (viewer) — только просмотр, без права редактировать/удалять. */
 export function canEditTrades(): boolean {
   return currentRole() !== 'viewer';
+}
+
+/**
+ * Реактивная версия currentRole() — переподхватывает смену роли из
+ * authSession.ts (периодический /auth/me) без перезахода. В mock-режиме
+ * роль не меняется динамически, отдаём статичное значение как есть (IS_API
+ * не меняется в рантайме, так что условный вызов хука тут безопасен).
+ */
+export function useCurrentRole(): UserRole {
+  // Хук вызывается безусловно (Rules of Hooks) — стор в мок-режиме просто
+  // никогда не обновляется (authSession.ts не стартует поллинг без IS_API).
+  const live = useLiveRole();
+  if (IS_API) return (live as UserRole | null) ?? currentRole();
+  return currentRole();
 }
 
 export function clearSession(): void {

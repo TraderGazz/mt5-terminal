@@ -32,6 +32,19 @@ export function isAuthed(): boolean {
   return !!getToken();
 }
 
+/** Обновляет только роль в закэшированном пользователе (см. data/authSession.ts —
+ * периодический recheck /auth/me, чтобы смена роли в админке применялась без
+ * повторного логина, например когда инвестору нельзя предлагать перезайти). */
+export function updateAuthUserRole(role: AuthUser['role']): void {
+  const current = getAuthUser();
+  if (!current || current.role === role) return;
+  try {
+    localStorage.setItem(USER_KEY, JSON.stringify({ ...current, role }));
+  } catch {
+    /* ignore */
+  }
+}
+
 export function clearAuth(): void {
   try {
     localStorage.removeItem(TOKEN_KEY);
