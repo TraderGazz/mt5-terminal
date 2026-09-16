@@ -40,10 +40,11 @@ const PERIOD_ROWS: readonly { value: PeriodKind; label: string }[] = [
 const TEMP_DISABLED_PERIODS = new Set<PeriodKind>([]);
 const VISIBLE_PERIOD_ROWS = PERIOD_ROWS.filter((row) => !TEMP_DISABLED_PERIODS.has(row.value));
 
-// ВРЕМЕННО (тот же запрос): «Создать торговый отчёт» пока просто показывает
-// «Режим просмотра» вместо реальной генерации HTML/CSV — снять флаг, чтобы
-// вернуть рабочий выбор формата (код ниже не тронут).
-const TEMP_REPORT_DISABLED = true;
+// Раньше временно показывало «Режим просмотра» вместо реальной генерации
+// HTML/CSV, пока в истории были непроверенные депозиты — заказчик разрешил
+// вернуть после того, как в админке появился инструмент для правки истории
+// («Сделки и депозиты»).
+const TEMP_REPORT_DISABLED = false;
 
 /** White iOS card (radius 14, 16px margins) on the grouped gray background. */
 function Card({ children, first }: { children: ReactNode; first?: boolean }) {

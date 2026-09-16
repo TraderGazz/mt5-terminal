@@ -88,7 +88,7 @@ const TABS: TabDef[] = [
   { to: '/', label: 'Котировки', icon: ArrowDownUp, strokeWidth: 2, end: true },
   { to: '/chart', label: 'Чарт', icon: CandlesIcon, strokeWidth: 1.7 },
   { to: '/trade', label: 'Торговля', icon: TradeIcon, strokeWidth: 1.7, activeClassName: 'text-[#FF3B30]' },
-  { to: '/history', label: 'История', icon: History, strokeWidth: 1.7, disabled: true },
+  { to: '/history', label: 'История', icon: History, strokeWidth: 1.7 },
   { to: '/settings', label: 'Настройки', icon: Settings, strokeWidth: 1.7 },
 ];
 
