@@ -202,7 +202,7 @@ export default function HistoryPage() {
   const historyLoaded = useHistoryLoaded();
   const historyError = useHistoryError();
 
-  const [tab, setTab] = useState<TabKey>('deals');
+  const [tab, setTab] = useState<TabKey>('positions');
   const [tabDir, setTabDir] = useState(1);
   const [rowsAnimate, setRowsAnimate] = useState(() => !hasMountedOnce);
   const [sort, setSort] = useState<SortKey>('default');
