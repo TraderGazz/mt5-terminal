@@ -54,12 +54,15 @@ router.post('/login', requireDb, async (req, res) => {
   }
   try {
     const { rows } = await query(
-      'SELECT id, login, password_hash, role, name FROM users WHERE login = $1',
+      'SELECT id, login, password_hash, role, name, active FROM users WHERE login = $1',
       [login]
     );
     const user = rows[0];
     if (!user || !verifyPassword(password, user.password_hash)) {
       return res.status(401).json({ error: 'Неверный логин или пароль' });
+    }
+    if (!user.active) {
+      return res.status(403).json({ error: 'Ведутся технические работы', code: 'user_disabled' });
     }
     const token = jwt.sign(
       { sub: user.id, login: user.login, role: user.role, name: user.name },
@@ -77,7 +80,7 @@ router.post('/login', requireDb, async (req, res) => {
 });
 
 // Middleware: verify JWT Bearer token.
-export function authRequired(req, res, next) {
+export async function authRequired(req, res, next) {
   const header = req.headers.authorization || '';
   const [type, token] = header.split(' ');
   if (type !== 'Bearer' || !token) {
@@ -85,10 +88,22 @@ export function authRequired(req, res, next) {
   }
   try {
     req.user = jwt.verify(token, JWT_SECRET());
-    next();
   } catch {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
+  // Отключённый в админке пользователь теряет доступ сразу на следующем
+  // запросе, не дожидаясь истечения JWT (12ч) — заявка заказчика.
+  if (isDbReady()) {
+    try {
+      const { rows } = await query('SELECT active FROM users WHERE id = $1', [req.user.sub]);
+      if (!rows[0] || !rows[0].active) {
+        return res.status(401).json({ error: 'Учётная запись отключена' });
+      }
+    } catch {
+      // Сбой БД не должен рвать авторизацию — пропускаем проверку.
+    }
+  }
+  next();
 }
 
 // Middleware: restrict to given roles.

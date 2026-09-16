@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS users (
     role          VARCHAR(10) NOT NULL DEFAULT 'viewer'
         CHECK (role IN ('admin', 'trader', 'viewer')),
     name          VARCHAR(255) DEFAULT '',
+    active        BOOLEAN NOT NULL DEFAULT true,
     created_at    TIMESTAMPTZ DEFAULT now()
 );
 

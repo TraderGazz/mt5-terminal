@@ -16,7 +16,7 @@ const ROLES = ['admin', 'trader', 'viewer'];
 
 router.get('/users', wrap(async (req, res) => {
   const { rows } = await query(
-    'SELECT id, login, role, name, created_at FROM users ORDER BY id'
+    'SELECT id, login, role, name, active, created_at FROM users ORDER BY id'
   );
   res.json({ users: rows });
 }));
@@ -31,7 +31,7 @@ router.post('/users', wrap(async (req, res) => {
   }
   try {
     const { rows } = await query(
-      'INSERT INTO users (login, password_hash, role, name) VALUES ($1, $2, $3, $4) RETURNING id, login, role, name, created_at',
+      'INSERT INTO users (login, password_hash, role, name) VALUES ($1, $2, $3, $4) RETURNING id, login, role, name, active, created_at',
       [login, hashPassword(password), role, name]
     );
     res.status(201).json({ user: rows[0] });
@@ -42,7 +42,10 @@ router.post('/users', wrap(async (req, res) => {
 }));
 
 router.patch('/users/:id', wrap(async (req, res) => {
-  const { role, name, password } = req.body || {};
+  const { role, name, password, active } = req.body || {};
+  if (active === false && Number(req.params.id) === Number(req.user.sub)) {
+    return res.status(400).json({ error: 'Cannot disable yourself' });
+  }
   const updates = [];
   const params = [];
   if (role !== undefined) {
@@ -60,10 +63,14 @@ router.patch('/users/:id', wrap(async (req, res) => {
     params.push(hashPassword(password));
     updates.push(`password_hash = $${params.length}`);
   }
+  if (active !== undefined) {
+    params.push(Boolean(active));
+    updates.push(`active = $${params.length}`);
+  }
   if (!updates.length) return res.status(400).json({ error: 'Nothing to update' });
   params.push(req.params.id);
   const { rows } = await query(
-    `UPDATE users SET ${updates.join(', ')} WHERE id = $${params.length} RETURNING id, login, role, name, created_at`,
+    `UPDATE users SET ${updates.join(', ')} WHERE id = $${params.length} RETURNING id, login, role, name, active, created_at`,
     params
   );
   if (!rows[0]) return res.status(404).json({ error: 'User not found' });
