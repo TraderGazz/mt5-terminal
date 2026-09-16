@@ -108,9 +108,10 @@ const TABS: TabDef[] = [
  * frame. Layout adds matching bottom padding to the scroll container.
  */
 export default function TabBar() {
-  // История временно активна только у admin (заявка заказчика — пока не
-  // разберёмся с расхождениями в данных, для всех остальных ролей серая).
-  const isAdmin = currentRole() === 'admin';
+  // История временно скрыта только для viewer (инвесторский логин, заявка
+  // заказчика: пока не разберёмся с расхождениями в данных, инвестор её не
+  // видит) — admin и trader видят её как обычно.
+  const historyVisible = currentRole() !== 'viewer';
   return (
     <nav
       aria-label="Основная навигация"
@@ -119,7 +120,7 @@ export default function TabBar() {
     >
       <div className="pointer-events-auto flex h-[74px] items-stretch rounded-[26px] bg-white/85 p-2 shadow-[0_8px_28px_rgba(0,0,0,0.14)] backdrop-blur-[20px] backdrop-saturate-[180%]">
         {TABS.map(({ to, label, icon: Icon, strokeWidth, end, activeClassName = 'text-accent', disabled: staticDisabled }) => {
-          const disabled = to === '/history' ? staticDisabled && !isAdmin : staticDisabled;
+          const disabled = to === '/history' ? staticDisabled && !historyVisible : staticDisabled;
           if (disabled) {
             return (
               <span
