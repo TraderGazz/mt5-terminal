@@ -76,9 +76,6 @@ function RealSyncSection({ showToast }: { showToast: (msg: string) => void }) {
         <div className="flex items-center justify-between gap-4 p-5">
           <div>
             <p className="text-[15px] font-medium text-black">Двусторонний обмен</p>
-            <p className="mt-0.5 text-[13px] text-text-secondary">
-              По ТЗ обмен односторонний — включайте, только если это подтверждено заказчиком
-            </p>
           </div>
           <IosToggle
             checked={reverseEnabled}
@@ -188,7 +185,7 @@ function MockSyncSection({ showToast }: { showToast: (msg: string) => void }) {
               ))}
             </div>
             <p className="text-[12px] leading-[16px] text-loss">
-              Изменения в админке Русинвест не уходят в АльфаФорекс (ограничение ТЗ)
+              Изменения в админке Русинвест не уходят в АльфаФорекс
             </p>
           </div>
         </AdminCard>
