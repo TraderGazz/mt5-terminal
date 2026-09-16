@@ -6,11 +6,11 @@ import ActionSheet from '@/components/ActionSheet';
 import Toast from '@/components/Toast';
 import PageLoading from '@/components/PageLoading';
 import ConnectionError from '@/components/ConnectionError';
-import type { Deal } from '@/data/history';
 import {
   getBalanceOps,
   getCfdOps,
   getDeals,
+  getDealLegs,
   useDealsVersion,
   useHistoryLoaded,
   useHistoryError,
@@ -20,7 +20,7 @@ import { getSymbolMeta } from '@/mocks/symbols';
 import { formatMoneyMT5 } from '@/components/history/utils';
 import SegmentedControl from '@/components/history/SegmentedControl';
 import {
-  DealRow,
+  DealLegRow,
   HistoryEmpty,
   OrderRow,
   PositionRow,
@@ -207,7 +207,7 @@ export default function HistoryPage() {
   const [rowsAnimate, setRowsAnimate] = useState(() => !hasMountedOnce);
   const [sort, setSort] = useState<SortKey>('default');
   const [sortOpen, setSortOpen] = useState(false);
-  const [rowSheet, setRowSheet] = useState<Deal | null>(null);
+  const [rowSheet, setRowSheet] = useState<{ symbol: string; ticket: number } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
@@ -254,6 +254,29 @@ export default function HistoryPage() {
     if (sort === 'default') return aggregated;
     return [...aggregated].sort(compareRows(sort));
   }, [deals, sort]);
+
+  // Сырые сделки (открытие/закрытие раздельно) — для вкладки «Сделки»,
+  // 1-в-1 с оригинальным MT5 (см. DealLeg в data/history.ts). compareRows
+  // читает только openTime/closeTime/profit/symbol/ticket/type/volume — у
+  // сырой сделки одно-единственное time, подставляем его в оба поля.
+  const dealLegs = useMemo(() => {
+    const cmp = compareRows(sort);
+    return getDealLegs()
+      .filter(
+        (d) =>
+          d.dealType !== 'balance' &&
+          (filter.symbol == null || d.symbol === filter.symbol) &&
+          d.time >= range.from &&
+          d.time <= range.to,
+      )
+      .sort((a, b) =>
+        cmp(
+          { ...a, type: a.type ?? '', openTime: a.time, closeTime: a.time },
+          { ...b, type: b.type ?? '', openTime: b.time, closeTime: b.time },
+        ),
+      );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter.symbol, range, dealsVersion, sort]);
 
   // MT5 iOS opens History already scrolled to the very bottom (latest
   // entries + the totals block visible). Scroll the app scroll container
@@ -368,6 +391,30 @@ export default function HistoryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deals, isWidestPeriod]);
 
+  // То же самое, но из СЫРЫХ сделок — специально для вкладки «Сделки».
+  // Важно: это НЕ обязано совпадать с totals выше (который из уже слитых
+  // open+close позиций) — сам оригинальный MT5 показывает разные суммы во
+  // вкладках «Сделки» и «Позиции» для одного и того же периода (проверено
+  // напрямую сравнением скриншотов), это не баг, а факт про то, как MT5
+  // считает эти два разных представления.
+  const dealLegsTotals = useMemo(() => {
+    if (isWidestPeriod) {
+      const { profit, swap, commission } = FIXED_TOTALS;
+      return { profit, swap, commission, total: profit + swap + commission };
+    }
+    let profit = 0;
+    let swap = 0;
+    let commission = 0;
+    for (const d of dealLegs) {
+      if (d.dealType !== 'buy' && d.dealType !== 'sell') continue;
+      profit += d.profit;
+      swap += d.swap;
+      commission += d.commission;
+    }
+    return { profit, swap, commission, total: profit + swap + commission };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dealLegs, isWidestPeriod]);
+
   // Депозит/снятие — гибрид: даты в пределах официальной выписки брокера
   // (depositLedger.ts, до LEDGER_END) берутся из неё — синхронизированные
   // с EA balance-записи за ВСЁ время не совпадают с выпиской (68.7М против
@@ -413,7 +460,10 @@ export default function HistoryPage() {
   // это и так сходится с зафиксированным FIXED_TOTALS-балансом (проверено
   // при подборе тех цифр), для остальных периодов — реальная сумма
   // отображаемых выше строк, как в оригинале.
-  const grandTotal = balTotals.net + totals.total + cfdTotal;
+  // «Сделки» считает итоги из сырых legs (см. dealLegsTotals) — по факту
+  // отличается от «Позиций»/«Ордеров», как и в оригинале.
+  const activeTotals = tab === 'deals' ? dealLegsTotals : totals;
+  const grandTotal = balTotals.net + activeTotals.total + cfdTotal;
 
   const orderStats = useMemo(
     () => ({
@@ -430,7 +480,7 @@ export default function HistoryPage() {
       ? orders.length > 0
       : tab === 'positions'
         ? positions.length > 0
-        : deals.length > 0;
+        : dealLegs.length > 0;
 
   const changeTab = (next: TabKey) => {
     if (next === tab) return;
@@ -617,19 +667,22 @@ export default function HistoryPage() {
             transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
           >
             {tab === 'deals' &&
-              (deals.length === 0 ? (
+              (dealLegs.length === 0 ? (
                 <HistoryEmpty title="Нет сделок" />
               ) : (
                 <div className="bg-white">
-                  {deals.map((deal, i) => (
-                    <DealRow
-                      key={deal.ticket}
-                      deal={deal}
-                      digits={digitsOf(deal.symbol)}
-                      last={i === deals.length - 1}
+                  {dealLegs.map((leg, i) => (
+                    <DealLegRow
+                      key={leg.ticket}
+                      leg={leg}
+                      digits={digitsOf(leg.symbol)}
+                      last={i === dealLegs.length - 1}
                       staggerDelay={stagger(i)}
-                      onTap={() => navigate(`/trade/${deal.ticket}`)}
-                      onLongPress={() => setRowSheet(deal)}
+                      onTap={
+                        leg.entry === 'out' || leg.entry === 'inout'
+                          ? () => navigate(`/trade/${leg.ticket}`)
+                          : undefined
+                      }
                     />
                   ))}
                 </div>
@@ -648,6 +701,7 @@ export default function HistoryPage() {
                       last={i === positions.length - 1}
                       staggerDelay={stagger(i)}
                       onTap={() => navigate(`/trade/${p.ticket}`)}
+                      onLongPress={() => setRowSheet(p)}
                     />
                   ))}
                 </div>
@@ -691,10 +745,10 @@ export default function HistoryPage() {
                   {showWithdrawal && (
                     <TotalRow label="Снятие" value={formatMoneyMT5(balTotals.withdrawal)} />
                   )}
-                  <TotalRow label="Прибыль" value={formatMoneyMT5(totals.profit)} />
+                  <TotalRow label="Прибыль" value={formatMoneyMT5(activeTotals.profit)} />
                   {showCfd && <TotalRow label="CFD" value={formatMoneyMT5(cfdTotal)} />}
-                  <TotalRow label="Своп" value={formatMoneyMT5(totals.swap)} />
-                  <TotalRow label="Комиссия" value={formatMoneyMT5(totals.commission)} />
+                  <TotalRow label="Своп" value={formatMoneyMT5(activeTotals.swap)} />
+                  <TotalRow label="Комиссия" value={formatMoneyMT5(activeTotals.commission)} />
                   <TotalRow label="Баланс" value={formatMoneyMT5(grandTotal)} />
                 </>
               )}

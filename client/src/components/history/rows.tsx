@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowDownLeft, ArrowUpRight, Clock } from 'lucide-react';
-import type { Deal } from '@/data/history';
+import type { Deal, DealLeg } from '@/data/history';
 import { formatPrice, formatVolume, formatDate, formatTimeShort } from '@/lib/format';
 import { formatDayTime, formatFullDateTime, formatMoneyMT5, formatSignedMoneyMT5 } from './utils';
 
@@ -143,6 +143,61 @@ export function DealRow({ deal, digits, last, staggerDelay, onTap, onLongPress }
 }
 
 /* ------------------------------------------------------------------ */
+/* Сделки — сырые (открытие/закрытие раздельно, 1-в-1 с оригиналом)    */
+/* ------------------------------------------------------------------ */
+
+interface DealLegRowProps {
+  leg: DealLeg;
+  digits: number;
+  last: boolean;
+  staggerDelay: number;
+  onTap?: () => void;
+}
+
+/**
+ * Сырая сделка (MT5 «Сделки»): «EURUSDrfd buy, in» / «sell, out» — в
+ * отличие от DealRow (уже слитая позиция), тут открытие и закрытие — ДВЕ
+ * отдельные строки, как в самом MT5. Открывающая (in) сделка всегда с
+ * прибылью 0 — справа ничего не показываем (пусто), совпадает с оригиналом.
+ */
+export function DealLegRow({ leg, digits, last, staggerDelay, onTap }: DealLegRowProps) {
+  const showProfit = leg.entry === 'out' || leg.entry === 'inout';
+  return (
+    <RowShell last={last} staggerDelay={staggerDelay} onTap={onTap}>
+      <div className="flex items-start justify-between gap-2 px-2 py-[6px]">
+        <div className="min-w-0">
+          <div className="text-[17px] leading-[22px] tracking-[-0.41px]">
+            <span className="font-semibold text-black">{leg.symbol || '—'}</span>{' '}
+            {leg.type && (
+              <span className={leg.type === 'buy' ? 'text-accent' : 'text-loss'}>
+                {leg.type}, {leg.entry}
+              </span>
+            )}
+          </div>
+          <div className="tnum mt-[2px] text-[13px] leading-[18px] text-text-secondary">
+            {leg.type ? `${formatLots(leg.volume)} at ${formatPrice(leg.price, digits)}` : leg.comment}
+          </div>
+        </div>
+        <div className="shrink-0 text-right">
+          {showProfit && (
+            <div
+              className={`tnum text-[17px] font-semibold leading-[22px] ${
+                leg.profit >= 0 ? 'text-accent' : 'text-loss'
+              }`}
+            >
+              {formatMoneyMT5(leg.profit)}
+            </div>
+          )}
+          <div className="tnum mt-[2px] text-[13px] leading-[18px] text-text-secondary">
+            {formatFullDateTime(leg.time)}
+          </div>
+        </div>
+      </div>
+    </RowShell>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Позиции (aggregated by positionId)                                  */
 /* ------------------------------------------------------------------ */
 
@@ -201,16 +256,17 @@ interface PositionRowProps {
   last: boolean;
   staggerDelay: number;
   onTap: () => void;
+  onLongPress?: () => void;
 }
 
-export function PositionRow({ position, digits, last, staggerDelay, onTap }: PositionRowProps) {
+export function PositionRow({ position, digits, last, staggerDelay, onTap, onLongPress }: PositionRowProps) {
   // Только прибыль, без свопа/комиссии — так же, как в «Сделках» (DealRow
   // ниже) и в самом MT5: своп почти всегда 0 для однодневных сделок, поэтому
   // расхождение не было заметно, пока не досинхронизировались позиции,
   // провисевшие открытыми много дней (реальный своп там ненулевой).
   const net = position.profit;
   return (
-    <RowShell last={last} staggerDelay={staggerDelay} onTap={onTap}>
+    <RowShell last={last} staggerDelay={staggerDelay} onTap={onTap} onLongPress={onLongPress}>
       <div className="flex items-start justify-between gap-2 px-2 py-[6px]">
         <div className="min-w-0">
           <div className="text-[17px] leading-[22px] tracking-[-0.41px]">

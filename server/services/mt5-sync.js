@@ -5,7 +5,7 @@
 //
 // Запускается при старте, по интервалу и по событию 'trade' от моста.
 import { getBridge } from './mt5-bridge/index.js';
-import { normalizeDeal } from './mt5-bridge/normalize.js';
+import { normalizeDeal, toIso as toIsoBroker } from './mt5-bridge/normalize.js';
 import { query, isDbReady } from '../db.js';
 
 const INTERVAL_MS = Number(process.env.MT5_SYNC_INTERVAL_MS) || 30_000;
@@ -94,6 +94,60 @@ async function syncPositions(bridge) {
     await query('ROLLBACK');
     throw err;
   }
+}
+
+// Категория сырой сделки — та же логика, что и balance-ветка в
+// buildPositionsFromDeals() ниже + cfd-проверка из normalize.js:dealType(),
+// просто применённая к сырому объекту напрямую (без промежуточного маппинга).
+function categorizeRawDeal(raw, profit) {
+  const t = String(raw.type || '').toUpperCase();
+  if (t.includes('BALANCE') || t.includes('DEPOSIT') || t.includes('WITHDRAW') || t.includes('CREDIT')) {
+    return profit < 0 ? 'withdrawal' : 'balance';
+  }
+  if (t.includes('CFD') || t.includes('DIVIDEND') || t.includes('CHARGE') || t.includes('CORRECTION')) return 'cfd';
+  if (t.includes('SELL')) return 'sell';
+  return 'buy';
+}
+
+function normalizeEntry(raw) {
+  const s = String(raw.entry || '').toUpperCase();
+  if (s.includes('INOUT')) return 'inout';
+  if (s.includes('OUT')) return 'out';
+  if (s.includes('IN')) return 'in';
+  return '';
+}
+
+// Сырые сделки БЕЗ сшивания open+close — прямой passthrough в deal_legs,
+// нужен для вкладки «Сделки» (см. её комментарий в init.sql): оригинальный
+// MT5 показывает там открытие и закрытие как ДВЕ отдельные строки, а не
+// слитую запись, как в trades/buildPositionsFromDeals ниже.
+async function saveRawDeals(rawDeals) {
+  for (const d of rawDeals) {
+    const profit = Number(d.profit) || 0;
+    const dealType = categorizeRawDeal(d, profit);
+    const type = dealType === 'buy' || dealType === 'sell' ? dealType : null;
+    await query(
+      `INSERT INTO deal_legs
+         (ticket, position_id, order_ticket, symbol, type, entry, deal_type,
+          volume, price, stop_loss, take_profit, profit, swap, commission, time, comment)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+       ON CONFLICT (ticket) DO UPDATE SET
+         position_id = EXCLUDED.position_id, order_ticket = EXCLUDED.order_ticket,
+         symbol = EXCLUDED.symbol, type = EXCLUDED.type, entry = EXCLUDED.entry,
+         deal_type = EXCLUDED.deal_type, volume = EXCLUDED.volume, price = EXCLUDED.price,
+         stop_loss = EXCLUDED.stop_loss, take_profit = EXCLUDED.take_profit,
+         profit = EXCLUDED.profit, swap = EXCLUDED.swap, commission = EXCLUDED.commission,
+         time = EXCLUDED.time
+       WHERE deal_legs.is_edited = FALSE`,
+      [
+        d.ticket, Number(d.position_id) || null, Number(d.order_ticket) || null,
+        d.symbol || null, type, normalizeEntry(d), dealType,
+        d.volume, d.price, d.sl_price, d.tp_price, profit, d.swap, d.commission,
+        toIsoBroker(d.time), d.comment || '',
+      ],
+    );
+  }
+  return rawDeals.length;
 }
 
 async function saveDeals(deals) {
@@ -349,6 +403,7 @@ async function syncHistory(bridge) {
       const next = new Date(day.getTime() + DAY_MS);
       rawAll = rawAll.concat(await fetchDealsChunked(bridge, day, next));
     }
+    await saveRawDeals(rawAll);
     const positions = buildPositionsFromDeals(rawAll).map(normalizeDeal).filter((d) => d.ticket);
     return saveDeals(positions);
   }
@@ -381,11 +436,12 @@ export async function backfillHistory() {
   try {
     if (bridge.mode === 'real') {
       const rawDeals = await fetchDealsChunked(bridge, from, to);
+      await saveRawDeals(rawDeals);
       const positions = buildPositionsFromDeals(rawDeals);
       const deals = positions.map(normalizeDeal).filter((d) => d.ticket);
       const n = await saveDeals(deals);
       console.log(
-        `[mt5-sync] бэкфилл истории (deals) за ${HISTORY_MONTHS} мес. — ${rawDeals.length} deals → ${positions.length} позиций → ${n} строк в БД`,
+        `[mt5-sync] бэкфилл истории (deals) за ${HISTORY_MONTHS} мес. — ${rawDeals.length} deals → ${positions.length} позиций → ${n} строк в БД (+ ${rawDeals.length} сырых в deal_legs)`,
       );
     } else {
       const deals = await fetchHistoryChunked(bridge, from, to);

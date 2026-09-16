@@ -67,6 +67,40 @@ async function loadDeals(range) {
   return { deals, from: 'bridge' };
 }
 
+// deal_legs — сырые сделки (открытие/закрытие раздельно), см. init.sql:
+// нужны, чтобы вкладка «Сделки» на сайте совпадала с оригинальным MT5
+// (там это ДВЕ строки на позицию, а не слитая запись из `trades`).
+const dbRowToLeg = (r) => ({
+  id: Number(r.id),
+  ticket: Number(r.ticket),
+  positionId: r.position_id ? Number(r.position_id) : null,
+  orderTicket: r.order_ticket ? Number(r.order_ticket) : null,
+  symbol: r.symbol || '',
+  type: r.type || null,
+  entry: r.entry || '',
+  dealType: r.deal_type || 'buy',
+  volume: Number(r.volume) || 0,
+  price: Number(r.price) || 0,
+  stopLoss: Number(r.stop_loss) || 0,
+  takeProfit: Number(r.take_profit) || 0,
+  profit: Number(r.profit) || 0,
+  swap: Number(r.swap) || 0,
+  commission: Number(r.commission) || 0,
+  time: r.time ? new Date(r.time).toISOString() : null,
+  comment: r.comment || '',
+  isEdited: !!r.is_edited,
+});
+
+async function loadDealLegs() {
+  if (!isDbReady()) return [];
+  try {
+    const { rows } = await query('SELECT * FROM deal_legs ORDER BY time DESC NULLS LAST, id DESC');
+    return rows.map(dbRowToLeg);
+  } catch {
+    return [];
+  }
+}
+
 // GET /api/history/raw — все строки за всё время, разбитые по категориям.
 // Мобильный фронт фильтрует/агрегирует/считает итоги на клиенте (дизайн заморожен).
 router.get('/raw', authRequired, async (req, res) => {
@@ -75,7 +109,8 @@ router.get('/raw', authRequired, async (req, res) => {
     const trade = deals.filter((d) => d.dealType === 'buy' || d.dealType === 'sell');
     const balanceOps = deals.filter((d) => d.dealType === 'balance' || d.dealType === 'withdrawal');
     const cfdOps = deals.filter((d) => d.dealType === 'cfd');
-    res.json({ deals: trade, balanceOps, cfdOps, source: getBridge().status() });
+    const dealLegs = await loadDealLegs();
+    res.json({ deals: trade, balanceOps, cfdOps, dealLegs, source: getBridge().status() });
   } catch (err) {
     console.error('[history/raw] error:', err.message);
     res.status(502).json({ error: 'Не удалось получить историю', detail: err.message });

@@ -120,10 +120,34 @@ export interface HistoryQuery {
 export const getHistory = (q: HistoryQuery) =>
   api<ApiHistoryResponse>('/history', { query: q as Record<string, string | undefined> });
 
+// Сырая сделка (открытие/закрытие раздельно) — 1-в-1 с оригинальной вкладкой
+// «Сделки» MT5, в отличие от ApiHistoryRow (уже слитая open+close позиция).
+export interface ApiDealLeg {
+  id: number;
+  ticket: number;
+  positionId: number | null;
+  orderTicket: number | null;
+  symbol: string;
+  type: 'buy' | 'sell' | null;
+  entry: 'in' | 'out' | 'inout' | '';
+  dealType: 'buy' | 'sell' | 'balance' | 'withdrawal' | 'cfd';
+  volume: number;
+  price: number;
+  stopLoss: number;
+  takeProfit: number;
+  profit: number;
+  swap: number;
+  commission: number;
+  time: string | null;
+  comment: string;
+  isEdited?: boolean;
+}
+
 export interface ApiHistoryRaw {
   deals: ApiHistoryRow[];
   balanceOps: ApiHistoryRow[];
   cfdOps: ApiHistoryRow[];
+  dealLegs: ApiDealLeg[];
 }
 
 export const getHistoryRaw = () => api<ApiHistoryRaw>('/history/raw');
