@@ -277,15 +277,13 @@ function buildPositionsFromDeals(deals) {
 // счёту/позициям (те синкаются отдельно, до истории — см. syncNow).
 const SYNC_WINDOW_DAYS = Number(process.env.MT5_SYNC_WINDOW_DAYS) || 3;
 
-async function fetchDayFast(bridge, day, real) {
+// Только для мока (mode=positions уже отдаёт завершённые записи, сшивать
+// open/close самим не нужно) — реальный путь собран отдельно в syncHistory().
+async function fetchDayFast(bridge, day) {
   const dateStr = day.toISOString().slice(0, 10);
   if (KNOWN_BAD_DAYS.has(dateStr)) return [];
   const next = new Date(day.getTime() + DAY_MS);
   try {
-    if (real) {
-      const rawDeals = await fetchDealsChunked(bridge, day, next);
-      return buildPositionsFromDeals(rawDeals).map(normalizeDeal).filter((d) => d.ticket);
-    }
     return await fetchHistoryChunked(bridge, day, next);
   } catch (err) {
     console.error(`[mt5-sync] история (${dateStr}) пропущена:`, err.message);
@@ -296,11 +294,33 @@ async function fetchDayFast(bridge, day, real) {
 async function syncHistory(bridge) {
   const to = atUtcMidnight(new Date());
   const real = bridge.mode === 'real';
+
+  if (real) {
+    // ВАЖНО: сшивать open/close в позицию нужно ПОСЛЕ того, как собраны сырые
+    // deals за ВЕСЬ оконный период, а не по одному дню за раз — иначе любая
+    // позиция, открытая в один календарный день и закрытая в другой (обычное
+    // дело), не находит пару ни в одном из двух дневных чанков и тихо
+    // выбрасывается как "незавершённая" (см. buildPositionsFromDeals). Раньше
+    // buildPositionsFromDeals вызывался внутри fetchDayFast на КАЖДЫЙ день —
+    // копим сырьё сначала, сшиваем один раз в конце, как в backfillHistory().
+    let rawAll = [];
+    for (let i = 0; i < SYNC_WINDOW_DAYS; i++) {
+      const day = new Date(to.getTime() - i * DAY_MS);
+      const dateStr = day.toISOString().slice(0, 10);
+      if (KNOWN_BAD_DAYS.has(dateStr)) continue;
+      await sleep(120); // EA однопоточный — не бомбим впритык
+      const next = new Date(day.getTime() + DAY_MS);
+      rawAll = rawAll.concat(await fetchDealsChunked(bridge, day, next));
+    }
+    const positions = buildPositionsFromDeals(rawAll).map(normalizeDeal).filter((d) => d.ticket);
+    return saveDeals(positions);
+  }
+
   let all = [];
   for (let i = 0; i < SYNC_WINDOW_DAYS; i++) {
     const day = new Date(to.getTime() - i * DAY_MS);
-    await sleep(120); // EA однопоточный — не бомбим впритык
-    all = all.concat(await fetchDayFast(bridge, day, real));
+    await sleep(120);
+    all = all.concat(await fetchDayFast(bridge, day));
   }
   return saveDeals(all);
 }
