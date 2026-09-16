@@ -74,8 +74,12 @@ function AccountRow({ label, value }: { label: string; value: string }) {
 export default function TradePage() {
   const account = useAccount();
   const positions = usePositions();
-  const dataReady = useAccountReady() && usePositionsReady();
-  const dataError = useAccountError() || usePositionsError();
+  const accountReady = useAccountReady();
+  const positionsReady = usePositionsReady();
+  const dataReady = accountReady && positionsReady;
+  const accountError = useAccountError();
+  const positionsError = usePositionsError();
+  const dataError = accountError || positionsError;
   const quotes = useQuotes();
   const quoteMap = useMemo(() => new Map(quotes.map((q) => [q.symbol, q])), [quotes]);
 
