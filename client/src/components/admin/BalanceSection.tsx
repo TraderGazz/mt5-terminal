@@ -1,11 +1,17 @@
 /**
  * Admin → Редактирование баланса (admin.md §10.4): manual edit form with
  * live preview of the Trade page balance block, save confirmation modal.
+ *
+ * В режиме api правит реальный снимок счёта (GET/PATCH /api/admin/balance) —
+ * счёт один общий на весь терминал, без выбора пользователя. В mock-режиме —
+ * прежнее локальное состояние для демо (выбор пользователя, лог импортов).
  */
 import { motion } from 'framer-motion';
-import { useMemo, useState, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { ACCOUNT, ADMIN_USERS, type ImportLogEntry } from '@/mocks';
 import { formatMoney } from '@/lib/format';
+import { IS_API } from '@/config';
+import { getAdminBalance, updateAdminBalance } from '@/api/admin';
 import { AdminButton, AdminCard, AdminInput, AdminModal } from './bits';
 
 interface BalanceForm {
@@ -15,14 +21,6 @@ interface BalanceForm {
   freeMargin: string;
   marginLevel: string;
 }
-
-const toForm = (): BalanceForm => ({
-  balance: String(ACCOUNT.balance),
-  equity: String(ACCOUNT.equity),
-  margin: String(ACCOUNT.margin),
-  freeMargin: String(ACCOUNT.freeMargin),
-  marginLevel: String(ACCOUNT.marginLevel),
-});
 
 function parse(v: string): number {
   const n = Number(v.replace(/\s/g, '').replace(',', '.'));
@@ -46,7 +44,148 @@ function PreviewRow({ label, value }: { label: string; value: number }) {
   );
 }
 
-export default function BalanceSection({
+export default function BalanceSection(props: {
+  showToast: (msg: string) => void;
+  onBalanceSaved: (entry: ImportLogEntry) => void;
+}) {
+  if (IS_API) return <RealBalanceSection showToast={props.showToast} />;
+  return <MockBalanceSection {...props} />;
+}
+
+// ---------- api-режим: реальный снимок счёта ----------
+
+const emptyForm: BalanceForm = { balance: '0', equity: '0', margin: '0', freeMargin: '0', marginLevel: '0' };
+
+function RealBalanceSection({ showToast }: { showToast: (msg: string) => void }) {
+  const [form, setForm] = useState<BalanceForm | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  useEffect(() => {
+    getAdminBalance()
+      .then((acc) => {
+        if (!acc) { setError('Счёт не найден (запустите database/init.sql)'); return; }
+        setForm({
+          balance: String(acc.balance),
+          equity: String(acc.equity),
+          margin: String(acc.margin),
+          freeMargin: String(acc.free_margin),
+          marginLevel: String(acc.margin_level),
+        });
+      })
+      .catch((err: Error) => setError(err.message || 'Не удалось загрузить счёт'));
+  }, []);
+
+  const values = useMemo(() => {
+    const f = form ?? emptyForm;
+    return {
+      balance: parse(f.balance),
+      equity: parse(f.equity),
+      margin: parse(f.margin),
+      freeMargin: parse(f.freeMargin),
+      marginLevel: parse(f.marginLevel),
+    };
+  }, [form]);
+
+  const set = (key: keyof BalanceForm) => (e: ChangeEvent<HTMLInputElement>) =>
+    setForm((prev) => ({ ...(prev ?? emptyForm), [key]: e.target.value }));
+
+  const save = () => {
+    setConfirmOpen(false);
+    updateAdminBalance({
+      balance: values.balance,
+      equity: values.equity,
+      margin: values.margin,
+      free_margin: values.freeMargin,
+      margin_level: values.marginLevel,
+    })
+      .then(() => showToast('Баланс обновлён'))
+      .catch((err: Error) => showToast(err.message || 'Не удалось сохранить'));
+  };
+
+  if (error) return <AdminCard className="p-6 text-center text-[14px] text-loss">{error}</AdminCard>;
+  if (!form) return <AdminCard className="p-6 text-center text-[14px] text-text-secondary">Загрузка…</AdminCard>;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <h1 className="text-[28px] font-bold leading-tight text-black md:text-[34px]">
+        Редактирование баланса
+      </h1>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <AdminCard title="Ручное изменение баланса">
+          <div className="flex flex-col gap-3 p-5">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <AdminInput label="Баланс" suffix="₽" inputMode="decimal" value={form.balance} onChange={set('balance')} />
+              <AdminInput label="Средства" suffix="₽" inputMode="decimal" value={form.equity} onChange={set('equity')} />
+              <AdminInput label="Маржа" suffix="₽" inputMode="decimal" value={form.margin} onChange={set('margin')} />
+              <AdminInput label="Свободная маржа" suffix="₽" inputMode="decimal" value={form.freeMargin} onChange={set('freeMargin')} />
+              <AdminInput label="Уровень маржи" suffix="%" inputMode="decimal" value={form.marginLevel} onChange={set('marginLevel')} />
+            </div>
+            <AdminButton onClick={() => setConfirmOpen(true)} className="mt-1 self-end">
+              Сохранить
+            </AdminButton>
+          </div>
+        </AdminCard>
+
+        <AdminCard title="Как увидит пользователь">
+          <div className="p-5">
+            <div className="rounded-[10px] bg-bg-secondary p-4">
+              <p className="tnum text-[28px] font-semibold tracking-[-0.5px] text-black">
+                {formatMoney(values.equity)}
+              </p>
+              <div className="mt-3 divide-y divide-separator/70">
+                <PreviewRow label="Баланс" value={values.balance} />
+                <PreviewRow label="Средства" value={values.equity} />
+                <PreviewRow label="Маржа" value={values.margin} />
+                <PreviewRow label="Свободная маржа" value={values.freeMargin} />
+                <div className="flex items-center justify-between py-[7px]">
+                  <span className="text-[13px] text-text-secondary">Уровень маржи</span>
+                  <span className="tnum text-[14px] font-medium text-black">
+                    {values.marginLevel.toFixed(2)} %
+                  </span>
+                </div>
+              </div>
+            </div>
+            <p className="mt-3 text-[12px] leading-[16px] text-text-secondary">
+              Это ручной снимок счёта (страницы «Торговля»/«Настройки») —
+              обычно перезаписывается синхронизацией с MT5. Правьте, только
+              если нужно временно переопределить показания.
+            </p>
+          </div>
+        </AdminCard>
+      </div>
+
+      <AdminModal
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        title="Подтверждение"
+        footer={
+          <>
+            <AdminButton variant="secondary" onClick={() => setConfirmOpen(false)}>
+              Отмена
+            </AdminButton>
+            <AdminButton onClick={save}>Сохранить</AdminButton>
+          </>
+        }
+      >
+        <p className="text-[14px] leading-[20px] text-black">Сохранить изменения баланса?</p>
+      </AdminModal>
+    </div>
+  );
+}
+
+// ---------- mock-режим: прежнее локальное состояние для демо ----------
+
+const toForm = (): BalanceForm => ({
+  balance: String(ACCOUNT.balance),
+  equity: String(ACCOUNT.equity),
+  margin: String(ACCOUNT.margin),
+  freeMargin: String(ACCOUNT.freeMargin),
+  marginLevel: String(ACCOUNT.marginLevel),
+});
+
+function MockBalanceSection({
   showToast,
   onBalanceSaved,
 }: {

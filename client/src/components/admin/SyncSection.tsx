@@ -1,13 +1,124 @@
 /**
  * Admin → Настройки автообмена (admin.md §10.5): master toggle, direction,
- * interval, data checklist, sync log, manual sync.
+ * sync log.
+ *
+ * В режиме api читает/пишет реальные server/routes/admin.js
+ * /sync-settings + /sync-log (интервал и чек-лист данных из старого мока
+ * убраны — их нет в реальной схеме sync_settings). В mock-режиме — прежнее
+ * локальное состояние для демо.
  */
-import { motion } from 'framer-motion';
-import { RefreshCw } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SYNC_LOG, SYNC_SETTINGS } from '@/mocks';
 import { formatDateTime } from '@/lib/format';
-import { AdminButton, AdminCard, IosToggle, Pill, SegmentedControl } from './bits';
+import { IS_API } from '@/config';
+import { getSyncSettings, updateSyncSettings, getSyncLog, type ApiSyncLogEntry } from '@/api/admin';
+import { AdminButton, AdminCard, IosToggle, Pill } from './bits';
+
+export default function SyncSection({ showToast }: { showToast: (msg: string) => void }) {
+  if (IS_API) return <RealSyncSection showToast={showToast} />;
+  return <MockSyncSection showToast={showToast} />;
+}
+
+// ---------- api-режим ----------
+
+function RealSyncSection({ showToast }: { showToast: (msg: string) => void }) {
+  const [enabled, setEnabled] = useState(false);
+  const [reverseEnabled, setReverseEnabled] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [log, setLog] = useState<ApiSyncLogEntry[] | null>(null);
+
+  useEffect(() => {
+    getSyncSettings()
+      .then((s) => {
+        setEnabled(s?.enabled ?? false);
+        setReverseEnabled(s?.reverse_enabled ?? false);
+        setLoaded(true);
+      })
+      .catch((err: Error) => setError(err.message || 'Не удалось загрузить настройки'));
+    getSyncLog()
+      .then(setLog)
+      .catch(() => setLog([]));
+  }, []);
+
+  const save = (patch: Partial<{ enabled: boolean; reverse_enabled: boolean }>) => {
+    updateSyncSettings(patch)
+      .then(() => showToast('Настройки автообмена сохранены'))
+      .catch((err: Error) => showToast(err.message || 'Не удалось сохранить'));
+  };
+
+  if (error) return <AdminCard className="p-6 text-center text-[14px] text-loss">{error}</AdminCard>;
+  if (!loaded) return <AdminCard className="p-6 text-center text-[14px] text-text-secondary">Загрузка…</AdminCard>;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <h1 className="text-[28px] font-bold leading-tight text-black md:text-[34px]">
+        Настройки автообмена
+      </h1>
+
+      <AdminCard>
+        <div className="flex items-center justify-between gap-4 p-5">
+          <div>
+            <p className="text-[17px] font-semibold text-black">Автообмен включён</p>
+            <p className="mt-0.5 text-[13px] text-text-secondary">
+              Односторонняя передача баланса: терминал → сайт АльфаФорекс
+            </p>
+          </div>
+          <IosToggle
+            checked={enabled}
+            onChange={(v) => { setEnabled(v); save({ enabled: v }); }}
+            label="Автообмен включён"
+          />
+        </div>
+      </AdminCard>
+
+      <AdminCard>
+        <div className="flex items-center justify-between gap-4 p-5">
+          <div>
+            <p className="text-[15px] font-medium text-black">Двусторонний обмен</p>
+            <p className="mt-0.5 text-[13px] text-text-secondary">
+              По ТЗ обмен односторонний — включайте, только если это подтверждено заказчиком
+            </p>
+          </div>
+          <IosToggle
+            checked={reverseEnabled}
+            onChange={(v) => { setReverseEnabled(v); save({ reverse_enabled: v }); }}
+            label="Двусторонний обмен"
+          />
+        </div>
+      </AdminCard>
+
+      <AdminCard title="Журнал обмена">
+        <div className="divide-y divide-separator/70 px-5">
+          {!log ? (
+            <p className="py-4 text-[13px] text-text-secondary">Загрузка…</p>
+          ) : log.length === 0 ? (
+            <p className="py-4 text-[13px] text-text-secondary">Обменов пока не было</p>
+          ) : (
+            log.slice(0, 20).map((e) => (
+              <div key={e.id} className="flex items-center justify-between gap-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="truncate text-[14px] text-black">
+                    <span className="tnum mr-2 text-text-secondary">
+                      {formatDateTime(new Date(e.created_at).getTime())}
+                    </span>
+                    {e.direction} · {e.peer}
+                  </p>
+                  {e.detail && <p className="truncate text-[12px] text-text-secondary">{e.detail}</p>}
+                </div>
+                <Pill tone={e.status === 'ok' ? 'green' : e.status === 'skipped' ? 'gray' : 'red'}>
+                  {e.status === 'ok' ? 'успешно' : e.status === 'skipped' ? 'пропущено' : 'ошибка'}
+                </Pill>
+              </div>
+            ))
+          )}
+        </div>
+      </AdminCard>
+    </div>
+  );
+}
+
+// ---------- mock-режим: прежнее локальное состояние для демо ----------
 
 const DATA_ITEMS = [
   'Баланс',
@@ -19,11 +130,7 @@ const DATA_ITEMS = [
   'История сделок',
 ];
 
-export default function SyncSection({
-  showToast,
-}: {
-  showToast: (msg: string) => void;
-}) {
+function MockSyncSection({ showToast }: { showToast: (msg: string) => void }) {
   const [enabled, setEnabled] = useState(SYNC_SETTINGS.autoSync);
   const [direction, setDirection] = useState<'to-alfa' | 'both'>('to-alfa');
   const [intervalMin, setIntervalMin] = useState(SYNC_SETTINGS.intervalMin);
@@ -60,23 +167,26 @@ export default function SyncSection({
         </div>
       </AdminCard>
 
-      <motion.div
-        animate={{ opacity: enabled ? 1 : 0.4 }}
-        transition={{ duration: 0.25 }}
-        className={`flex flex-col gap-4 ${enabled ? '' : 'pointer-events-none'}`}
+      <div
+        style={{ opacity: enabled ? 1 : 0.4 }}
+        className={`flex flex-col gap-4 transition-opacity duration-200 ${enabled ? '' : 'pointer-events-none'}`}
         aria-hidden={!enabled}
       >
         {/* Direction */}
         <AdminCard title="Направление обмена">
           <div className="flex flex-col gap-3 p-5">
-            <SegmentedControl<'to-alfa' | 'both'>
-              value={direction}
-              onChange={setDirection}
-              options={[
-                { value: 'to-alfa', label: 'Русинвест → АльфаФорекс' },
-                { value: 'both', label: 'Двусторонний' },
-              ]}
-            />
+            <div className="flex h-8 rounded-lg bg-[#E9E9EB] p-[2px]">
+              {(['to-alfa', 'both'] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setDirection(v)}
+                  className={`flex-1 rounded-md px-3 text-[13px] font-medium ${direction === v ? 'bg-white text-black shadow-[0_3px_8px_rgba(0,0,0,0.12)]' : 'text-[#636366]'}`}
+                >
+                  {v === 'to-alfa' ? 'Русинвест → АльфаФорекс' : 'Двусторонний'}
+                </button>
+              ))}
+            </div>
             <p className="text-[12px] leading-[16px] text-loss">
               Изменения в админке Русинвест не уходят в АльфаФорекс (ограничение ТЗ)
             </p>
@@ -149,10 +259,9 @@ export default function SyncSection({
         </AdminCard>
 
         <AdminButton variant="secondary" onClick={runSync} disabled={syncing} className="self-start">
-          <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
           {syncing ? 'Выполняется обмен…' : 'Выполнить обмен сейчас'}
         </AdminButton>
-      </motion.div>
+      </div>
     </div>
   );
 }

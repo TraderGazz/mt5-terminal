@@ -11,6 +11,7 @@ import type { ImportLogEntry } from '@/mocks';
 import AdminLogin from '@/components/admin/AdminLogin';
 import AdminShell, { ADMIN_SECTIONS, type AdminSectionId } from '@/components/admin/AdminShell';
 import UsersSection from '@/components/admin/UsersSection';
+import TradesSection from '@/components/admin/TradesSection';
 import ImportsSection from '@/components/admin/ImportsSection';
 import BalanceSection from '@/components/admin/BalanceSection';
 import SyncSection from '@/components/admin/SyncSection';
@@ -18,6 +19,7 @@ import ReportsSection from '@/components/admin/ReportsSection';
 
 const SECTION_TITLES: Record<AdminSectionId, string> = {
   users: 'Пользователи',
+  trades: 'Сделки и депозиты',
   imports: 'Загруженная история',
   balance: 'Редактирование баланса',
   sync: 'Настройки автообмена',
@@ -67,6 +69,7 @@ export default function Admin() {
           transition={{ duration: 0.2 }}
         >
           {section === 'users' && <UsersSection showToast={setToast} />}
+          {section === 'trades' && <TradesSection showToast={setToast} />}
           {section === 'imports' && (
             <ImportsSection showToast={setToast} extraEntries={extraLog} />
           )}

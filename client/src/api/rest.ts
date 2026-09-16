@@ -130,3 +130,41 @@ export const getHistoryRaw = () => api<ApiHistoryRaw>('/history/raw');
 
 export const patchTrade = (id: number, body: Record<string, unknown>) =>
   api<{ trade: unknown }>(`/trades/${id}`, { method: 'PATCH', body });
+
+// ---------- Admin: raw trades/deposits browser (server/routes/trades.js) ----------
+
+export interface ApiTradeRow {
+  id: number;
+  ticket: number;
+  symbol: string;
+  type: string;
+  volume: number;
+  open_price: number;
+  close_price: number;
+  profit: number;
+  swap: number;
+  commission: number;
+  open_time: string | null;
+  close_time: string | null;
+  comment: string;
+  is_edited: boolean;
+}
+
+export interface ApiTradesTotals {
+  profit: number;
+  swap: number;
+  commission: number;
+  count: number;
+}
+
+export const getTrades = (q: {
+  period?: string;
+  symbol?: string;
+  limit?: number;
+  offset?: number;
+}) =>
+  api<{ trades: ApiTradeRow[]; totals: ApiTradesTotals }>('/trades', {
+    query: q as Record<string, string | number | undefined>,
+  });
+
+export const deleteTrade = (id: number) => api<{ deleted: true }>(`/trades/${id}`, { method: 'DELETE' });

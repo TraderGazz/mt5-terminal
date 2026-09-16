@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { query, requireDb } from '../db.js';
-import { authRequired } from './auth.js';
+import { authRequired, requireRole } from './auth.js';
 import { parseMt5Report, Mt5ReportParseError } from '../services/mt5-parser.js';
 
 const router = Router();
@@ -17,6 +17,7 @@ const upload = multer({
 router.post(
   '/mt5-report',
   authRequired,
+  requireRole('admin', 'trader'),
   requireDb,
   upload.single('report'),
   async (req, res) => {

@@ -1,5 +1,7 @@
 import { ADMIN_USERS } from '@/mocks/admin';
 import type { UserRole } from '@/mocks/admin';
+import { IS_API } from '@/config';
+import { getAuthUser } from '@/api/auth';
 
 /**
  * Mock auth session stored in localStorage (auth.md / settings.md).
@@ -36,6 +38,23 @@ export function startSession(login: string): Session {
     /* private mode — session is memory-only */
   }
   return session;
+}
+
+/**
+ * Текущая роль пользователя. В api-режиме — из реального JWT (`getAuthUser`),
+ * НЕ из мок-сессии (`startSession` резолвит роль по ADMIN_USERS и в api-
+ * режиме тоже, но это только для отображения имени — для прав доступа это
+ * ненадёжно, т.к. номер логина реального пользователя может не совпадать
+ * ни с одной записью в моках).
+ */
+export function currentRole(): UserRole {
+  if (IS_API) return (getAuthUser()?.role as UserRole | undefined) ?? 'trader';
+  return getSession()?.role ?? 'trader';
+}
+
+/** Инвестор (viewer) — только просмотр, без права редактировать/удалять. */
+export function canEditTrades(): boolean {
+  return currentRole() !== 'viewer';
 }
 
 export function clearSession(): void {

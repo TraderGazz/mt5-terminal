@@ -132,6 +132,13 @@ router.get('/sync-settings', wrap(async (req, res) => {
   res.json({ settings: rows[0] || null });
 }));
 
+router.get('/sync-log', wrap(async (req, res) => {
+  const { rows } = await query(
+    'SELECT * FROM sync_log ORDER BY created_at DESC LIMIT 100'
+  );
+  res.json({ log: rows });
+}));
+
 router.patch('/sync-settings', wrap(async (req, res) => {
   const { enabled, direction, reverse_enabled } = req.body || {};
   const updates = [];

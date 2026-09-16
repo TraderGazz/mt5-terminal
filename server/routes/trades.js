@@ -1,10 +1,14 @@
 import { Router } from 'express';
 import { query, requireDb } from '../db.js';
-import { authRequired } from './auth.js';
+import { authRequired, requireRole } from './auth.js';
 
 const router = Router();
 
 router.use(authRequired, requireDb);
+
+// Инвестор (role=viewer) — только просмотр, без права редактировать/удалять
+// сделки и депозиты (заявка заказчика: торговый и инвесторский пароль).
+const canEdit = requireRole('admin', 'trader');
 
 // GET /api/trades — list with filters.
 // Query params:
@@ -89,7 +93,7 @@ const EDITABLE_FIELDS = [
   'symbol', 'type', 'volume',
 ];
 
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', canEdit, async (req, res) => {
   const updates = [];
   const params = [];
   for (const field of EDITABLE_FIELDS) {
@@ -124,7 +128,7 @@ const CREATABLE_FIELDS = [
   'comment', 'position_id', 'order_ticket',
 ];
 
-router.post('/', async (req, res) => {
+router.post('/', canEdit, async (req, res) => {
   const body = req.body || {};
   if (body.ticket === undefined || body.ticket === null) {
     return res.status(400).json({ error: 'ticket is required' });
@@ -160,7 +164,7 @@ router.post('/', async (req, res) => {
 });
 
 // DELETE /api/trades/:id
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', canEdit, async (req, res) => {
   try {
     const { rowCount } = await query('DELETE FROM trades WHERE id = $1', [req.params.id]);
     if (!rowCount) return res.status(404).json({ error: 'Trade not found' });

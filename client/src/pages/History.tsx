@@ -28,6 +28,7 @@ import {
   type HistoryOrder,
 } from '@/components/history/rows';
 import { DAY, periodRange, useHistoryFilter } from '@/components/history/historyFilter';
+import { canEditTrades } from '@/components/auth/session';
 
 /** First-mount stagger happens only once per session (design.md §6). */
 let hasMountedOnce = false;
@@ -713,10 +714,14 @@ export default function HistoryPage() {
             label: 'Подробнее',
             onSelect: () => rowSheet && navigate(`/trade/${rowSheet.ticket}`),
           },
-          {
-            label: 'Редактировать',
-            onSelect: () => rowSheet && navigate(`/trade/${rowSheet.ticket}/edit`),
-          },
+          ...(canEditTrades()
+            ? [
+                {
+                  label: 'Редактировать',
+                  onSelect: () => rowSheet && navigate(`/trade/${rowSheet.ticket}/edit`),
+                },
+              ]
+            : []),
         ]}
       />
 

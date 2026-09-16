@@ -1,13 +1,18 @@
 /**
- * Admin → Создание торгового отчёта (admin.md §10.6): user + period + format,
- * progress, generated file (real client-side HTML/CSV from mock data) with
- * download/open, previous reports table.
+ * Admin → Создание торгового отчёта (admin.md §10.6): period + format,
+ * progress, generated file with download/open.
+ *
+ * В режиме api скачивает реальный отчёт с GET /api/admin/report (по всем
+ * сделкам в БД — выбора пользователя нет, счёт один общий). В mock-режиме —
+ * прежняя клиентская генерация из моков для демо.
  */
 import { motion } from 'framer-motion';
 import { Download, ExternalLink, FileDown } from 'lucide-react';
 import { useState } from 'react';
 import { ACCOUNT, ADMIN_USERS, DEALS, BALANCE_OPS, type Deal } from '@/mocks';
 import { formatDate, formatDateTime, formatMoney, formatPrice, formatSignedMoney, getSymbolDigitsSafe } from './reportUtils';
+import { IS_API } from '@/config';
+import { fetchAdminReport } from '@/api/admin';
 import { AdminButton, AdminCard, SegmentedControl } from './bits';
 
 type ReportFormat = 'html' | 'csv';
@@ -23,15 +28,139 @@ const PERIODS = [
 
 type PeriodId = (typeof PERIODS)[number]['id'];
 
-interface GeneratedReport {
-  fileName: string;
-  sizeKb: number;
-  content: string;
-  mime: string;
-  format: ReportFormat;
-  periodLabel: string;
-  createdAt: number;
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
+
+function openBlob(blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank', 'noopener');
+}
+
+function PeriodPicker({ period, onChange }: { period: PeriodId; onChange: (p: PeriodId) => void }) {
+  return (
+    <div className="grid max-w-[480px] grid-cols-1 gap-1 sm:grid-cols-2">
+      {PERIODS.map((p) => (
+        <button
+          key={p.id}
+          type="button"
+          onClick={() => onChange(p.id)}
+          className="flex items-center justify-between rounded-[8px] px-3 py-2 text-left hover:bg-[#F7F7FA]"
+        >
+          <span className="text-[15px] text-black">{p.label}</span>
+          <span
+            className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${
+              period === p.id ? 'border-accent bg-accent' : 'border-separator'
+            }`}
+          >
+            {period === p.id && (
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden>
+                <path d="M1.5 5.2 4 7.5 8.5 2.6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export default function ReportsSection({ showToast }: { showToast: (msg: string) => void }) {
+  if (IS_API) return <RealReportsSection showToast={showToast} />;
+  return <MockReportsSection showToast={showToast} />;
+}
+
+// ---------- api-режим ----------
+
+function RealReportsSection({ showToast }: { showToast: (msg: string) => void }) {
+  const [period, setPeriod] = useState<PeriodId>('month');
+  const [format, setFormat] = useState<ReportFormat>('html');
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{ blob: Blob; filename: string; periodLabel: string } | null>(null);
+
+  const generate = () => {
+    setLoading(true);
+    setResult(null);
+    const p = PERIODS.find((x) => x.id === period) ?? PERIODS[3];
+    const from = Number.isFinite(p.days) ? new Date(Date.now() - p.days * 86400_000).toISOString() : undefined;
+    fetchAdminReport({ format, from })
+      .then(({ blob, filename }) => {
+        setResult({ blob, filename, periodLabel: p.label });
+        showToast('Отчёт сформирован');
+      })
+      .catch((err: Error) => showToast(err.message || 'Не удалось сформировать отчёт'))
+      .finally(() => setLoading(false));
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <h1 className="text-[28px] font-bold leading-tight text-black md:text-[34px]">
+        Создание торгового отчёта
+      </h1>
+
+      <AdminCard title="Параметры отчёта">
+        <div className="flex flex-col gap-4 p-5">
+          <div>
+            <span className="mb-1 block text-[13px] text-text-secondary">Период</span>
+            <PeriodPicker period={period} onChange={setPeriod} />
+          </div>
+
+          <div>
+            <span className="mb-1 block text-[13px] text-text-secondary">Формат</span>
+            <SegmentedControl<ReportFormat>
+              value={format}
+              onChange={setFormat}
+              options={[
+                { value: 'html', label: 'HTML' },
+                { value: 'csv', label: 'CSV' },
+              ]}
+              className="max-w-[240px]"
+            />
+          </div>
+
+          <AdminButton onClick={generate} disabled={loading} className="self-start">
+            <FileDown size={16} />
+            {loading ? 'Формируется…' : 'Создать торговый отчёт'}
+          </AdminButton>
+        </div>
+      </AdminCard>
+
+      {result && (
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+          <AdminCard title="Отчёт готов">
+            <div className="flex flex-wrap items-center justify-between gap-3 p-5">
+              <div className="min-w-0">
+                <p className="tnum truncate text-[15px] font-medium text-black">{result.filename}</p>
+                <p className="text-[13px] text-text-secondary">
+                  {Math.max(1, Math.round(result.blob.size / 1024))} КБ · {result.periodLabel}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <AdminButton onClick={() => downloadBlob(result.blob, result.filename)}>
+                  <Download size={16} />
+                  Скачать
+                </AdminButton>
+                <AdminButton variant="secondary" onClick={() => openBlob(result.blob)}>
+                  <ExternalLink size={16} />
+                  Открыть
+                </AdminButton>
+              </div>
+            </div>
+          </AdminCard>
+        </motion.div>
+      )}
+    </div>
+  );
+}
+
+// ---------- mock-режим: прежняя клиентская генерация для демо ----------
 
 function filterByPeriod(deals: Deal[], days: number): Deal[] {
   if (!Number.isFinite(days)) return deals;
@@ -57,7 +186,7 @@ function buildCsv(deals: Deal[]): string {
       d.comment,
     ]),
   ];
-  return '\uFEFF' + rows.map((r) => r.map((c) => `"${c.replaceAll('"', '""')}"`).join(';')).join('\n');
+  return '﻿' + rows.map((r) => r.map((c) => `"${c.replaceAll('"', '""')}"`).join(';')).join('\n');
 }
 
 function buildHtml(deals: Deal[], periodLabel: string): string {
@@ -100,22 +229,13 @@ ${rows}
 </body></html>`;
 }
 
-function downloadReport(r: GeneratedReport) {
-  const blob = new Blob([r.content], { type: r.mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = r.fileName;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
-function openReport(r: GeneratedReport) {
-  const blob = new Blob([r.content], { type: r.mime });
-  const url = URL.createObjectURL(blob);
-  window.open(url, '_blank', 'noopener');
+interface GeneratedReport {
+  fileName: string;
+  sizeKb: number;
+  content: string;
+  mime: string;
+  periodLabel: string;
+  createdAt: number;
 }
 
 const PREVIOUS_REPORTS: { fileName: string; period: string; createdAt: number }[] = [
@@ -124,11 +244,7 @@ const PREVIOUS_REPORTS: { fileName: string; period: string; createdAt: number }[
   { fileName: 'report_50214901_month.html', period: 'Последний месяц', createdAt: Date.now() - 9 * 86400_000 },
 ];
 
-export default function ReportsSection({
-  showToast,
-}: {
-  showToast: (msg: string) => void;
-}) {
+function MockReportsSection({ showToast }: { showToast: (msg: string) => void }) {
   const [userId, setUserId] = useState(ADMIN_USERS[0]?.id ?? 1);
   const [period, setPeriod] = useState<PeriodId>('month');
   const [format, setFormat] = useState<ReportFormat>('html');
@@ -160,7 +276,6 @@ export default function ReportsSection({
             sizeKb,
             content,
             mime: format === 'html' ? 'text/html;charset=utf-8' : 'text/csv;charset=utf-8',
-            format,
             periodLabel: p.label,
             createdAt: Date.now(),
           });
@@ -195,29 +310,7 @@ export default function ReportsSection({
 
           <div>
             <span className="mb-1 block text-[13px] text-text-secondary">Период</span>
-            <div className="grid max-w-[480px] grid-cols-1 gap-1 sm:grid-cols-2">
-              {PERIODS.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setPeriod(p.id)}
-                  className="flex items-center justify-between rounded-[8px] px-3 py-2 text-left hover:bg-[#F7F7FA]"
-                >
-                  <span className="text-[15px] text-black">{p.label}</span>
-                  <span
-                    className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${
-                      period === p.id ? 'border-accent bg-accent' : 'border-separator'
-                    }`}
-                  >
-                    {period === p.id && (
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden>
-                        <path d="M1.5 5.2 4 7.5 8.5 2.6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    )}
-                  </span>
-                </button>
-              ))}
-            </div>
+            <PeriodPicker period={period} onChange={setPeriod} />
           </div>
 
           <div>
@@ -266,11 +359,11 @@ export default function ReportsSection({
                 </p>
               </div>
               <div className="flex gap-2">
-                <AdminButton onClick={() => downloadReport(result)}>
+                <AdminButton onClick={() => downloadBlob(new Blob([result.content], { type: result.mime }), result.fileName)}>
                   <Download size={16} />
                   Скачать
                 </AdminButton>
-                <AdminButton variant="secondary" onClick={() => openReport(result)}>
+                <AdminButton variant="secondary" onClick={() => openBlob(new Blob([result.content], { type: result.mime }))}>
                   <ExternalLink size={16} />
                   Открыть
                 </AdminButton>
@@ -305,15 +398,10 @@ export default function ReportsSection({
                       onClick={() => {
                         const isCsv = r.fileName.endsWith('.csv');
                         const content = isCsv ? buildCsv(DEALS) : buildHtml(DEALS, r.period);
-                        downloadReport({
-                          fileName: r.fileName,
-                          sizeKb: Math.max(1, Math.round(new Blob([content]).size / 1024)),
-                          content,
-                          mime: isCsv ? 'text/csv;charset=utf-8' : 'text/html;charset=utf-8',
-                          format: isCsv ? 'csv' : 'html',
-                          periodLabel: r.period,
-                          createdAt: r.createdAt,
-                        });
+                        downloadBlob(
+                          new Blob([content], { type: isCsv ? 'text/csv;charset=utf-8' : 'text/html;charset=utf-8' }),
+                          r.fileName,
+                        );
                       }}
                       className="inline-flex h-8 w-8 items-center justify-center rounded-full text-accent hover:bg-[rgba(0,122,255,0.08)]"
                     >

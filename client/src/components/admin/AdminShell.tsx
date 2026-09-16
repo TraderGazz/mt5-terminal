@@ -8,6 +8,7 @@ import {
   ArrowLeftRight,
   FileDown,
   Import,
+  ListChecks,
   Menu,
   Users,
   Wallet,
@@ -15,8 +16,9 @@ import {
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { BrandGlyph } from './bits';
+import { getAuthUser } from '@/api/auth';
 
-export type AdminSectionId = 'users' | 'imports' | 'balance' | 'sync' | 'reports';
+export type AdminSectionId = 'users' | 'trades' | 'imports' | 'balance' | 'sync' | 'reports';
 
 export const ADMIN_SECTIONS: {
   id: AdminSectionId;
@@ -24,6 +26,7 @@ export const ADMIN_SECTIONS: {
   icon: typeof Users;
 }[] = [
   { id: 'users', label: 'Пользователи', icon: Users },
+  { id: 'trades', label: 'Сделки и депозиты', icon: ListChecks },
   { id: 'imports', label: 'Лог импортов', icon: Import },
   { id: 'balance', label: 'Баланс', icon: Wallet },
   { id: 'sync', label: 'Автообмен', icon: ArrowLeftRight },
@@ -69,11 +72,12 @@ function NavItems({
 }
 
 function SidebarFooter({ onLogout }: { onLogout: () => void }) {
+  const user = getAuthUser();
   return (
     <div className="mt-auto flex items-center justify-between border-t border-separator px-4 py-3">
       <div className="min-w-0">
-        <p className="truncate text-[13px] font-medium text-black">admin</p>
-        <p className="text-[11px] text-text-secondary">Администратор</p>
+        <p className="truncate text-[13px] font-medium text-black">{user?.login ?? 'admin'}</p>
+        <p className="text-[11px] text-text-secondary">{user?.name || 'Администратор'}</p>
       </div>
       <button
         type="button"

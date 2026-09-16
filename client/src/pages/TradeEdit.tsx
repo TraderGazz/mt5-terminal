@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { motion } from 'framer-motion';
 import { Briefcase, Minus, Plus } from 'lucide-react';
@@ -8,6 +8,7 @@ import EditRow, { EDIT_INPUT_CLASS } from '@/components/trade/EditRow';
 import { getDeal, updateDeal, useDealsVersion } from '@/data/history';
 import { getSymbolMeta } from '@/mocks/symbols';
 import type { Deal } from '@/data/history';
+import { canEditTrades } from '@/components/auth/session';
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
@@ -97,6 +98,10 @@ export default function TradeEditPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const ticket = Number(id);
+
+  useEffect(() => {
+    if (!canEditTrades()) navigate(`/trade/${ticket}`, { replace: true });
+  }, [ticket, navigate]);
 
   useDealsVersion();
   const deal = getDeal(ticket);
