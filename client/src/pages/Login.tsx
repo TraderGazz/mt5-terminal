@@ -132,6 +132,7 @@ export default function LoginPage() {
                 id="login-input"
                 value={login}
                 onChange={(e) => setLogin(e.target.value)}
+                inputMode="numeric"
                 autoComplete="username"
                 autoCapitalize="none"
                 autoCorrect="off"
