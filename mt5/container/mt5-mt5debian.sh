@@ -4,6 +4,32 @@ set -e
 export WINEPREFIX=/root/.mt5
 export DISPLAY=:1
 
+# [mt5-terminal] Broker-specific install (installed from AlfaForex's own
+# installer, alfaforexru5setup.exe — has AlfaForexRU-Real in servers.dat and
+# startup.ini for autologin/AllowLiveTrading). The generic "MetaTrader 5"
+# folder below is ONLY the initial bootstrap install from the stock
+# MetaQuotes installer, which doesn't have that server in its list at all.
+#
+# Without this branch, this script always found the generic folder first
+# (it's checked below, unconditionally) and launched THAT blank, never-
+# configured instance on every container start — including after a plain
+# VM/Docker restart, not just a rebuild. Confirmed incident: after a server
+# reboot, /v1/account came back as "Default Client" / balance 0 and the
+# whole site went down until someone launched the right binary by hand.
+ALFA_DIR_WIN='C:\Program Files\MetaTrader 5 Alfa-Forex'
+ALFA_DIR_UNIX="$WINEPREFIX/drive_c/Program Files/MetaTrader 5 Alfa-Forex"
+if [ -f "$ALFA_DIR_UNIX/terminal64.exe" ]; then
+    echo "MT5 Alfa-Forex install found, launching with autologin..."
+    cp -f /SocketBridgeEA.ex5 "$ALFA_DIR_UNIX/MQL5/Experts/SocketBridgeEA.ex5" 2>/dev/null || true
+    wineserver -w
+    wine reg add "HKEY_CURRENT_USER\\Software\\Wine" /v Version /t REG_SZ /d "win10" /f
+    # Config path MUST be the Windows-style path (not the Unix/WINEPREFIX
+    # one) — a relative or Unix path here resolves against wine's own CWD,
+    # not the exe's folder, and silently fails to load (see project memory).
+    wine "$ALFA_DIR_WIN\\terminal64.exe" /portable /config:"$ALFA_DIR_WIN\\startup.ini"
+    exit 0
+fi
+
 # Check if MT5 is already installed
 if [ -f "$WINEPREFIX/drive_c/Program Files/MetaTrader 5/terminal64.exe" ]; then
     echo "MT5 is already installed, launching MT5..."
@@ -77,4 +103,3 @@ sleep 2
 echo "Copying EA..."
 # [mt5-terminal] cp (not mv) so the source survives container restarts
 cp -f /SocketBridgeEA.ex5 "$WINEPREFIX/drive_c/Program Files/MetaTrader 5/MQL5/Experts/SocketBridgeEA.ex5"
-
