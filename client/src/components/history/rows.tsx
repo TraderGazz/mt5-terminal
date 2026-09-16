@@ -202,7 +202,11 @@ interface PositionRowProps {
 }
 
 export function PositionRow({ position, digits, last, staggerDelay, onTap }: PositionRowProps) {
-  const net = position.profit + position.swap + position.commission;
+  // Только прибыль, без свопа/комиссии — так же, как в «Сделках» (DealRow
+  // ниже) и в самом MT5: своп почти всегда 0 для однодневных сделок, поэтому
+  // расхождение не было заметно, пока не досинхронизировались позиции,
+  // провисевшие открытыми много дней (реальный своп там ненулевой).
+  const net = position.profit;
   return (
     <RowShell last={last} staggerDelay={staggerDelay} onTap={onTap}>
       <div className="flex items-start justify-between gap-2 px-2 py-[6px]">
