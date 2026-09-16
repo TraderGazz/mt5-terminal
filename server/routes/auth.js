@@ -92,13 +92,18 @@ export async function authRequired(req, res, next) {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
   // Отключённый в админке пользователь теряет доступ сразу на следующем
-  // запросе, не дожидаясь истечения JWT (12ч) — заявка заказчика.
+  // запросе, не дожидаясь истечения JWT (12ч) — заявка заказчика. Роль тоже
+  // берём живьём из БД, а не из токена: JWT подписан в момент логина и несёт
+  // СТАРУЮ роль до истечения 12ч — иначе смена роли (например investor →
+  // viewer) не применялась бы, пока человек сам не перезайдёт, а инвестору
+  // такое лучше вообще не предлагать.
   if (isDbReady()) {
     try {
-      const { rows } = await query('SELECT active FROM users WHERE id = $1', [req.user.sub]);
+      const { rows } = await query('SELECT active, role FROM users WHERE id = $1', [req.user.sub]);
       if (!rows[0] || !rows[0].active) {
         return res.status(401).json({ error: 'Учётная запись отключена' });
       }
+      req.user.role = rows[0].role;
     } catch {
       // Сбой БД не должен рвать авторизацию — пропускаем проверку.
     }
