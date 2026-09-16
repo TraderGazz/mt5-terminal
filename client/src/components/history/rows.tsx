@@ -190,7 +190,9 @@ export function aggregatePositions(deals: Deal[]): ClosedPosition[] {
         isEdited: group.some((d) => d.isEdited),
       };
     })
-    .sort((a, b) => b.closeTime - a.closeTime);
+    // Старые сверху, новые снизу — как во вкладке «Сделки» (auto-scroll вниз
+    // на входе в Историю), а не наоборот.
+    .sort((a, b) => a.closeTime - b.closeTime);
 }
 
 interface PositionRowProps {
