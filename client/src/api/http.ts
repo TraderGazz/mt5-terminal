@@ -57,6 +57,16 @@ export async function api<T>(path: string, opts: Options = {}): Promise<T> {
     // back to the login screen instead of leaving a logged-out client
     // sitting on a route that requires auth.
     if (!window.location.pathname.endsWith('/login')) {
+      // Login.tsx redirects to «/» after a successful login — without this,
+      // getting kicked out mid-admin-edit lands you back on Котировки with
+      // no way back except manually retyping /admin (reported: "выбило в
+      // котировки, нажать не могу"). Remember where we were, Login.tsx
+      // reads it back once auth succeeds.
+      try {
+        sessionStorage.setItem('post-login-redirect', window.location.pathname + window.location.search);
+      } catch {
+        /* ignore */
+      }
       window.location.href = `${window.location.origin}/mobile/login`;
     }
   }

@@ -6,7 +6,7 @@ import { query, requireDb, isDbReady } from '../db.js';
 const router = Router();
 
 const JWT_SECRET = () => process.env.JWT_SECRET || 'dev-insecure-secret';
-const JWT_EXPIRES_IN = () => process.env.JWT_EXPIRES_IN || '12h';
+const JWT_EXPIRES_IN = () => process.env.JWT_EXPIRES_IN || '30d';
 
 // --- password hashing (scrypt, no external deps) ---
 // Format: scrypt$<salt_hex>$<hash_hex>

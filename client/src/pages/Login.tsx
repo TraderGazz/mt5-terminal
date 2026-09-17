@@ -60,7 +60,21 @@ export default function LoginPage() {
       apiLogin(login.trim(), password)
         .then(() => {
           startSession(login.trim()); // мок-сессия для совместимости UI
-          navigate('/', { replace: true });
+          // Если сюда попали из-за протухшей сессии (api/http.ts 401),
+          // вернуть туда же (например обратно в /admin), а не всегда на
+          // Котировки — иначе разлогин посреди работы в админке "выбивает"
+          // без возможности вернуться одним кликом.
+          let target = '/';
+          try {
+            const saved = sessionStorage.getItem('post-login-redirect');
+            if (saved) {
+              sessionStorage.removeItem('post-login-redirect');
+              target = saved.startsWith('/mobile') ? saved.slice('/mobile'.length) || '/' : saved;
+            }
+          } catch {
+            /* ignore */
+          }
+          navigate(target, { replace: true });
         })
         .catch((err: Error) => fail(err.message || 'Неверный логин или пароль'));
       return;
