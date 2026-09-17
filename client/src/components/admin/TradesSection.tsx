@@ -6,11 +6,15 @@
  * список строк из таблицы `trades` (сделки И балансовые операции —
  * депозиты/снятия хранятся там же с type='balance'/'withdrawal'), с
  * возможностью найти и поправить/удалить любую запись, включая цену
- * открытия/закрытия — заявка заказчика.
+ * открытия/закрытия — заявка заказчика. Итог «Депозит/Снятие» в шапке при
+ * этом СЧИТАЕТСЯ НЕ из этих строк, а из той же выписки заказчика, что и на
+ * сайте (depositLedger.ts) — EA-синхронизированные balance-записи в БД
+ * подтверждённо ненадёжны для этих сумм (см. depositLedger.ts).
  */
 import { useEffect, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { formatDateTime } from '@/lib/format';
+import { depositTotalsForRange } from '@/data/depositLedger';
 import {
   getTrades,
   getPositions,
@@ -19,7 +23,6 @@ import {
   openTrade,
   closeTrade,
   type ApiTradeRow,
-  type ApiTradesTotals,
   type ApiPosition,
 } from '@/api/rest';
 import { AdminButton, AdminCard, AdminInput, AdminModal, Pill, SegmentedControl } from './bits';
@@ -346,15 +349,13 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
     profit: '', swap: '', commission: '', openPrice: '', closePrice: '', comment: '',
   });
   const [deleteTarget, setDeleteTarget] = useState<ApiTradeRow | null>(null);
-  // Итог по ВСЕМУ периоду — считает сервер агрегатом по всей БД (не зависит
-  // от LIMIT ниже). На плотных периодах сделок может быть в разы больше
-  // лимита строк для отображения — если считать итог из `rows`, депозит/
-  // снятие за пределами загруженных строк тихо выпадали бы из суммы (баг-
-  // репорт заказчика: "в админке снятие 0, хотя на сайте есть за тот же
-  // период"). Живой пересчёт после правки/удаления — через дельту сюда же,
-  // без повторного похода на сервер (заявка заказчика: сумма обновляется
-  // сразу же после любой правки).
-  const [totals, setTotals] = useState<ApiTradesTotals | null>(null);
+  // Прибыль/своп/комиссия по ВСЕМУ периоду — считает сервер агрегатом по всей
+  // БД (не зависит от LIMIT ниже). На плотных периодах сделок может быть в
+  // разы больше лимита строк для отображения — если считать итог из `rows`,
+  // хвост периода тихо выпадал бы из суммы. Живой пересчёт после правки/
+  // удаления — через дельту сюда же, без повторного похода на сервер (заявка
+  // заказчика: сумма обновляется сразу же после любой правки).
+  const [totals, setTotals] = useState<{ profit: number; swap: number; commission: number; count: number } | null>(null);
 
   const load = () => {
     getTrades({
@@ -370,8 +371,6 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
         // коэрсить в число нужно сразу тут, один раз, а не в каждом месте
         // использования: иначе "0" + "21211640.90" склеивается как строка.
         setTotals({
-          deposit: Number(r.totals.deposit) || 0,
-          withdrawal: Number(r.totals.withdrawal) || 0,
           profit: Number(r.totals.profit) || 0,
           swap: Number(r.totals.swap) || 0,
           commission: Number(r.totals.commission) || 0,
@@ -394,20 +393,26 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
 
   const filtered = type === 'all' ? rows : rows.filter((r) => r.type === type);
 
-  const periodTotals = totals;
+  // Депозит/снятие — ТОЛЬКО из официальной выписки заказчика (тот же
+  // источник, что и на сайте, см. depositLedger.ts), не из таблицы `trades`:
+  // EA-синхронизированные balance-записи там подтверждённо ненадёжны (см.
+  // комментарий в depositLedger.ts) — заявка заказчика: "снятия и пополнения
+  // должны браться из файла для расчёта". Пустой from/to = весь период
+  // выписки целиком (как «Все» на сайте).
+  const fromMs = from ? new Date(`${from}T00:00:00`).getTime() : -Infinity;
+  const toMs = to ? new Date(`${to}T23:59:59.999`).getTime() : Infinity;
+  const ledger = depositTotalsForRange(fromMs, toMs);
+
+  const periodTotals = { deposit: ledger.deposit, withdrawal: ledger.withdrawal, ...totals };
   const periodBalance =
     periodTotals.deposit - periodTotals.withdrawal + periodTotals.profit + periodTotals.swap + periodTotals.commission;
 
-  // Вклад одной строки в итог — те же категории, что и в SQL-агрегате выше
-  // (deposit/withdrawal — отдельные значения type, не 'balance' со знаком).
+  // Вклад одной строки в итог сделок (buy/sell) — депозит/снятие сюда не
+  // входят (см. выше), редактирование строки type='balance'/'withdrawal' в
+  // таблице ниже не двигает итог, только саму запись в БД.
   const contribution = (r: Pick<ApiTradeRow, 'type' | 'profit' | 'swap' | 'commission'>) => {
-    const profit = Number(r.profit) || 0;
-    const swap = Number(r.swap) || 0;
-    const commission = Number(r.commission) || 0;
-    if (r.type === 'buy' || r.type === 'sell') return { deposit: 0, withdrawal: 0, profit, swap, commission };
-    if (r.type === 'balance') return { deposit: profit, withdrawal: 0, profit: 0, swap: 0, commission: 0 };
-    if (r.type === 'withdrawal') return { deposit: 0, withdrawal: -profit, profit: 0, swap: 0, commission: 0 };
-    return { deposit: 0, withdrawal: 0, profit: 0, swap: 0, commission: 0 };
+    if (r.type !== 'buy' && r.type !== 'sell') return { profit: 0, swap: 0, commission: 0 };
+    return { profit: Number(r.profit) || 0, swap: Number(r.swap) || 0, commission: Number(r.commission) || 0 };
   };
 
   const applyDelta = (before: ApiTradeRow, after: Pick<ApiTradeRow, 'type' | 'profit' | 'swap' | 'commission'>) => {
@@ -415,12 +420,10 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
     const a = contribution(after);
     setTotals((t) =>
       t && {
-        deposit: t.deposit - b.deposit + a.deposit,
-        withdrawal: t.withdrawal - b.withdrawal + a.withdrawal,
+        ...t,
         profit: t.profit - b.profit + a.profit,
         swap: t.swap - b.swap + a.swap,
         commission: t.commission - b.commission + a.commission,
-        count: t.count,
       },
     );
   };
