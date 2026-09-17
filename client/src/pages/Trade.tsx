@@ -2,16 +2,21 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { animate, motion } from 'framer-motion';
 import { Briefcase, Plus } from 'lucide-react';
 import Toast from '@/components/Toast';
+import ActionSheet from '@/components/ActionSheet';
 import PageLoading from '@/components/PageLoading';
 import ConnectionError from '@/components/ConnectionError';
 import PositionSheet, { type LivePositionData } from '@/components/trade/PositionSheet';
+import NewOrderSheet from '@/components/trade/NewOrderSheet';
 import { useAccount, useAccountReady, useAccountError } from '@/data/account';
-import { usePositions, usePositionsReady, usePositionsError } from '@/data/positions';
+import { usePositions, usePositionsReady, usePositionsError, refreshPositions } from '@/data/positions';
 import type { Position } from '@/data/positions';
 import { useQuotes } from '@/data/useQuotes';
 import { refreshQuotes, type Quote } from '@/data/quotes';
 import { getSymbolMeta } from '@/mocks/symbols';
 import { formatPrice } from '@/lib/format';
+import { openTrade, closeTrade } from '@/api/rest';
+import { SYMBOL } from '@/config';
+import { useCurrentRole } from '@/components/auth/session';
 
 /** First-mount animations run once per session (design.md §6). */
 let hasMountedOnce = false;
@@ -72,6 +77,15 @@ function AccountRow({ label, value }: { label: string; value: string }) {
 }
 
 export default function TradePage() {
+  // Реальные открытие/закрытие сделок прямо на сайте — заявка заказчика,
+  // только для admin (не trader/viewer). Это настоящий ордер брокеру через
+  // MT5-мост, не мок/запись для витрины — как и в отдельной админке.
+  const isAdmin = useCurrentRole() === 'admin';
+  const [orderSheet, setOrderSheet] = useState(false);
+  const [submittingOrder, setSubmittingOrder] = useState(false);
+  const [closeConfirm, setCloseConfirm] = useState<Position | null>(null);
+  const [closing, setClosing] = useState(false);
+
   const account = useAccount();
   const positions = usePositions();
   const accountReady = useAccountReady();
@@ -129,6 +143,35 @@ export default function TradePage() {
     const l = live.find((x) => x.position.id === selected);
     return l ? { position: l.position, close: l.close, profit: l.profit, digits: l.digits } : null;
   }, [selected, live]);
+
+  const symbolQuote = quoteMap.get(SYMBOL);
+
+  const submitOpen = (type: 'buy' | 'sell', volume: number) => {
+    setSubmittingOrder(true);
+    openTrade({ type, volume })
+      .then((r) => {
+        setToast(`Сделка открыта: ${type} ${volume} лот, тикет #${r.order ?? r.deal ?? '—'}`);
+        setOrderSheet(false);
+        return refreshPositions();
+      })
+      .catch((err: Error) => setToast(err.message || 'Не удалось открыть сделку'))
+      .finally(() => setSubmittingOrder(false));
+  };
+
+  const submitClose = () => {
+    if (!closeConfirm) return;
+    const target = closeConfirm;
+    setClosing(true);
+    closeTrade({ ticket: target.id })
+      .then(() => {
+        setToast(`Позиция #${target.id} закрыта`);
+        setCloseConfirm(null);
+        setSelected(null);
+        return refreshPositions();
+      })
+      .catch((err: Error) => setToast(err.message || 'Не удалось закрыть сделку'))
+      .finally(() => setClosing(false));
+  };
 
   // --- pull to refresh ---
   const scrollerAtTop = () => {
@@ -232,8 +275,14 @@ export default function TradePage() {
         <button
           type="button"
           aria-label="Новый ордер"
-          onClick={() => setToast('Только просмотр. Совершение сделок недоступно')}
-          className="absolute right-5 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-[#F2F2F4] text-[#8E8E93] active:opacity-50"
+          onClick={() =>
+            isAdmin
+              ? setOrderSheet(true)
+              : setToast('Только просмотр. Совершение сделок недоступно')
+          }
+          className={`absolute right-5 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full active:opacity-50 ${
+            isAdmin ? 'bg-accent text-white' : 'bg-[#F2F2F4] text-[#8E8E93]'
+          }`}
         >
           <Plus size={22} strokeWidth={1.5} />
         </button>
@@ -309,8 +358,45 @@ export default function TradePage() {
         </div>
       )}
 
-      {/* Position detail sheet (read-only) */}
-      <PositionSheet data={selectedData} onClose={() => setSelected(null)} />
+      {/* Position detail sheet — «Закрыть позицию» только у admin */}
+      <PositionSheet
+        data={selectedData}
+        onClose={() => setSelected(null)}
+        onRequestClosePosition={
+          isAdmin && selectedData ? () => setCloseConfirm(selectedData.position) : undefined
+        }
+      />
+
+      {/* Новый ордер (admin) — реальная рыночная заявка, не мок */}
+      <NewOrderSheet
+        open={orderSheet}
+        symbol={SYMBOL}
+        digits={getSymbolMeta(SYMBOL)?.digits ?? 5}
+        bid={symbolQuote?.bid}
+        ask={symbolQuote?.ask}
+        submitting={submittingOrder}
+        onSubmit={submitOpen}
+        onClose={() => !submittingOrder && setOrderSheet(false)}
+      />
+
+      {/* Подтверждение закрытия позиции (admin) */}
+      <ActionSheet
+        open={closeConfirm !== null}
+        onClose={() => !closing && setCloseConfirm(null)}
+        title={
+          closeConfirm
+            ? `#${closeConfirm.id} ${closeConfirm.symbol} ${closeConfirm.type} — закрыть по рынку? Действие необратимо.`
+            : undefined
+        }
+        actions={[
+          {
+            label: closing ? 'Закрываю…' : 'Закрыть позицию',
+            destructive: true,
+            disabled: closing,
+            onSelect: submitClose,
+          },
+        ]}
+      />
 
       <Toast message={toast} onClose={() => setToast(null)} />
     </div>

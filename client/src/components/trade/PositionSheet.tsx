@@ -16,13 +16,17 @@ export interface LivePositionData {
 interface PositionSheetProps {
   data: LivePositionData | null;
   onClose: () => void;
+  /** Admin-only (заявка заказчика): реальное закрытие позиции по рынку —
+   * родитель сам показывает подтверждение и шлёт запрос брокеру. */
+  onRequestClosePosition?: () => void;
 }
 
 /**
- * Read-only position detail sheet (trade.md): slides up 350ms over a dimmed
- * backdrop, closed by swipe-down / backdrop tap. Scoped to the phone column.
+ * Position detail sheet (trade.md): slides up 350ms over a dimmed backdrop,
+ * closed by swipe-down / backdrop tap. Scoped to the phone column. Read-only
+ * for everyone except admin, у которого внизу появляется «Закрыть позицию».
  */
-export default function PositionSheet({ data, onClose }: PositionSheetProps) {
+export default function PositionSheet({ data, onClose, onRequestClosePosition }: PositionSheetProps) {
   return (
     <AnimatePresence>
       {data && (
@@ -95,9 +99,20 @@ export default function PositionSheet({ data, onClose }: PositionSheetProps) {
                 <FlatRow
                   label="Время открытия"
                   value={formatDateTime(data.position.openTime)}
-                  last
+                  last={!onRequestClosePosition}
                 />
               </div>
+              {onRequestClosePosition && (
+                <div className="px-4 pt-3">
+                  <button
+                    type="button"
+                    onClick={onRequestClosePosition}
+                    className="h-[44px] w-full rounded-[10px] bg-loss text-[16px] font-semibold text-white active:opacity-85"
+                  >
+                    Закрыть позицию
+                  </button>
+                </div>
+              )}
             </motion.div>
           </div>
         </div>

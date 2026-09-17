@@ -28,7 +28,7 @@ import {
   type HistoryOrder,
 } from '@/components/history/rows';
 import { DAY, periodRange, useHistoryFilter } from '@/components/history/historyFilter';
-import { canEditTrades } from '@/components/auth/session';
+import { canEditTrades, useCurrentRole } from '@/components/auth/session';
 
 /** First-mount stagger happens only once per session (design.md §6). */
 let hasMountedOnce = false;
@@ -198,6 +198,9 @@ function TotalRow({ label, value }: { label: string; value: string }) {
 
 export default function HistoryPage() {
   const navigate = useNavigate();
+  // Видимая кнопка-карандаш на самой сделке — заявка заказчика: явный вход
+  // в редактирование прямо на сайте, только для admin (не trader/viewer).
+  const isAdmin = useCurrentRole() === 'admin';
   const filter = useHistoryFilter();
   const historyLoaded = useHistoryLoaded();
   const historyError = useHistoryError();
@@ -687,6 +690,7 @@ export default function HistoryPage() {
                       staggerDelay={stagger(i)}
                       onTap={() => navigate(`/trade/${p.ticket}`)}
                       onLongPress={() => setRowSheet(p)}
+                      onEdit={isAdmin ? () => navigate(`/trade/${p.ticket}/edit`) : undefined}
                     />
                   ))}
                 </div>

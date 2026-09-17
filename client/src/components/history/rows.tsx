@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowDownLeft, ArrowUpRight, Clock } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Clock, Pencil } from 'lucide-react';
 import type { Deal, DealLeg } from '@/data/history';
 import { formatPrice, formatVolume, formatDate, formatTimeShort } from '@/lib/format';
 import { formatDayTime, formatFullDateTime, formatMoneyMT5, formatSignedMoneyMT5 } from './utils';
@@ -257,9 +257,12 @@ interface PositionRowProps {
   staggerDelay: number;
   onTap: () => void;
   onLongPress?: () => void;
+  /** Видимая кнопка-карандаш (заявка заказчика: явный вход в редактирование
+   * прямо на сайте для admin, не только долгим нажатием). */
+  onEdit?: () => void;
 }
 
-export function PositionRow({ position, digits, last, staggerDelay, onTap, onLongPress }: PositionRowProps) {
+export function PositionRow({ position, digits, last, staggerDelay, onTap, onLongPress, onEdit }: PositionRowProps) {
   // Только прибыль, без свопа/комиссии — так же, как в «Сделках» (DealRow
   // ниже) и в самом MT5: своп почти всегда 0 для однодневных сделок, поэтому
   // расхождение не было заметно, пока не досинхронизировались позиции,
@@ -277,17 +280,32 @@ export function PositionRow({ position, digits, last, staggerDelay, onTap, onLon
             {formatPrice(position.openPrice, digits)} → {formatPrice(position.closePrice, digits)}
           </div>
         </div>
-        <div className="shrink-0 text-right">
-          <div
-            className={`tnum text-[17px] font-semibold leading-[22px] ${
-              net >= 0 ? 'text-accent' : 'text-loss'
-            }`}
-          >
-            {formatMoneyMT5(net)}
+        <div className="flex shrink-0 items-start gap-1.5">
+          <div className="text-right">
+            <div
+              className={`tnum text-[17px] font-semibold leading-[22px] ${
+                net >= 0 ? 'text-accent' : 'text-loss'
+              }`}
+            >
+              {formatMoneyMT5(net)}
+            </div>
+            <div className="tnum mt-[2px] text-[13px] leading-[18px] text-text-secondary">
+              {formatFullDateTime(position.closeTime)}
+            </div>
           </div>
-          <div className="tnum mt-[2px] text-[13px] leading-[18px] text-text-secondary">
-            {formatFullDateTime(position.closeTime)}
-          </div>
+          {onEdit && (
+            <button
+              type="button"
+              aria-label="Редактировать сделку"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              className="-mt-1 -mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-accent active:bg-fill"
+            >
+              <Pencil size={14} strokeWidth={2} />
+            </button>
+          )}
         </div>
       </div>
     </RowShell>

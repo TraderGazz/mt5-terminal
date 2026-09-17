@@ -57,3 +57,16 @@ export const usePositions = store.useValue;
 export const getPositionsSnapshot = store.get;
 export const usePositionsReady = readyStore.useValue;
 export const usePositionsError = errorStore.useValue;
+
+// Форс-обновление сразу после открытия/закрытия сделки (admin, Trade.tsx) —
+// не ждать следующего WS-пуша (интервал синхронизации ~30с), пользователь
+// должен увидеть результат своего действия сразу же.
+export function refreshPositions(): Promise<void> {
+  if (!IS_API) return Promise.resolve();
+  return fetchPositions()
+    .then((l) => {
+      store.set(fromApi(l));
+      errorStore.set(false);
+    })
+    .catch(() => errorStore.set(true));
+}

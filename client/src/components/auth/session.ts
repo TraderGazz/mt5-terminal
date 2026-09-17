@@ -53,9 +53,9 @@ export function currentRole(): UserRole {
   return getSession()?.role ?? 'trader';
 }
 
-/** Инвестор (viewer) — только просмотр, без права редактировать/удалять. */
+/** Редактирование сделок/торговля на сайте — только admin (заявка заказчика). */
 export function canEditTrades(): boolean {
-  return currentRole() !== 'viewer';
+  return currentRole() === 'admin';
 }
 
 /**
