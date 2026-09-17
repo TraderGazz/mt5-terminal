@@ -116,6 +116,25 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- ============================================================================
+-- sessions — сессии входа (см. database/migrations/004_sessions.sql):
+-- session_id зашивается в JWT при логине, отзыв (revoked=true) даёт кикнуть
+-- одно устройство или все разом (кнопка SOS в админке), не дожидаясь
+-- истечения самого токена (12ч).
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS sessions (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    ip            VARCHAR(64),
+    user_agent    TEXT,
+    revoked       BOOLEAN NOT NULL DEFAULT false,
+    created_at    TIMESTAMPTZ DEFAULT now(),
+    last_seen_at  TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions (user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_revoked ON sessions (revoked);
+
+-- ============================================================================
 -- accounts — снимок счёта (страницы «Торговля», «Настройки», «Логин»).
 -- Один ряд на счёт; значения обновляет синхронизация с MT5 / админ вручную.
 -- ============================================================================

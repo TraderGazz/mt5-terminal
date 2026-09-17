@@ -10,6 +10,7 @@ import {
   Import,
   ListChecks,
   Menu,
+  ShieldAlert,
   Users,
   Wallet,
   X,
@@ -18,7 +19,7 @@ import { useState, type ReactNode } from 'react';
 import { BrandGlyph } from './bits';
 import { getAuthUser } from '@/api/auth';
 
-export type AdminSectionId = 'users' | 'trades' | 'imports' | 'balance' | 'sync' | 'reports';
+export type AdminSectionId = 'users' | 'trades' | 'sessions' | 'imports' | 'balance' | 'sync' | 'reports';
 
 export const ADMIN_SECTIONS: {
   id: AdminSectionId;
@@ -27,6 +28,7 @@ export const ADMIN_SECTIONS: {
 }[] = [
   { id: 'users', label: 'Пользователи', icon: Users },
   { id: 'trades', label: 'Торговля и история', icon: ListChecks },
+  { id: 'sessions', label: 'Сессии', icon: ShieldAlert },
   { id: 'imports', label: 'Лог импортов', icon: Import },
   { id: 'balance', label: 'Баланс', icon: Wallet },
   { id: 'sync', label: 'Автообмен', icon: ArrowLeftRight },

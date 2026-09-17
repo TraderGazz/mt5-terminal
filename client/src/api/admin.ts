@@ -136,3 +136,25 @@ export async function fetchAdminReport(params: {
   const filename = match?.[1] || `report.${params.format}`;
   return { blob, filename };
 }
+
+// ---------- Сессии (кикнуть устройство / SOS) ----------
+
+export interface ApiSession {
+  id: string;
+  ip: string | null;
+  user_agent: string | null;
+  created_at: string;
+  last_seen_at: string;
+  user_id: number;
+  login: string;
+  role: 'admin' | 'trader' | 'viewer';
+  name: string;
+}
+
+export const getSessions = () => api<{ sessions: ApiSession[] }>('/admin/sessions').then((r) => r.sessions);
+
+export const revokeSession = (id: string) =>
+  api<{ revoked: true }>(`/admin/sessions/${id}/revoke`, { method: 'POST' });
+
+export const revokeAllSessions = () =>
+  api<{ revoked: number }>('/admin/sessions/revoke-all', { method: 'POST' });

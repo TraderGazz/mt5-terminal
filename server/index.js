@@ -22,6 +22,10 @@ import { startMt5Sync } from './services/mt5-sync.js';
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
 
+// За nginx — иначе req.ip всегда localhost (мешает показывать реальный IP
+// устройства в списке сессий в админке).
+app.set('trust proxy', true);
+
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 

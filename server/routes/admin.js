@@ -86,6 +86,36 @@ router.delete('/users/:id', wrap(async (req, res) => {
   res.json({ deleted: true });
 }));
 
+// ---------- Sessions (кикнуть устройство / SOS — кикнуть всех) ----------
+
+router.get('/sessions', wrap(async (req, res) => {
+  const { rows } = await query(
+    `SELECT s.id, s.ip, s.user_agent, s.created_at, s.last_seen_at,
+            u.id AS user_id, u.login, u.role, u.name
+     FROM sessions s JOIN users u ON u.id = s.user_id
+     WHERE s.revoked = false
+     ORDER BY s.last_seen_at DESC`
+  );
+  res.json({ sessions: rows });
+}));
+
+// Кикнуть одно устройство — следующий же запрос с этим токеном получит 401.
+router.post('/sessions/:id/revoke', wrap(async (req, res) => {
+  const { rowCount } = await query(
+    'UPDATE sessions SET revoked = true WHERE id = $1 AND revoked = false',
+    [req.params.id]
+  );
+  if (!rowCount) return res.status(404).json({ error: 'Session not found' });
+  res.json({ revoked: true });
+}));
+
+// SOS — кикнуть буквально всех разом, включая того, кто нажал кнопку
+// (заявка заказчика: моментально на экран входа).
+router.post('/sessions/revoke-all', wrap(async (req, res) => {
+  const { rowCount } = await query('UPDATE sessions SET revoked = true WHERE revoked = false');
+  res.json({ revoked: rowCount });
+}));
+
 // ---------- Import log ----------
 
 router.get('/imports', wrap(async (req, res) => {

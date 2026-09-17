@@ -64,8 +64,16 @@ router.post('/login', requireDb, async (req, res) => {
     if (!user.active) {
       return res.status(403).json({ error: 'Ведутся технические работы', code: 'user_disabled' });
     }
+    // sid зашивается в токен и живёт в БД отдельно от него — так можно
+    // отозвать ОДНО конкретное устройство (или все разом, SOS в админке),
+    // не дожидаясь истечения самого JWT (12ч).
+    const { rows: sessionRows } = await query(
+      'INSERT INTO sessions (user_id, ip, user_agent) VALUES ($1, $2, $3) RETURNING id',
+      [user.id, req.ip || null, req.headers['user-agent'] || null]
+    );
+    const sid = sessionRows[0].id;
     const token = jwt.sign(
-      { sub: user.id, login: user.login, role: user.role, name: user.name },
+      { sub: user.id, login: user.login, role: user.role, name: user.name, sid },
       JWT_SECRET(),
       { expiresIn: JWT_EXPIRES_IN() }
     );
@@ -104,6 +112,17 @@ export async function authRequired(req, res, next) {
         return res.status(401).json({ error: 'Учётная запись отключена' });
       }
       req.user.role = rows[0].role;
+      // Токены, выданные до перехода на sid (старые сессии в кэше браузера),
+      // просто не проверяем — отвалятся сами по истечении 12ч.
+      if (req.user.sid) {
+        const { rows: sess } = await query(
+          'UPDATE sessions SET last_seen_at = now() WHERE id = $1 AND revoked = false RETURNING id',
+          [req.user.sid]
+        );
+        if (!sess.length) {
+          return res.status(401).json({ error: 'Сессия завершена' });
+        }
+      }
     } catch {
       // Сбой БД не должен рвать авторизацию — пропускаем проверку.
     }
