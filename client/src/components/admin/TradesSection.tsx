@@ -1,15 +1,20 @@
 /**
- * Admin → Сделки и депозиты: реальный список строк из таблицы `trades`
- * (сделки И балансовые операции — депозиты/снятия хранятся там же с
- * type='balance'/'withdrawal'). Позволяет найти и поправить/удалить
- * конкретную запись — заявка заказчика: "есть депозиты, которых не должно
- * быть в оригинале".
+ * Admin → Торговля и история (заявка заказчика: разделить как на самом
+ * сайте — «Торговля» = открытые позиции, «История» = закрытые сделки).
+ * «Торговля» — живой просмотр /api/positions, без редактирования (значения
+ * меняются каждую секунду, редактировать нечего). «История» — реальный
+ * список строк из таблицы `trades` (сделки И балансовые операции —
+ * депозиты/снятия хранятся там же с type='balance'/'withdrawal'), с
+ * возможностью найти и поправить/удалить любую запись, включая цену
+ * открытия/закрытия — заявка заказчика.
  */
 import { useEffect, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { formatDateTime } from '@/lib/format';
-import { getTrades, patchTrade, deleteTrade, type ApiTradeRow } from '@/api/rest';
+import { getTrades, getPositions, patchTrade, deleteTrade, type ApiTradeRow, type ApiPosition } from '@/api/rest';
 import { AdminButton, AdminCard, AdminInput, AdminModal, Pill, SegmentedControl } from './bits';
+
+type ViewMode = 'history' | 'trading';
 
 type TypeFilter = 'all' | 'buy' | 'sell' | 'balance' | 'withdrawal' | 'cfd';
 
@@ -26,6 +31,11 @@ const TYPE_TONE: Record<string, 'blue' | 'green' | 'gray' | 'orange' | 'red'> = 
 const fmt = (n: number | string | null | undefined) =>
   (Number(n) || 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const fmtPrice = (n: number | string | null | undefined) => {
+  const v = Number(n) || 0;
+  return v === 0 ? '—' : v.toFixed(5);
+};
+
 function TotalStat({ label, value, bold }: { label: string; value: number; bold?: boolean }) {
   return (
     <div>
@@ -39,10 +49,96 @@ interface EditForm {
   profit: string;
   swap: string;
   commission: string;
+  openPrice: string;
+  closePrice: string;
   comment: string;
 }
 
 export default function TradesSection({ showToast }: { showToast: (msg: string) => void }) {
+  const [view, setView] = useState<ViewMode>('history');
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <h1 className="text-[28px] font-bold leading-tight text-black md:text-[34px]">
+          {view === 'history' ? 'История' : 'Торговля'}
+        </h1>
+        <SegmentedControl<ViewMode>
+          value={view}
+          onChange={setView}
+          className="w-auto"
+          options={[
+            { value: 'trading', label: 'Торговля' },
+            { value: 'history', label: 'История' },
+          ]}
+        />
+      </div>
+      {view === 'trading' ? <TradingView /> : <HistoryEditor showToast={showToast} />}
+    </div>
+  );
+}
+
+/** Торговля — текущие открытые позиции (только просмотр, живые данные). */
+function TradingView() {
+  const [positions, setPositions] = useState<ApiPosition[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getPositions()
+      .then((p) => { setPositions(p); setError(null); })
+      .catch((err: Error) => setError(err.message || 'Не удалось загрузить позиции'));
+  }, []);
+
+  if (error) return <AdminCard className="p-6 text-center text-[14px] text-loss">{error}</AdminCard>;
+  if (!positions) return <AdminCard className="p-6 text-center text-[14px] text-text-secondary">Загрузка…</AdminCard>;
+
+  return (
+    <AdminCard className="overflow-x-auto">
+      <table className="w-full min-w-[760px] border-collapse text-left">
+        <thead>
+          <tr className="border-b border-separator text-[12px] uppercase tracking-wide text-text-secondary">
+            <th className="px-5 py-3 font-medium">Тикет / Символ</th>
+            <th className="px-4 py-3 font-medium">Тип</th>
+            <th className="px-4 py-3 text-right font-medium">Цена открытия</th>
+            <th className="px-4 py-3 text-right font-medium">Текущая цена</th>
+            <th className="px-4 py-3 text-right font-medium">Прибыль</th>
+            <th className="px-4 py-3 text-right font-medium">Своп</th>
+            <th className="px-4 py-3 font-medium">Открыта</th>
+          </tr>
+        </thead>
+        <tbody>
+          {positions.map((p) => (
+            <tr key={p.id} className="border-b border-separator/60 last:border-0 hover:bg-[#F7F7FA]">
+              <td className="px-5 py-3">
+                <span className="block text-[14px] text-black">{p.symbol || '—'}</span>
+                <span className="tnum block text-[12px] text-text-secondary">#{p.id}</span>
+              </td>
+              <td className="px-4 py-3">
+                <Pill tone={TYPE_TONE[p.type] ?? 'gray'}>{p.type}</Pill>
+              </td>
+              <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(p.openPrice)}</td>
+              <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(p.currentPrice)}</td>
+              <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(p.profit)}</td>
+              <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(p.swap)}</td>
+              <td className="tnum whitespace-nowrap px-4 py-3 text-[13px] text-text-secondary">
+                {p.openTime ? formatDateTime(new Date(p.openTime).getTime()) : '—'}
+              </td>
+            </tr>
+          ))}
+          {positions.length === 0 && (
+            <tr>
+              <td colSpan={7} className="px-5 py-8 text-center text-[14px] text-text-secondary">
+                Нет открытых позиций
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </AdminCard>
+  );
+}
+
+/** История — закрытые сделки/депозиты из `trades` (редактируемо). */
+function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
   const [rows, setRows] = useState<ApiTradeRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [type, setType] = useState<TypeFilter>('all');
@@ -50,7 +146,9 @@ export default function TradesSection({ showToast }: { showToast: (msg: string) 
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [editTarget, setEditTarget] = useState<ApiTradeRow | null>(null);
-  const [form, setForm] = useState<EditForm>({ profit: '', swap: '', commission: '', comment: '' });
+  const [form, setForm] = useState<EditForm>({
+    profit: '', swap: '', commission: '', openPrice: '', closePrice: '', comment: '',
+  });
   const [deleteTarget, setDeleteTarget] = useState<ApiTradeRow | null>(null);
 
   const load = () => {
@@ -104,6 +202,8 @@ export default function TradesSection({ showToast }: { showToast: (msg: string) 
       profit: String(row.profit ?? 0),
       swap: String(row.swap ?? 0),
       commission: String(row.commission ?? 0),
+      openPrice: String(row.open_price ?? 0),
+      closePrice: String(row.close_price ?? 0),
       comment: row.comment ?? '',
     });
   };
@@ -113,15 +213,22 @@ export default function TradesSection({ showToast }: { showToast: (msg: string) 
     const profit = Number(form.profit.replace(',', '.'));
     const swap = Number(form.swap.replace(',', '.'));
     const commission = Number(form.commission.replace(',', '.'));
-    if (!Number.isFinite(profit) || !Number.isFinite(swap) || !Number.isFinite(commission)) {
+    const openPrice = Number(form.openPrice.replace(',', '.'));
+    const closePrice = Number(form.closePrice.replace(',', '.'));
+    if (![profit, swap, commission, openPrice, closePrice].every(Number.isFinite)) {
       showToast('Введите корректные числа');
       return;
     }
-    patchTrade(editTarget.id, { profit, swap, commission, comment: form.comment })
+    patchTrade(editTarget.id, {
+      profit, swap, commission, comment: form.comment,
+      open_price: openPrice, close_price: closePrice,
+    })
       .then(() => {
         setRows((prev) =>
           (prev ?? []).map((r) =>
-            r.id === editTarget.id ? { ...r, profit, swap, commission, comment: form.comment, is_edited: true } : r,
+            r.id === editTarget.id
+              ? { ...r, profit, swap, commission, comment: form.comment, open_price: openPrice, close_price: closePrice, is_edited: true }
+              : r,
           ),
         );
         showToast(`Запись #${editTarget.ticket} обновлена`);
@@ -143,10 +250,7 @@ export default function TradesSection({ showToast }: { showToast: (msg: string) 
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className="text-[28px] font-bold leading-tight text-black md:text-[34px]">
-          Сделки и депозиты
-        </h1>
+      <div className="flex justify-end">
         <SegmentedControl<TypeFilter>
           value={type}
           onChange={setType}
@@ -193,6 +297,8 @@ export default function TradesSection({ showToast }: { showToast: (msg: string) 
             <tr className="border-b border-separator text-[12px] uppercase tracking-wide text-text-secondary">
               <th className="px-5 py-3 font-medium">Тикет / Символ</th>
               <th className="px-4 py-3 font-medium">Тип</th>
+              <th className="px-4 py-3 text-right font-medium">Цена откр.</th>
+              <th className="px-4 py-3 text-right font-medium">Цена закр.</th>
               <th className="px-4 py-3 text-right font-medium">Прибыль</th>
               <th className="px-4 py-3 text-right font-medium">Своп</th>
               <th className="px-4 py-3 text-right font-medium">Комиссия</th>
@@ -212,6 +318,8 @@ export default function TradesSection({ showToast }: { showToast: (msg: string) 
                 <td className="px-4 py-3">
                   <Pill tone={TYPE_TONE[r.type] ?? 'gray'}>{r.type}</Pill>
                 </td>
+                <td className="tnum px-4 py-3 text-right text-[13px] text-text-secondary">{fmtPrice(r.open_price)}</td>
+                <td className="tnum px-4 py-3 text-right text-[13px] text-text-secondary">{fmtPrice(r.close_price)}</td>
                 <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(r.profit)}</td>
                 <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(r.swap)}</td>
                 <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(r.commission)}</td>
@@ -237,7 +345,7 @@ export default function TradesSection({ showToast }: { showToast: (msg: string) 
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-5 py-8 text-center text-[14px] text-text-secondary">
+                <td colSpan={9} className="px-5 py-8 text-center text-[14px] text-text-secondary">
                   Ничего не найдено
                 </td>
               </tr>
@@ -261,6 +369,22 @@ export default function TradesSection({ showToast }: { showToast: (msg: string) 
         }
       >
         <div className="flex flex-col gap-3">
+          {editTarget && (editTarget.type === 'buy' || editTarget.type === 'sell') && (
+            <div className="grid grid-cols-2 gap-3">
+              <AdminInput
+                label="Цена открытия"
+                inputMode="decimal"
+                value={form.openPrice}
+                onChange={(e) => setForm((f) => ({ ...f, openPrice: e.target.value }))}
+              />
+              <AdminInput
+                label="Цена закрытия"
+                inputMode="decimal"
+                value={form.closePrice}
+                onChange={(e) => setForm((f) => ({ ...f, closePrice: e.target.value }))}
+              />
+            </div>
+          )}
           <AdminInput
             label="Прибыль / сумма"
             inputMode="decimal"

@@ -19,7 +19,7 @@ import ReportsSection from '@/components/admin/ReportsSection';
 
 const SECTION_TITLES: Record<AdminSectionId, string> = {
   users: 'Пользователи',
-  trades: 'Сделки и депозиты',
+  trades: 'Торговля и история',
   imports: 'Загруженная история',
   balance: 'Редактирование баланса',
   sync: 'Настройки автообмена',

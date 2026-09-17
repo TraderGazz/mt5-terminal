@@ -26,7 +26,7 @@ export const ADMIN_SECTIONS: {
   icon: typeof Users;
 }[] = [
   { id: 'users', label: 'Пользователи', icon: Users },
-  { id: 'trades', label: 'Сделки и депозиты', icon: ListChecks },
+  { id: 'trades', label: 'Торговля и история', icon: ListChecks },
   { id: 'imports', label: 'Лог импортов', icon: Import },
   { id: 'balance', label: 'Баланс', icon: Wallet },
   { id: 'sync', label: 'Автообмен', icon: ArrowLeftRight },
