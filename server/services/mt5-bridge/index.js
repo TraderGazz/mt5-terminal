@@ -114,6 +114,24 @@ class Bridge extends EventEmitter {
     return { ...p, profit };
   }
 
+  // Реальная сделка (заявка заказчика: открывать/закрывать из админки) —
+  // рыночный ордер, только 'buy'/'sell'. Возвращает как есть то, что даёт
+  // EA/мок (тикет сделки/ордера, цену исполнения) — это результат действия,
+  // не снапшот, глубокая нормализация тут не нужна.
+  async openTrade({ symbol, type, volume, comment } = {}) {
+    if (typeof this.impl.placeOrder !== 'function') {
+      throw new Error('Мост не поддерживает открытие сделок');
+    }
+    return this.impl.placeOrder({ symbol: symbol || this.symbol, order_type: type, volume, comment });
+  }
+
+  async closeTrade({ ticket, volume } = {}) {
+    if (typeof this.impl.closeOrder !== 'function') {
+      throw new Error('Мост не поддерживает закрытие сделок');
+    }
+    return this.impl.closeOrder({ ticket, volume });
+  }
+
   async history({ from, to } = {}) {
     const res = await this.impl.getHistory({ from, to });
     const list = Array.isArray(res) ? res : res.data || res.history || res.deals || [];

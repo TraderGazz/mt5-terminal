@@ -14,6 +14,7 @@ import historyRouter from './routes/history.js';
 import uploadRouter from './routes/upload.js';
 import syncRouter from './routes/sync.js';
 import adminRouter from './routes/admin.js';
+import tradingRouter from './routes/trading.js';
 import { startSyncScheduler } from './services/sync-service.js';
 import { getBridge } from './services/mt5-bridge/index.js';
 import { attachWsHub } from './services/ws-hub.js';
@@ -49,6 +50,7 @@ app.use('/api/history', historyRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/sync', syncRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/trading', tradingRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });

@@ -194,3 +194,23 @@ export const getTrades = (q: {
   });
 
 export const deleteTrade = (id: number) => api<{ deleted: true }>(`/trades/${id}`, { method: 'DELETE' });
+
+// ---------- Admin: реальная торговля (server/routes/trading.js) ----------
+// В отличие от patchTrade/deleteTrade выше (правка ЗАПИСЕЙ в БД — витрина),
+// это настоящая заявка брокеру через MT5-мост: реальные деньги, необратимо.
+
+export interface ApiTradeResult {
+  order?: number;
+  deal?: number;
+  ticket?: number;
+  volume?: number;
+  price?: number;
+  bid?: number;
+  ask?: number;
+}
+
+export const openTrade = (body: { type: 'buy' | 'sell'; volume: number; comment?: string }) =>
+  api<ApiTradeResult>('/trading/open', { method: 'POST', body });
+
+export const closeTrade = (body: { ticket: number; volume?: number }) =>
+  api<ApiTradeResult>('/trading/close', { method: 'POST', body });

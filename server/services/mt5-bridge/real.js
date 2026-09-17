@@ -36,6 +36,19 @@ async function get(path, params, timeoutMs = TIMEOUT_MS) {
   return res.json();
 }
 
+async function post(path, body, timeoutMs = TIMEOUT_MS) {
+  const ctl = AbortSignal.timeout(timeoutMs);
+  const res = await fetch(BASE + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {}),
+    signal: ctl,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.details || `bridge ${path} → HTTP ${res.status}`);
+  return data;
+}
+
 export class RealBridge extends EventEmitter {
   constructor() {
     super();
@@ -52,6 +65,24 @@ export class RealBridge extends EventEmitter {
 
   async getPositions() {
     return get('/order/list');
+  }
+
+  // Реальная рыночная заявка брокеру (EA: CTrade.PositionOpen) — заявка
+  // заказчика "открывать/закрывать сделки из админки". order_type только
+  // 'buy'/'sell' (рыночный ордер) — отложенные заявки админке не нужны.
+  async placeOrder({ symbol, volume, order_type, comment } = {}) {
+    return post('/order', {
+      symbol: symbol || this.symbol,
+      volume,
+      order_type,
+      comment: comment || '',
+    });
+  }
+
+  // Закрытие позиции целиком (EA сам подставляет полный объём, если volume
+  // не передан или превышает остаток — см. CommandCore::CloseOrder).
+  async closeOrder({ ticket, volume } = {}) {
+    return post('/order/close', { ticket, volume: volume || 0 });
   }
 
   // Сырые deals за диапазон (без реконструкции в позиции на стороне EA —

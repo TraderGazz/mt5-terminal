@@ -186,6 +186,39 @@ export class MockBridge extends EventEmitter {
     return { symbol: this.symbol, timeframe, bars };
   }
 
+  // ---- открытие/закрытие сделок (имитация — для dev без реального EA) ----
+
+  async placeOrder({ volume, order_type, comment } = {}) {
+    const vol = Number(volume) || 0.1;
+    const p = this.#mkPosition(order_type === 'sell' ? 'sell' : 'buy', vol, this.mid, Date.now());
+    if (comment) p.comment = comment;
+    this.positions.push(p);
+    const ask = round(this.mid + 12e-5);
+    return { msg: 'order_send', type: `order_type_${order_type}`, deal: p.ticket, order: p.ticket, volume: vol, price: p.price_open, bid: round(this.mid), ask };
+  }
+
+  async closeOrder({ ticket } = {}) {
+    const idx = this.positions.findIndex((p) => p.ticket === Number(ticket));
+    if (idx === -1) throw new Error(`Position not found for ticket: ${ticket}`);
+    const [p] = this.positions.splice(idx, 1);
+    p.price_current = round(this.mid);
+    p.profit = positionProfit(p, this.mid);
+    const net = money(p.profit + p.swap + p.commission);
+    this.account.balance = money(this.account.balance + net);
+    this.history.unshift({
+      ticket: p.ticket, position: p.ticket, order: p.ticket + 1,
+      symbol: p.symbol, type: p.type, deal_type: p.type,
+      volume: p.volume, price_open: p.price_open, price_close: p.price_current,
+      sl: 0, tp: 0, profit: p.profit, swap: p.swap, commission: p.commission,
+      time_open: p.time, time_close: Math.floor(Date.now() / 1000), comment: '',
+    });
+    return {
+      message: 'order closed successfully', ticket: p.ticket, type: 'fully_closed',
+      deal: p.ticket + 1, order: p.ticket + 1, volume: p.volume, price: p.price_current,
+      bid: round(this.mid), ask: round(this.mid + 12e-5),
+    };
+  }
+
   async getQuote() {
     const spread = 12e-5;
     return {

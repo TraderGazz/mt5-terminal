@@ -11,7 +11,16 @@
 import { useEffect, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { formatDateTime } from '@/lib/format';
-import { getTrades, getPositions, patchTrade, deleteTrade, type ApiTradeRow, type ApiPosition } from '@/api/rest';
+import {
+  getTrades,
+  getPositions,
+  patchTrade,
+  deleteTrade,
+  openTrade,
+  closeTrade,
+  type ApiTradeRow,
+  type ApiPosition,
+} from '@/api/rest';
 import { AdminButton, AdminCard, AdminInput, AdminModal, Pill, SegmentedControl } from './bits';
 
 type ViewMode = 'history' | 'trading';
@@ -72,94 +81,244 @@ export default function TradesSection({ showToast }: { showToast: (msg: string) 
           ]}
         />
       </div>
-      {view === 'trading' ? <TradingView /> : <HistoryEditor showToast={showToast} />}
+      {view === 'trading' ? <TradingView showToast={showToast} /> : <HistoryEditor showToast={showToast} />}
     </div>
   );
 }
 
-/** Торговля — текущие открытые позиции (только просмотр, живые данные). */
-function TradingView() {
+/**
+ * Торговля — открытые позиции + возможность открыть/закрыть реальную
+ * сделку (заявка заказчика). ВАЖНО: это настоящий ордер брокеру через
+ * MT5-мост, не правка записи в БД — реальные деньги, необратимо, поэтому
+ * оба действия идут через модалку-подтверждение с явным предупреждением.
+ */
+function TradingView({ showToast }: { showToast: (msg: string) => void }) {
   const [positions, setPositions] = useState<ApiPosition[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [openModal, setOpenModal] = useState(false);
+  const [openType, setOpenType] = useState<'buy' | 'sell'>('buy');
+  const [openVolume, setOpenVolume] = useState('0.01');
+  const [submitting, setSubmitting] = useState(false);
+  const [closeTarget, setCloseTarget] = useState<ApiPosition | null>(null);
+  const [closing, setClosing] = useState(false);
 
-  useEffect(() => {
+  const load = () => {
     getPositions()
       .then((p) => { setPositions(p); setError(null); })
       .catch((err: Error) => setError(err.message || 'Не удалось загрузить позиции'));
-  }, []);
+  };
 
-  if (error) return <AdminCard className="p-6 text-center text-[14px] text-loss">{error}</AdminCard>;
-  if (!positions) return <AdminCard className="p-6 text-center text-[14px] text-text-secondary">Загрузка…</AdminCard>;
+  useEffect(load, []);
 
-  if (positions.length === 0) {
-    return <AdminCard className="p-6 text-center text-[14px] text-text-secondary">Нет открытых позиций</AdminCard>;
+  const submitOpen = () => {
+    const volume = Number(openVolume.replace(',', '.'));
+    if (!Number.isFinite(volume) || volume <= 0) {
+      showToast('Введите корректный объём');
+      return;
+    }
+    setSubmitting(true);
+    openTrade({ type: openType, volume })
+      .then((r) => {
+        showToast(`Сделка открыта: ${openType} ${volume} лот, тикет #${r.order ?? r.deal ?? '—'}`);
+        setOpenModal(false);
+        load();
+      })
+      .catch((err: Error) => showToast(err.message || 'Не удалось открыть сделку'))
+      .finally(() => setSubmitting(false));
+  };
+
+  const submitClose = () => {
+    if (!closeTarget) return;
+    setClosing(true);
+    closeTrade({ ticket: closeTarget.id })
+      .then(() => {
+        showToast(`Позиция #${closeTarget.id} закрыта`);
+        setCloseTarget(null);
+        setPositions((prev) => (prev ?? []).filter((p) => p.id !== closeTarget.id));
+      })
+      .catch((err: Error) => showToast(err.message || 'Не удалось закрыть сделку'))
+      .finally(() => setClosing(false));
+  };
+
+  const openButton = (
+    <div className="flex justify-end">
+      <AdminButton onClick={() => { setOpenType('buy'); setOpenVolume('0.01'); setOpenModal(true); }}>
+        Открыть сделку
+      </AdminButton>
+    </div>
+  );
+
+  const modals = (
+    <>
+      {/* Открытие — подтверждение (реальный ордер, реальные деньги) */}
+      <AdminModal
+        open={openModal}
+        onClose={() => !submitting && setOpenModal(false)}
+        title="Открыть сделку"
+        footer={
+          <>
+            <AdminButton variant="secondary" onClick={() => setOpenModal(false)} disabled={submitting}>
+              Отмена
+            </AdminButton>
+            <AdminButton onClick={submitOpen} disabled={submitting}>
+              {submitting ? 'Открываю…' : 'Открыть по рынку'}
+            </AdminButton>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <SegmentedControl<'buy' | 'sell'>
+            value={openType}
+            onChange={setOpenType}
+            options={[
+              { value: 'buy', label: 'Buy' },
+              { value: 'sell', label: 'Sell' },
+            ]}
+          />
+          <AdminInput
+            label="Объём (лоты)"
+            inputMode="decimal"
+            value={openVolume}
+            onChange={(e) => setOpenVolume(e.target.value)}
+          />
+          <p className="text-[13px] leading-[18px] text-loss">
+            Это реальная рыночная заявка брокеру по текущей цене — не тестовая
+            запись. Отменить нельзя, только закрыть обратно с новым рыночным риском.
+          </p>
+        </div>
+      </AdminModal>
+
+      {/* Закрытие — подтверждение */}
+      <AdminModal
+        open={closeTarget !== null}
+        onClose={() => !closing && setCloseTarget(null)}
+        title="Закрыть позицию?"
+        footer={
+          <>
+            <AdminButton variant="secondary" onClick={() => setCloseTarget(null)} disabled={closing}>
+              Отмена
+            </AdminButton>
+            <AdminButton variant="destructive" onClick={submitClose} disabled={closing}>
+              {closing ? 'Закрываю…' : 'Закрыть по рынку'}
+            </AdminButton>
+          </>
+        }
+      >
+        {closeTarget && (
+          <p className="text-[14px] leading-[20px] text-black">
+            #{closeTarget.id} {closeTarget.symbol} {closeTarget.type}, {closeTarget.volume} лот — будет закрыта
+            реальным ордером брокеру по текущей цене (прибыль сейчас: {fmt(closeTarget.profit)}). Действие необратимо.
+          </p>
+        )}
+      </AdminModal>
+    </>
+  );
+
+  if (error) {
+    return (
+      <div className="flex flex-col gap-4">
+        {openButton}
+        <AdminCard className="p-6 text-center text-[14px] text-loss">{error}</AdminCard>
+        {modals}
+      </div>
+    );
+  }
+  if (!positions) {
+    return (
+      <div className="flex flex-col gap-4">
+        {openButton}
+        <AdminCard className="p-6 text-center text-[14px] text-text-secondary">Загрузка…</AdminCard>
+        {modals}
+      </div>
+    );
   }
 
   return (
-    <>
-      {/* Desktop/tablet: table */}
-      <AdminCard className="hidden overflow-x-auto md:block">
-        <table className="w-full min-w-[760px] border-collapse text-left">
-          <thead>
-            <tr className="border-b border-separator text-[12px] uppercase tracking-wide text-text-secondary">
-              <th className="px-5 py-3 font-medium">Тикет / Символ</th>
-              <th className="px-4 py-3 font-medium">Тип</th>
-              <th className="px-4 py-3 text-right font-medium">Цена открытия</th>
-              <th className="px-4 py-3 text-right font-medium">Текущая цена</th>
-              <th className="px-4 py-3 text-right font-medium">Прибыль</th>
-              <th className="px-4 py-3 text-right font-medium">Своп</th>
-              <th className="px-4 py-3 font-medium">Открыта</th>
-            </tr>
-          </thead>
-          <tbody>
-            {positions.map((p) => (
-              <tr key={p.id} className="border-b border-separator/60 last:border-0 hover:bg-[#F7F7FA]">
-                <td className="px-5 py-3">
-                  <span className="block text-[14px] text-black">{p.symbol || '—'}</span>
-                  <span className="tnum block text-[12px] text-text-secondary">#{p.id}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <Pill tone={TYPE_TONE[p.type] ?? 'gray'}>{p.type}</Pill>
-                </td>
-                <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(p.openPrice)}</td>
-                <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(p.currentPrice)}</td>
-                <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(p.profit)}</td>
-                <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(p.swap)}</td>
-                <td className="tnum whitespace-nowrap px-4 py-3 text-[13px] text-text-secondary">
-                  {p.openTime ? formatDateTime(new Date(p.openTime).getTime()) : '—'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </AdminCard>
+    <div className="flex flex-col gap-4">
+      {openButton}
 
-      {/* Mobile: cards (широкая таблица на телефоне была нечитаема) */}
-      <div className="flex flex-col gap-3 md:hidden">
-        {positions.map((p) => (
-          <div key={p.id} className="rounded-[10px] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-[15px] font-medium text-black">{p.symbol || '—'}</p>
-                <p className="tnum text-[12px] text-text-secondary">#{p.id}</p>
+      {positions.length === 0 ? (
+        <AdminCard className="p-6 text-center text-[14px] text-text-secondary">Нет открытых позиций</AdminCard>
+      ) : (
+        <>
+          {/* Desktop/tablet: table */}
+          <AdminCard className="hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[820px] border-collapse text-left">
+              <thead>
+                <tr className="border-b border-separator text-[12px] uppercase tracking-wide text-text-secondary">
+                  <th className="px-5 py-3 font-medium">Тикет / Символ</th>
+                  <th className="px-4 py-3 font-medium">Тип</th>
+                  <th className="px-4 py-3 text-right font-medium">Цена открытия</th>
+                  <th className="px-4 py-3 text-right font-medium">Текущая цена</th>
+                  <th className="px-4 py-3 text-right font-medium">Прибыль</th>
+                  <th className="px-4 py-3 text-right font-medium">Своп</th>
+                  <th className="px-4 py-3 font-medium">Открыта</th>
+                  <th className="px-4 py-3 text-right font-medium">Действия</th>
+                </tr>
+              </thead>
+              <tbody>
+                {positions.map((p) => (
+                  <tr key={p.id} className="border-b border-separator/60 last:border-0 hover:bg-[#F7F7FA]">
+                    <td className="px-5 py-3">
+                      <span className="block text-[14px] text-black">{p.symbol || '—'}</span>
+                      <span className="tnum block text-[12px] text-text-secondary">#{p.id}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Pill tone={TYPE_TONE[p.type] ?? 'gray'}>{p.type}</Pill>
+                    </td>
+                    <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(p.openPrice)}</td>
+                    <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(p.currentPrice)}</td>
+                    <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(p.profit)}</td>
+                    <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(p.swap)}</td>
+                    <td className="tnum whitespace-nowrap px-4 py-3 text-[13px] text-text-secondary">
+                      {p.openTime ? formatDateTime(new Date(p.openTime).getTime()) : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <AdminButton variant="destructive" onClick={() => setCloseTarget(p)}>
+                        Закрыть
+                      </AdminButton>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </AdminCard>
+
+          {/* Mobile: cards (широкая таблица на телефоне была нечитаема) */}
+          <div className="flex flex-col gap-3 md:hidden">
+            {positions.map((p) => (
+              <div key={p.id} className="rounded-[10px] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-medium text-black">{p.symbol || '—'}</p>
+                    <p className="tnum text-[12px] text-text-secondary">#{p.id}</p>
+                  </div>
+                  <Pill tone={TYPE_TONE[p.type] ?? 'gray'}>{p.type}</Pill>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
+                  <Field label="Цена открытия" value={fmt(p.openPrice)} />
+                  <Field label="Текущая цена" value={fmt(p.currentPrice)} />
+                  <Field label="Прибыль" value={fmt(p.profit)} />
+                  <Field label="Своп" value={fmt(p.swap)} />
+                  <Field
+                    label="Открыта"
+                    value={p.openTime ? formatDateTime(new Date(p.openTime).getTime()) : '—'}
+                    span
+                  />
+                </div>
+                <div className="mt-3 border-t border-separator pt-3">
+                  <AdminButton variant="destructive" className="w-full" onClick={() => setCloseTarget(p)}>
+                    Закрыть
+                  </AdminButton>
+                </div>
               </div>
-              <Pill tone={TYPE_TONE[p.type] ?? 'gray'}>{p.type}</Pill>
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
-              <Field label="Цена открытия" value={fmt(p.openPrice)} />
-              <Field label="Текущая цена" value={fmt(p.currentPrice)} />
-              <Field label="Прибыль" value={fmt(p.profit)} />
-              <Field label="Своп" value={fmt(p.swap)} />
-              <Field
-                label="Открыта"
-                value={p.openTime ? formatDateTime(new Date(p.openTime).getTime()) : '—'}
-                span
-              />
-            </div>
+            ))}
           </div>
-        ))}
-      </div>
-    </>
+        </>
+      )}
+
+      {modals}
+    </div>
   );
 }
 
