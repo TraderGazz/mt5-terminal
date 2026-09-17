@@ -218,7 +218,8 @@ function RealUsersSection({ showToast }: { showToast: (msg: string) => void }) {
         ))}
       </div>
 
-      <AdminCard className="overflow-x-auto">
+      {/* Desktop/tablet: table */}
+      <AdminCard className="hidden overflow-x-auto md:block">
         <table className="w-full min-w-[640px] border-collapse text-left">
           <thead>
             <tr className="border-b border-separator text-[12px] uppercase tracking-wide text-text-secondary">
@@ -274,6 +275,41 @@ function RealUsersSection({ showToast }: { showToast: (msg: string) => void }) {
           </tbody>
         </table>
       </AdminCard>
+
+      {/* Mobile: cards — меню действий было зажато в узкой строке таблицы. */}
+      <div className="flex flex-col gap-3 md:hidden">
+        {users.map((u) => (
+          <div key={u.id} className="rounded-[10px] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[rgba(0,122,255,0.10)] text-[13px] font-semibold text-accent">
+                  {initials(u.name || u.login)}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-[15px] text-black">{u.name || u.login}</span>
+                  <span className="tnum block text-[12px] text-text-secondary">логин {u.login}</span>
+                </span>
+              </div>
+              <RowMenu
+                active={u.active}
+                onRole={() => setRoleTarget(u)}
+                onReset={() => { setResetTarget(u); setNewPassword(''); }}
+                onToggleActive={() => {
+                  if (u.id === selfId) { showToast('Нельзя отключить свою же учётку'); return; }
+                  toggleActive(u);
+                }}
+              />
+            </div>
+            <div className="mt-3 flex items-center gap-2 border-t border-separator pt-3">
+              <Pill tone={ROLE_TONE[u.role]}>{ROLE_LABEL[u.role]}</Pill>
+              <Pill tone={u.active ? 'green' : 'gray'}>{u.active ? 'активен' : 'отключён'}</Pill>
+              <span className="tnum ml-auto text-[12px] text-text-secondary">
+                {formatDateTime(new Date(u.created_at).getTime())}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
 
       {/* Add user modal */}
       <AdminModal

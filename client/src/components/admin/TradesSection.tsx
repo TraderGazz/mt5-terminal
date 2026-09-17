@@ -91,49 +91,85 @@ function TradingView() {
   if (error) return <AdminCard className="p-6 text-center text-[14px] text-loss">{error}</AdminCard>;
   if (!positions) return <AdminCard className="p-6 text-center text-[14px] text-text-secondary">Загрузка…</AdminCard>;
 
+  if (positions.length === 0) {
+    return <AdminCard className="p-6 text-center text-[14px] text-text-secondary">Нет открытых позиций</AdminCard>;
+  }
+
   return (
-    <AdminCard className="overflow-x-auto">
-      <table className="w-full min-w-[760px] border-collapse text-left">
-        <thead>
-          <tr className="border-b border-separator text-[12px] uppercase tracking-wide text-text-secondary">
-            <th className="px-5 py-3 font-medium">Тикет / Символ</th>
-            <th className="px-4 py-3 font-medium">Тип</th>
-            <th className="px-4 py-3 text-right font-medium">Цена открытия</th>
-            <th className="px-4 py-3 text-right font-medium">Текущая цена</th>
-            <th className="px-4 py-3 text-right font-medium">Прибыль</th>
-            <th className="px-4 py-3 text-right font-medium">Своп</th>
-            <th className="px-4 py-3 font-medium">Открыта</th>
-          </tr>
-        </thead>
-        <tbody>
-          {positions.map((p) => (
-            <tr key={p.id} className="border-b border-separator/60 last:border-0 hover:bg-[#F7F7FA]">
-              <td className="px-5 py-3">
-                <span className="block text-[14px] text-black">{p.symbol || '—'}</span>
-                <span className="tnum block text-[12px] text-text-secondary">#{p.id}</span>
-              </td>
-              <td className="px-4 py-3">
-                <Pill tone={TYPE_TONE[p.type] ?? 'gray'}>{p.type}</Pill>
-              </td>
-              <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(p.openPrice)}</td>
-              <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(p.currentPrice)}</td>
-              <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(p.profit)}</td>
-              <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(p.swap)}</td>
-              <td className="tnum whitespace-nowrap px-4 py-3 text-[13px] text-text-secondary">
-                {p.openTime ? formatDateTime(new Date(p.openTime).getTime()) : '—'}
-              </td>
+    <>
+      {/* Desktop/tablet: table */}
+      <AdminCard className="hidden overflow-x-auto md:block">
+        <table className="w-full min-w-[760px] border-collapse text-left">
+          <thead>
+            <tr className="border-b border-separator text-[12px] uppercase tracking-wide text-text-secondary">
+              <th className="px-5 py-3 font-medium">Тикет / Символ</th>
+              <th className="px-4 py-3 font-medium">Тип</th>
+              <th className="px-4 py-3 text-right font-medium">Цена открытия</th>
+              <th className="px-4 py-3 text-right font-medium">Текущая цена</th>
+              <th className="px-4 py-3 text-right font-medium">Прибыль</th>
+              <th className="px-4 py-3 text-right font-medium">Своп</th>
+              <th className="px-4 py-3 font-medium">Открыта</th>
             </tr>
-          ))}
-          {positions.length === 0 && (
-            <tr>
-              <td colSpan={7} className="px-5 py-8 text-center text-[14px] text-text-secondary">
-                Нет открытых позиций
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </AdminCard>
+          </thead>
+          <tbody>
+            {positions.map((p) => (
+              <tr key={p.id} className="border-b border-separator/60 last:border-0 hover:bg-[#F7F7FA]">
+                <td className="px-5 py-3">
+                  <span className="block text-[14px] text-black">{p.symbol || '—'}</span>
+                  <span className="tnum block text-[12px] text-text-secondary">#{p.id}</span>
+                </td>
+                <td className="px-4 py-3">
+                  <Pill tone={TYPE_TONE[p.type] ?? 'gray'}>{p.type}</Pill>
+                </td>
+                <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(p.openPrice)}</td>
+                <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(p.currentPrice)}</td>
+                <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(p.profit)}</td>
+                <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(p.swap)}</td>
+                <td className="tnum whitespace-nowrap px-4 py-3 text-[13px] text-text-secondary">
+                  {p.openTime ? formatDateTime(new Date(p.openTime).getTime()) : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </AdminCard>
+
+      {/* Mobile: cards (широкая таблица на телефоне была нечитаема) */}
+      <div className="flex flex-col gap-3 md:hidden">
+        {positions.map((p) => (
+          <div key={p.id} className="rounded-[10px] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[15px] font-medium text-black">{p.symbol || '—'}</p>
+                <p className="tnum text-[12px] text-text-secondary">#{p.id}</p>
+              </div>
+              <Pill tone={TYPE_TONE[p.type] ?? 'gray'}>{p.type}</Pill>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
+              <Field label="Цена открытия" value={fmt(p.openPrice)} />
+              <Field label="Текущая цена" value={fmt(p.currentPrice)} />
+              <Field label="Прибыль" value={fmt(p.profit)} />
+              <Field label="Своп" value={fmt(p.swap)} />
+              <Field
+                label="Открыта"
+                value={p.openTime ? formatDateTime(new Date(p.openTime).getTime()) : '—'}
+                span
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+/** Подпись + значение в карточке мобильного вида. */
+function Field({ label, value, span }: { label: string; value: string; span?: boolean }) {
+  return (
+    <div className={span ? 'col-span-2' : undefined}>
+      <p className="text-text-secondary">{label}</p>
+      <p className="tnum text-black">{value}</p>
+    </div>
   );
 }
 
@@ -291,68 +327,111 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
         </div>
       </AdminCard>
 
-      <AdminCard className="overflow-x-auto">
-        <table className="w-full min-w-[760px] border-collapse text-left">
-          <thead>
-            <tr className="border-b border-separator text-[12px] uppercase tracking-wide text-text-secondary">
-              <th className="px-5 py-3 font-medium">Тикет / Символ</th>
-              <th className="px-4 py-3 font-medium">Тип</th>
-              <th className="px-4 py-3 text-right font-medium">Цена откр.</th>
-              <th className="px-4 py-3 text-right font-medium">Цена закр.</th>
-              <th className="px-4 py-3 text-right font-medium">Прибыль</th>
-              <th className="px-4 py-3 text-right font-medium">Своп</th>
-              <th className="px-4 py-3 text-right font-medium">Комиссия</th>
-              <th className="px-4 py-3 font-medium">Закрыта</th>
-              <th className="px-4 py-3 text-right font-medium">Действия</th>
-            </tr>
-          </thead>
-          <tbody>
+      {filtered.length === 0 ? (
+        <AdminCard className="p-6 text-center text-[14px] text-text-secondary">Ничего не найдено</AdminCard>
+      ) : (
+        <>
+          {/* Desktop/tablet: table */}
+          <AdminCard className="hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[760px] border-collapse text-left">
+              <thead>
+                <tr className="border-b border-separator text-[12px] uppercase tracking-wide text-text-secondary">
+                  <th className="px-5 py-3 font-medium">Тикет / Символ</th>
+                  <th className="px-4 py-3 font-medium">Тип</th>
+                  <th className="px-4 py-3 text-right font-medium">Цена откр.</th>
+                  <th className="px-4 py-3 text-right font-medium">Цена закр.</th>
+                  <th className="px-4 py-3 text-right font-medium">Прибыль</th>
+                  <th className="px-4 py-3 text-right font-medium">Своп</th>
+                  <th className="px-4 py-3 text-right font-medium">Комиссия</th>
+                  <th className="px-4 py-3 font-medium">Закрыта</th>
+                  <th className="px-4 py-3 text-right font-medium">Действия</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((r) => (
+                  <tr key={r.id} className="border-b border-separator/60 last:border-0 hover:bg-[#F7F7FA]">
+                    <td className="px-5 py-3">
+                      <span className="block text-[14px] text-black">{r.symbol || '—'}</span>
+                      <span className="tnum block text-[12px] text-text-secondary">
+                        #{r.ticket} {r.is_edited && '· изм.'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Pill tone={TYPE_TONE[r.type] ?? 'gray'}>{r.type}</Pill>
+                    </td>
+                    <td className="tnum px-4 py-3 text-right text-[13px] text-text-secondary">{fmtPrice(r.open_price)}</td>
+                    <td className="tnum px-4 py-3 text-right text-[13px] text-text-secondary">{fmtPrice(r.close_price)}</td>
+                    <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(r.profit)}</td>
+                    <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(r.swap)}</td>
+                    <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(r.commission)}</td>
+                    <td className="tnum whitespace-nowrap px-4 py-3 text-[13px] text-text-secondary">
+                      {r.close_time ? formatDateTime(new Date(r.close_time).getTime()) : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex justify-end gap-1">
+                        <AdminButton variant="text" onClick={() => openEdit(r)}>
+                          Изменить
+                        </AdminButton>
+                        <button
+                          type="button"
+                          aria-label="Удалить"
+                          onClick={() => setDeleteTarget(r)}
+                          className="flex h-8 w-8 items-center justify-center rounded-full text-loss hover:bg-[rgba(255,59,48,0.08)]"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </AdminCard>
+
+          {/* Mobile: cards — заявка заказчика, таблицу со скроллом вбок было
+              неудобно редактировать с телефона; тут всё в один столбец и
+              кнопки «Изменить»/«Удалить» на всю ширину. */}
+          <div className="flex flex-col gap-3 md:hidden">
             {filtered.map((r) => (
-              <tr key={r.id} className="border-b border-separator/60 last:border-0 hover:bg-[#F7F7FA]">
-                <td className="px-5 py-3">
-                  <span className="block text-[14px] text-black">{r.symbol || '—'}</span>
-                  <span className="tnum block text-[12px] text-text-secondary">
-                    #{r.ticket} {r.is_edited && '· изм.'}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <Pill tone={TYPE_TONE[r.type] ?? 'gray'}>{r.type}</Pill>
-                </td>
-                <td className="tnum px-4 py-3 text-right text-[13px] text-text-secondary">{fmtPrice(r.open_price)}</td>
-                <td className="tnum px-4 py-3 text-right text-[13px] text-text-secondary">{fmtPrice(r.close_price)}</td>
-                <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(r.profit)}</td>
-                <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(r.swap)}</td>
-                <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(r.commission)}</td>
-                <td className="tnum whitespace-nowrap px-4 py-3 text-[13px] text-text-secondary">
-                  {r.close_time ? formatDateTime(new Date(r.close_time).getTime()) : '—'}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <div className="flex justify-end gap-1">
-                    <AdminButton variant="text" onClick={() => openEdit(r)}>
-                      Изменить
-                    </AdminButton>
-                    <button
-                      type="button"
-                      aria-label="Удалить"
-                      onClick={() => setDeleteTarget(r)}
-                      className="flex h-8 w-8 items-center justify-center rounded-full text-loss hover:bg-[rgba(255,59,48,0.08)]"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+              <div key={r.id} className="rounded-[10px] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-medium text-black">{r.symbol || '—'}</p>
+                    <p className="tnum text-[12px] text-text-secondary">
+                      #{r.ticket} {r.is_edited && '· изм.'}
+                    </p>
                   </div>
-                </td>
-              </tr>
+                  <Pill tone={TYPE_TONE[r.type] ?? 'gray'}>{r.type}</Pill>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
+                  <Field label="Цена откр." value={fmtPrice(r.open_price)} />
+                  <Field label="Цена закр." value={fmtPrice(r.close_price)} />
+                  <Field label="Прибыль" value={fmt(r.profit)} />
+                  <Field label="Своп" value={fmt(r.swap)} />
+                  <Field label="Комиссия" value={fmt(r.commission)} />
+                  <Field
+                    label="Закрыта"
+                    value={r.close_time ? formatDateTime(new Date(r.close_time).getTime()) : '—'}
+                  />
+                </div>
+                <div className="mt-3 flex gap-2 border-t border-separator pt-3">
+                  <AdminButton variant="secondary" className="flex-1" onClick={() => openEdit(r)}>
+                    Изменить
+                  </AdminButton>
+                  <button
+                    type="button"
+                    aria-label="Удалить"
+                    onClick={() => setDeleteTarget(r)}
+                    className="flex h-[38px] w-[46px] shrink-0 items-center justify-center rounded-[10px] bg-[rgba(255,59,48,0.08)] text-loss active:opacity-80"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
             ))}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={9} className="px-5 py-8 text-center text-[14px] text-text-secondary">
-                  Ничего не найдено
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </AdminCard>
+          </div>
+        </>
+      )}
 
       {/* Edit modal */}
       <AdminModal
