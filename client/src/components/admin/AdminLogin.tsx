@@ -18,7 +18,9 @@ export default function AdminLogin({ onLogin }: { onLogin: () => void }) {
     if (IS_API) {
       apiLogin(login.trim(), password)
         .then((user) => {
-          if (user.role === 'admin') onLogin();
+          // trader тоже пускаем — заказчик просил личный доступ к правке
+          // сделок/итогов через админку, viewer (инвестор) — только просмотр.
+          if (user.role === 'admin' || user.role === 'trader') onLogin();
           else setError(true);
         })
         .catch(() => setError(true));

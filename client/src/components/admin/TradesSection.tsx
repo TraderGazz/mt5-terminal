@@ -24,6 +24,15 @@ const TYPE_TONE: Record<string, 'blue' | 'green' | 'gray' | 'orange' | 'red'> = 
 const fmt = (n: number | null | undefined) =>
   (n ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+function TotalStat({ label, value, bold }: { label: string; value: number; bold?: boolean }) {
+  return (
+    <div>
+      <p className="text-[12px] text-text-secondary">{label}</p>
+      <p className={`tnum ${bold ? 'text-[16px] font-semibold' : 'text-[14px]'} text-black`}>{fmt(value)}</p>
+    </div>
+  );
+}
+
 interface EditForm {
   profit: string;
   swap: string;
@@ -35,17 +44,26 @@ export default function TradesSection({ showToast }: { showToast: (msg: string) 
   const [rows, setRows] = useState<ApiTradeRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [type, setType] = useState<TypeFilter>('all');
+  // Пустая строка = без границы (тот же смысл, что «Все» на сайте).
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
   const [editTarget, setEditTarget] = useState<ApiTradeRow | null>(null);
   const [form, setForm] = useState<EditForm>({ profit: '', swap: '', commission: '', comment: '' });
   const [deleteTarget, setDeleteTarget] = useState<ApiTradeRow | null>(null);
 
   const load = () => {
-    getTrades({ period: 'all', limit: 500 })
+    getTrades({
+      period: from || to ? undefined : 'all',
+      from: from || undefined,
+      to: to ? `${to}T23:59:59` : undefined,
+      limit: 1000,
+    })
       .then((r) => { setRows(r.trades); setError(null); })
       .catch((err: Error) => setError(err.message || 'Не удалось загрузить сделки'));
   };
 
-  useEffect(load, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(load, [from, to]);
 
   if (error) {
     return <AdminCard className="p-6 text-center text-[14px] text-loss">{error}</AdminCard>;
@@ -55,6 +73,25 @@ export default function TradesSection({ showToast }: { showToast: (msg: string) 
   }
 
   const filtered = type === 'all' ? rows : rows.filter((r) => r.type === type);
+
+  // Живой итог — пересчитывается сразу при правке (заявка заказчика: видеть
+  // сумму периода сразу после изменения любой сделки, без доп. действий).
+  const periodTotals = filtered.reduce(
+    (acc, r) => {
+      if (r.type === 'buy' || r.type === 'sell') {
+        acc.profit += r.profit;
+        acc.swap += r.swap;
+        acc.commission += r.commission;
+      } else if (r.type === 'balance') {
+        if (r.profit < 0) acc.withdrawal += -r.profit;
+        else acc.deposit += r.profit;
+      }
+      return acc;
+    },
+    { deposit: 0, withdrawal: 0, profit: 0, swap: 0, commission: 0 },
+  );
+  const periodBalance =
+    periodTotals.deposit - periodTotals.withdrawal + periodTotals.profit + periodTotals.swap + periodTotals.commission;
 
   const openEdit = (row: ApiTradeRow) => {
     setEditTarget(row);
@@ -118,6 +155,32 @@ export default function TradesSection({ showToast }: { showToast: (msg: string) 
           ]}
         />
       </div>
+
+      {/* Произвольный период — заявка заказчика: выбрать любой диапазон дат
+          и сразу видеть пересчитанный итог по нему. */}
+      <AdminCard>
+        <div className="flex flex-wrap items-end gap-3 p-4">
+          <div className="w-[160px]">
+            <AdminInput label="С" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          </div>
+          <div className="w-[160px]">
+            <AdminInput label="По" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+          </div>
+          {(from || to) && (
+            <AdminButton variant="secondary" onClick={() => { setFrom(''); setTo(''); }}>
+              Сбросить период
+            </AdminButton>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-separator px-4 py-3 sm:grid-cols-3 md:grid-cols-6">
+          <TotalStat label="Депозит" value={periodTotals.deposit} />
+          <TotalStat label="Снятие" value={periodTotals.withdrawal} />
+          <TotalStat label="Прибыль" value={periodTotals.profit} />
+          <TotalStat label="Своп" value={periodTotals.swap} />
+          <TotalStat label="Комиссия" value={periodTotals.commission} />
+          <TotalStat label="Баланс" value={periodBalance} bold />
+        </div>
+      </AdminCard>
 
       <AdminCard className="overflow-x-auto">
         <table className="w-full min-w-[760px] border-collapse text-left">

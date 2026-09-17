@@ -184,6 +184,8 @@ export interface ApiTradesTotals {
 export const getTrades = (q: {
   period?: string;
   symbol?: string;
+  from?: string;
+  to?: string;
   limit?: number;
   offset?: number;
 }) =>
