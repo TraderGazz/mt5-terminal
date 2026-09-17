@@ -21,8 +21,10 @@ const TYPE_TONE: Record<string, 'blue' | 'green' | 'gray' | 'orange' | 'red'> = 
   cfd: 'gray',
 };
 
-const fmt = (n: number | null | undefined) =>
-  (n ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Postgres отдаёт DECIMAL-колонки строками в JSON — Number() обязателен,
+// иначе арифметика (periodTotals ниже) молча превращается в конкатенацию строк.
+const fmt = (n: number | string | null | undefined) =>
+  (Number(n) || 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function TotalStat({ label, value, bold }: { label: string; value: number; bold?: boolean }) {
   return (
@@ -78,13 +80,16 @@ export default function TradesSection({ showToast }: { showToast: (msg: string) 
   // сумму периода сразу после изменения любой сделки, без доп. действий).
   const periodTotals = filtered.reduce(
     (acc, r) => {
+      const profit = Number(r.profit) || 0;
+      const swap = Number(r.swap) || 0;
+      const commission = Number(r.commission) || 0;
       if (r.type === 'buy' || r.type === 'sell') {
-        acc.profit += r.profit;
-        acc.swap += r.swap;
-        acc.commission += r.commission;
+        acc.profit += profit;
+        acc.swap += swap;
+        acc.commission += commission;
       } else if (r.type === 'balance') {
-        if (r.profit < 0) acc.withdrawal += -r.profit;
-        else acc.deposit += r.profit;
+        if (profit < 0) acc.withdrawal += -profit;
+        else acc.deposit += profit;
       }
       return acc;
     },
