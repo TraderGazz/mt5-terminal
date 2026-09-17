@@ -19,6 +19,7 @@ import {
   openTrade,
   closeTrade,
   type ApiTradeRow,
+  type ApiTradesTotals,
   type ApiPosition,
 } from '@/api/rest';
 import { AdminButton, AdminCard, AdminInput, AdminModal, Pill, SegmentedControl } from './bits';
@@ -345,6 +346,15 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
     profit: '', swap: '', commission: '', openPrice: '', closePrice: '', comment: '',
   });
   const [deleteTarget, setDeleteTarget] = useState<ApiTradeRow | null>(null);
+  // Итог по ВСЕМУ периоду — считает сервер агрегатом по всей БД (не зависит
+  // от LIMIT ниже). На плотных периодах сделок может быть в разы больше
+  // лимита строк для отображения — если считать итог из `rows`, депозит/
+  // снятие за пределами загруженных строк тихо выпадали бы из суммы (баг-
+  // репорт заказчика: "в админке снятие 0, хотя на сайте есть за тот же
+  // период"). Живой пересчёт после правки/удаления — через дельту сюда же,
+  // без повторного похода на сервер (заявка заказчика: сумма обновляется
+  // сразу же после любой правки).
+  const [totals, setTotals] = useState<ApiTradesTotals | null>(null);
 
   const load = () => {
     getTrades({
@@ -353,7 +363,7 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
       to: to ? `${to}T23:59:59` : undefined,
       limit: 1000,
     })
-      .then((r) => { setRows(r.trades); setError(null); })
+      .then((r) => { setRows(r.trades); setTotals(r.totals); setError(null); })
       .catch((err: Error) => setError(err.message || 'Не удалось загрузить сделки'));
   };
 
@@ -363,33 +373,42 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
   if (error) {
     return <AdminCard className="p-6 text-center text-[14px] text-loss">{error}</AdminCard>;
   }
-  if (!rows) {
+  if (!rows || !totals) {
     return <AdminCard className="p-6 text-center text-[14px] text-text-secondary">Загрузка…</AdminCard>;
   }
 
   const filtered = type === 'all' ? rows : rows.filter((r) => r.type === type);
 
-  // Живой итог — пересчитывается сразу при правке (заявка заказчика: видеть
-  // сумму периода сразу после изменения любой сделки, без доп. действий).
-  const periodTotals = filtered.reduce(
-    (acc, r) => {
-      const profit = Number(r.profit) || 0;
-      const swap = Number(r.swap) || 0;
-      const commission = Number(r.commission) || 0;
-      if (r.type === 'buy' || r.type === 'sell') {
-        acc.profit += profit;
-        acc.swap += swap;
-        acc.commission += commission;
-      } else if (r.type === 'balance') {
-        if (profit < 0) acc.withdrawal += -profit;
-        else acc.deposit += profit;
-      }
-      return acc;
-    },
-    { deposit: 0, withdrawal: 0, profit: 0, swap: 0, commission: 0 },
-  );
+  const periodTotals = totals;
   const periodBalance =
     periodTotals.deposit - periodTotals.withdrawal + periodTotals.profit + periodTotals.swap + periodTotals.commission;
+
+  // Вклад одной строки в итог — те же категории, что и в SQL-агрегате выше
+  // (deposit/withdrawal — отдельные значения type, не 'balance' со знаком).
+  const contribution = (r: Pick<ApiTradeRow, 'type' | 'profit' | 'swap' | 'commission'>) => {
+    const profit = Number(r.profit) || 0;
+    const swap = Number(r.swap) || 0;
+    const commission = Number(r.commission) || 0;
+    if (r.type === 'buy' || r.type === 'sell') return { deposit: 0, withdrawal: 0, profit, swap, commission };
+    if (r.type === 'balance') return { deposit: profit, withdrawal: 0, profit: 0, swap: 0, commission: 0 };
+    if (r.type === 'withdrawal') return { deposit: 0, withdrawal: -profit, profit: 0, swap: 0, commission: 0 };
+    return { deposit: 0, withdrawal: 0, profit: 0, swap: 0, commission: 0 };
+  };
+
+  const applyDelta = (before: ApiTradeRow, after: Pick<ApiTradeRow, 'type' | 'profit' | 'swap' | 'commission'>) => {
+    const b = contribution(before);
+    const a = contribution(after);
+    setTotals((t) =>
+      t && {
+        deposit: t.deposit - b.deposit + a.deposit,
+        withdrawal: t.withdrawal - b.withdrawal + a.withdrawal,
+        profit: t.profit - b.profit + a.profit,
+        swap: t.swap - b.swap + a.swap,
+        commission: t.commission - b.commission + a.commission,
+        count: t.count,
+      },
+    );
+  };
 
   const openEdit = (row: ApiTradeRow) => {
     setEditTarget(row);
@@ -419,6 +438,7 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
       open_price: openPrice, close_price: closePrice,
     })
       .then(() => {
+        applyDelta(editTarget, { type: editTarget.type, profit, swap, commission });
         setRows((prev) =>
           (prev ?? []).map((r) =>
             r.id === editTarget.id
@@ -436,6 +456,7 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
     if (!deleteTarget) return;
     deleteTrade(deleteTarget.id)
       .then(() => {
+        applyDelta(deleteTarget, { type: deleteTarget.type, profit: 0, swap: 0, commission: 0 });
         setRows((prev) => (prev ?? []).filter((r) => r.id !== deleteTarget.id));
         showToast(`Запись #${deleteTarget.ticket} удалена`);
         setDeleteTarget(null);
@@ -485,6 +506,15 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
           <TotalStat label="Баланс" value={periodBalance} bold />
         </div>
       </AdminCard>
+
+      {/* Итог выше учитывает ВЕСЬ период (см. комментарий у useState totals) —
+          но список ниже для правки/удаления по-прежнему ограничен LIMIT, на
+          плотных по сделкам периодах может не доходить до начала диапазона. */}
+      {totals.count > rows.length && (
+        <p className="text-[13px] text-[#C93400]">
+          В периоде {totals.count} записей, для правки показаны последние {rows.length} — сузьте диапазон дат, чтобы добраться до более старых.
+        </p>
+      )}
 
       {filtered.length === 0 ? (
         <AdminCard className="p-6 text-center text-[14px] text-text-secondary">Ничего не найдено</AdminCard>

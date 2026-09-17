@@ -58,11 +58,20 @@ router.get('/', async (req, res) => {
        LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
       [...params, limit, offset]
     );
+    // Не зависит от LIMIT выше — иначе на плотных периодах (много сделок)
+    // видимые 1000 строк обрезают период по факту раньше запрошенного `from`,
+    // и депозит/снятие, случившиеся до этой отсечки, тихо выпадают из суммы
+    // (заявка/баг-репорт заказчика: "в админке снятие 0, хотя на сайте есть").
+    // deposit/withdrawal — ОТДЕЛЬНЫЕ значения type (см. mt5-sync.js
+    // categorizeRawDeal), не 'balance' со знаком — раньше клиент считал totals
+    // сам по себе и никогда не смотрел на type='withdrawal', отсюда 0.
     const totals = await query(
       `SELECT
-         COALESCE(SUM(profit), 0) AS profit,
-         COALESCE(SUM(swap), 0) AS swap,
-         COALESCE(SUM(commission), 0) AS commission,
+         COALESCE(SUM(profit) FILTER (WHERE type IN ('buy','sell')), 0) AS profit,
+         COALESCE(SUM(swap) FILTER (WHERE type IN ('buy','sell')), 0) AS swap,
+         COALESCE(SUM(commission) FILTER (WHERE type IN ('buy','sell')), 0) AS commission,
+         COALESCE(SUM(profit) FILTER (WHERE type = 'balance'), 0) AS deposit,
+         COALESCE(SUM(-profit) FILTER (WHERE type = 'withdrawal'), 0) AS withdrawal,
          COUNT(*)::int AS count
        FROM trades ${whereSql}`,
       params

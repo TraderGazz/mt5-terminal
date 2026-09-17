@@ -178,6 +178,8 @@ export interface ApiTradesTotals {
   profit: number;
   swap: number;
   commission: number;
+  deposit: number;
+  withdrawal: number;
   count: number;
 }
 
