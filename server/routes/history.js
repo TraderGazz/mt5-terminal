@@ -25,12 +25,14 @@ function resolveRange({ period, from, to }) {
       d.setHours(0, 0, 0, 0);
       return { from: d.toISOString(), to: null, period };
     }
-    case 'month': return { from: back((d) => d.setMonth(d.getMonth() - 1)), to: null, period };
-    case '3m': return { from: back((d) => d.setMonth(d.getMonth() - 3)), to: null, period };
+    // MT5 считает «месяц» фиксированными 29 днями, не календарным — сверено
+    // напрямую с оригиналом (см. historyFilter.ts:periodRange).
+    case 'month': return { from: new Date(now - 29 * 86400_000).toISOString(), to: null, period };
+    case '3m': return { from: new Date(now - 3 * 29 * 86400_000).toISOString(), to: null, period };
     case 'year': return { from: back((d) => d.setFullYear(d.getFullYear() - 1)), to: null, period };
     case 'all': return { from: null, to: null, period: 'all' };
     case '6m':
-    default: return { from: back((d) => d.setMonth(d.getMonth() - 6)), to: null, period: '6m' };
+    default: return { from: new Date(now - 6 * 29 * 86400_000).toISOString(), to: null, period: '6m' };
   }
 }
 

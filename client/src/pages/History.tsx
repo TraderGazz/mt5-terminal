@@ -15,7 +15,7 @@ import {
   useHistoryLoaded,
   useHistoryError,
 } from '@/data/history';
-import { depositTotalsForRange, LEDGER_END } from '@/data/depositLedger';
+import { depositTotalsForRange } from '@/data/depositLedger';
 import { getSymbolMeta } from '@/mocks/symbols';
 import { formatMoneyMT5 } from '@/components/history/utils';
 import SegmentedControl from '@/components/history/SegmentedControl';
@@ -415,36 +415,21 @@ export default function HistoryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dealLegs, isWidestPeriod]);
 
-  // Депозит/снятие — гибрид: даты в пределах официальной выписки брокера
-  // (depositLedger.ts, до LEDGER_END) берутся из неё — синхронизированные
-  // с EA balance-записи за ВСЁ время не совпадают с выпиской (68.7М против
-  // 25.3М по сумме депозитов). Но для дат ПОСЛЕ окончания выписки
-  // синхронизация проверена и точна (сверено посделочно напрямую с
-  // реальным терминалом на окне 15.08–15.09 — суммы совпали до копейки),
-  // так что для них берём именно её, а не молчим нулём.
+  // Депозит/снятие — ТОЛЬКО из официальной выписки брокера (depositLedger.ts,
+  // заявка заказчика). Синхронизированные с EA balance-записи за всё время
+  // не совпадают с выпиской (68.7М против 25.3М по сумме депозитов) — раз
+  // выписка авторитетна, любая дата, которой в ней нет, должна показывать 0,
+  // а не подставлять несовпадающие цифры из EA. Отсюда и ожидаемое поведение:
+  // период «Месяц» (целиком после LEDGER_END, где в выписке пусто) должен
+  // показывать депозит 0 — так и просил заказчик.
   const balTotals = useMemo(() => {
     if (isWidestPeriod) {
       const { deposit, withdrawal } = FIXED_TOTALS;
       return { deposit, withdrawal, net: deposit - withdrawal };
     }
-    let deposit = 0;
-    let withdrawal = 0;
-    if (range.from <= LEDGER_END) {
-      const l = depositTotalsForRange(range.from, Math.min(range.to, LEDGER_END));
-      deposit += l.deposit;
-      withdrawal += l.withdrawal;
-    }
-    if (range.to > LEDGER_END) {
-      const syncFrom = Math.max(range.from, LEDGER_END + 1);
-      for (const d of getBalanceOps()) {
-        if (d.closeTime < syncFrom || d.closeTime > range.to) continue;
-        if (d.profit < 0) withdrawal += -d.profit;
-        else deposit += d.profit;
-      }
-    }
+    const { deposit, withdrawal } = depositTotalsForRange(range.from, range.to);
     return { deposit, withdrawal, net: deposit - withdrawal };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range, isWidestPeriod, dealsVersion]);
+  }, [range, isWidestPeriod]);
 
   const cfdTotal = useMemo(
     () => (isWidestPeriod ? 0 : cfdOps.reduce((s, d) => s + d.profit, 0)),

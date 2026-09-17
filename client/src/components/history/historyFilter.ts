@@ -98,21 +98,17 @@ export function periodRange(f: HistoryFilterState, now: number = Date.now()): Pe
       return { from: startOfDay(now), to: now };
     case 'week':
       return { from: startOfWeek(now), to: now };
-    case 'month': {
-      const d = new Date(now);
-      d.setMonth(d.getMonth() - 1);
-      return { from: d.getTime(), to: now };
-    }
-    case '3m': {
-      const d = new Date(now);
-      d.setMonth(d.getMonth() - 3);
-      return { from: d.getTime(), to: now };
-    }
-    case '6m': {
-      const d = new Date(now);
-      d.setMonth(d.getMonth() - 6);
-      return { from: d.getTime(), to: now };
-    }
+    // MT5 считает «месяц» здесь не календарным (28-31 день), а фиксированными
+    // 29 днями — сверено напрямую с оригиналом: «месяц»/«3 месяца» дали ровно
+    // 29 и 29×3=87 дней назад (совпало день-в-день), «6 месяцев» не удалось
+    // сверить впрямую — там граница упёрлась в фактическое начало истории
+    // счёта раньше, чем настал бы расчётный рубеж 29×6=174 дня.
+    case 'month':
+      return { from: now - 29 * DAY, to: now };
+    case '3m':
+      return { from: now - 3 * 29 * DAY, to: now };
+    case '6m':
+      return { from: now - 6 * 29 * DAY, to: now };
     case 'year': {
       const d = new Date(now);
       d.setFullYear(d.getFullYear() - 1);
