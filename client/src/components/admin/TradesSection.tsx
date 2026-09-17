@@ -363,7 +363,22 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
       to: to ? `${to}T23:59:59` : undefined,
       limit: 1000,
     })
-      .then((r) => { setRows(r.trades); setTotals(r.totals); setError(null); })
+      .then((r) => {
+        setRows(r.trades);
+        // Postgres DECIMAL -> строка в JSON (см. fmt() выше) — periodBalance
+        // ниже делает арифметику напрямую над totals, без fmt(), поэтому
+        // коэрсить в число нужно сразу тут, один раз, а не в каждом месте
+        // использования: иначе "0" + "21211640.90" склеивается как строка.
+        setTotals({
+          deposit: Number(r.totals.deposit) || 0,
+          withdrawal: Number(r.totals.withdrawal) || 0,
+          profit: Number(r.totals.profit) || 0,
+          swap: Number(r.totals.swap) || 0,
+          commission: Number(r.totals.commission) || 0,
+          count: Number(r.totals.count) || 0,
+        });
+        setError(null);
+      })
       .catch((err: Error) => setError(err.message || 'Не удалось загрузить сделки'));
   };
 
