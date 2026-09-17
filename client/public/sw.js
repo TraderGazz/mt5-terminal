@@ -4,7 +4,7 @@
  * Хэшированные JS/CSS/иконки — cache-first (имя файла меняется при каждой
  * сборке, так что кэшировать их безопасно и полезно для офлайн-режима).
  * /api/* и /ws — никогда не кэшируются (живые данные счёта). */
-const CACHE = 'terminal-shell-v3';
+const CACHE = 'terminal-shell-v4';
 const SHELL = ['./manifest.webmanifest', './favicon.png'];
 
 self.addEventListener('install', (event) => {
