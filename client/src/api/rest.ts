@@ -216,3 +216,12 @@ export const openTrade = (body: { type: 'buy' | 'sell'; volume: number; comment?
 
 export const closeTrade = (body: { ticket: number; volume?: number }) =>
   api<ApiTradeResult>('/trading/close', { method: 'POST', body });
+
+// Косметическая правка ОТКРЫТОЙ позиции (не запись в БД — позиция живая):
+// заявка заказчика, цена открытия и/или прибыль/убыток "как будто". Реальная
+// позиция у брокера не трогается.
+export const updatePositionOverride = (ticket: number, body: { openPrice?: number; profit?: number }) =>
+  api<{ ticket: number }>(`/trading/position/${ticket}`, { method: 'PATCH', body });
+
+export const clearPositionOverride = (ticket: number) =>
+  api<{ cleared: true }>(`/trading/position/${ticket}`, { method: 'DELETE' });

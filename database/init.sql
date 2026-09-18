@@ -204,6 +204,17 @@ CREATE TABLE IF NOT EXISTS sync_settings (
 
 INSERT INTO sync_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 
+-- ============================================================================
+-- position_overrides — косметическая правка ОТКРЫТЫХ позиций (заявка
+-- заказчика, см. database/migrations/005_position_overrides.sql)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS position_overrides (
+    ticket              BIGINT PRIMARY KEY,
+    open_price_override DECIMAL(18, 5),
+    profit_offset       DECIMAL(18, 2),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 COMMIT;
 
 -- Первый admin создаётся сервером при старте из env ADMIN_LOGIN / ADMIN_PASSWORD

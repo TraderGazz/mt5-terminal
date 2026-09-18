@@ -1,8 +1,10 @@
 /**
  * Admin → Торговля и история (заявка заказчика: разделить как на самом
  * сайте — «Торговля» = открытые позиции, «История» = закрытые сделки).
- * «Торговля» — живой просмотр /api/positions, без редактирования (значения
- * меняются каждую секунду, редактировать нечего). «История» — реальный
+ * «Торговля» — живой просмотр /api/positions: открыть/закрыть реальную
+ * сделку (настоящий ордер брокеру), плюс косметическая правка цены
+ * открытия/прибыли отдельной открытой позиции (витрина, без реального
+ * ордера — см. server/routes/trading.js PATCH /position/:ticket). «История» — реальный
  * список строк из таблицы `trades` (сделки И балансовые операции —
  * депозиты/снятия хранятся там же с type='balance'/'withdrawal'), с
  * возможностью найти и поправить/удалить любую запись, включая цену
@@ -22,6 +24,8 @@ import {
   deleteTrade,
   openTrade,
   closeTrade,
+  updatePositionOverride,
+  clearPositionOverride,
   type ApiTradeRow,
   type ApiPosition,
 } from '@/api/rest';
@@ -105,6 +109,12 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
   const [submitting, setSubmitting] = useState(false);
   const [closeTarget, setCloseTarget] = useState<ApiPosition | null>(null);
   const [closing, setClosing] = useState(false);
+  // Косметическая правка открытой позиции (заявка заказчика) — цена
+  // открытия и/или прибыль "как будто", реальная позиция у брокера не
+  // трогается (см. server/routes/trading.js PATCH /position/:ticket).
+  const [editTarget, setEditTarget] = useState<ApiPosition | null>(null);
+  const [editForm, setEditForm] = useState({ openPrice: '', profit: '' });
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const load = () => {
     getPositions()
@@ -113,6 +123,43 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
   };
 
   useEffect(load, []);
+
+  const openEdit = (p: ApiPosition) => {
+    setEditTarget(p);
+    setEditForm({ openPrice: String(p.openPrice), profit: String(p.profit) });
+  };
+
+  const submitEdit = () => {
+    if (!editTarget) return;
+    const openPrice = Number(editForm.openPrice.replace(',', '.'));
+    const profit = Number(editForm.profit.replace(',', '.'));
+    if (!Number.isFinite(openPrice) || !Number.isFinite(profit)) {
+      showToast('Введите корректные числа');
+      return;
+    }
+    setSavingEdit(true);
+    updatePositionOverride(editTarget.id, { openPrice, profit })
+      .then(() => {
+        showToast(`Позиция #${editTarget.id} изменена`);
+        setEditTarget(null);
+        load();
+      })
+      .catch((err: Error) => showToast(err.message || 'Не удалось сохранить'))
+      .finally(() => setSavingEdit(false));
+  };
+
+  const resetEdit = () => {
+    if (!editTarget) return;
+    setSavingEdit(true);
+    clearPositionOverride(editTarget.id)
+      .then(() => {
+        showToast(`Позиция #${editTarget.id}: правки сброшены`);
+        setEditTarget(null);
+        load();
+      })
+      .catch((err: Error) => showToast(err.message || 'Не удалось сбросить'))
+      .finally(() => setSavingEdit(false));
+  };
 
   const submitOpen = () => {
     const volume = Number(openVolume.replace(',', '.'));
@@ -215,6 +262,43 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
           </p>
         )}
       </AdminModal>
+
+      {/* Правка витрины открытой позиции — реального ордера не уходит */}
+      <AdminModal
+        open={editTarget !== null}
+        onClose={() => !savingEdit && setEditTarget(null)}
+        title={editTarget ? `#${editTarget.id} · ${editTarget.symbol}` : ''}
+        footer={
+          <>
+            <AdminButton variant="secondary" onClick={resetEdit} disabled={savingEdit}>
+              Сбросить к реальным
+            </AdminButton>
+            <AdminButton onClick={submitEdit} disabled={savingEdit}>
+              {savingEdit ? 'Сохраняю…' : 'Сохранить'}
+            </AdminButton>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <AdminInput
+            label="Цена открытия"
+            inputMode="decimal"
+            value={editForm.openPrice}
+            onChange={(e) => setEditForm((f) => ({ ...f, openPrice: e.target.value }))}
+          />
+          <AdminInput
+            label="Прибыль / убыток"
+            inputMode="decimal"
+            value={editForm.profit}
+            onChange={(e) => setEditForm((f) => ({ ...f, profit: e.target.value }))}
+          />
+          <p className="text-[13px] leading-[18px] text-text-secondary">
+            Это витрина (что видят сайт и админка) — реальная позиция у
+            брокера не меняется. Прибыль дальше продолжит двигаться вместе
+            с рынком от заданного здесь значения.
+          </p>
+        </div>
+      </AdminModal>
     </>
   );
 
@@ -278,9 +362,14 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
                       {p.openTime ? formatDateTime(new Date(p.openTime).getTime()) : '—'}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <AdminButton variant="destructive" onClick={() => setCloseTarget(p)}>
-                        Закрыть
-                      </AdminButton>
+                      <div className="flex justify-end gap-1">
+                        <AdminButton variant="text" onClick={() => openEdit(p)}>
+                          Изменить
+                        </AdminButton>
+                        <AdminButton variant="destructive" onClick={() => setCloseTarget(p)}>
+                          Закрыть
+                        </AdminButton>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -310,8 +399,11 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
                     span
                   />
                 </div>
-                <div className="mt-3 border-t border-separator pt-3">
-                  <AdminButton variant="destructive" className="w-full" onClick={() => setCloseTarget(p)}>
+                <div className="mt-3 flex gap-2 border-t border-separator pt-3">
+                  <AdminButton variant="secondary" className="flex-1" onClick={() => openEdit(p)}>
+                    Изменить
+                  </AdminButton>
+                  <AdminButton variant="destructive" className="flex-1" onClick={() => setCloseTarget(p)}>
                     Закрыть
                   </AdminButton>
                 </div>

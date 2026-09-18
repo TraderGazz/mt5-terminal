@@ -51,4 +51,71 @@ router.post('/close', async (req, res) => {
   }
 });
 
+// PATCH /api/trading/position/:ticket — { openPrice?, profit? } — заявка
+// заказчика: косметическая правка ОТКРЫТОЙ позиции (не запись в БД, как
+// закрытые сделки, — позиция живая). Реального ордера брокеру НЕ уходит.
+router.patch('/position/:ticket', async (req, res) => {
+  const ticket = Number(req.params.ticket);
+  if (!Number.isFinite(ticket) || ticket <= 0) {
+    return res.status(400).json({ error: 'Некорректный тикет' });
+  }
+  const bridge = getBridge();
+  try {
+    const positions = await bridge.rawPositions();
+    const p = positions.find((x) => x.id === ticket);
+    if (!p) return res.status(404).json({ error: 'Позиция не найдена (возможно уже закрыта)' });
+
+    const openPriceOverride = req.body?.openPrice != null ? Number(req.body.openPrice) : null;
+    const targetProfit = req.body?.profit != null ? Number(req.body.profit) : null;
+    if (req.body?.openPrice != null && !Number.isFinite(openPriceOverride)) {
+      return res.status(400).json({ error: 'Некорректная цена открытия' });
+    }
+    if (req.body?.profit != null && !Number.isFinite(targetProfit)) {
+      return res.status(400).json({ error: 'Некорректная прибыль' });
+    }
+
+    // Прибыль/убыток задаётся ЦЕЛЕВЫМ числом "здесь и сейчас" (заявка:
+    // "поставил -60000, и дальше двигалась вместе с рынком") — пересчитываем
+    // это в фиксированную добавку (offset) поверх текущей рассчитанной
+    // прибыли (уже с учётом новой цены открытия, если она тоже меняется в
+    // этом же запросе), чтобы дальше "плыло" вместе с рынком, не замерло.
+    let profitOffset = null;
+    if (targetProfit != null) {
+      const baseProfit = openPriceOverride != null ? recomputeProfit(p, openPriceOverride) : p.profit;
+      profitOffset = targetProfit - baseProfit;
+    }
+
+    await bridge.setPositionOverride(ticket, { openPriceOverride, profitOffset });
+    console.log(`[trading] ${req.user.login} изменил витрину позиции #${ticket}`);
+    res.json({ ticket, openPriceOverride, profitOffset });
+  } catch (err) {
+    console.error('[trading] position override error:', err.message);
+    res.status(500).json({ error: err.message || 'Не удалось сохранить' });
+  }
+});
+
+// DELETE /api/trading/position/:ticket — сброс правки, вернуть настоящие цифры.
+router.delete('/position/:ticket', async (req, res) => {
+  const ticket = Number(req.params.ticket);
+  if (!Number.isFinite(ticket) || ticket <= 0) {
+    return res.status(400).json({ error: 'Некорректный тикет' });
+  }
+  try {
+    await getBridge().clearPositionOverride(ticket);
+    res.json({ cleared: true });
+  } catch (err) {
+    console.error('[trading] clear override error:', err.message);
+    res.status(500).json({ error: err.message || 'Не удалось сбросить' });
+  }
+});
+
+// Та же линейная формула, что и в mt5-bridge/index.js#applyOverride — здесь
+// нужна один раз, чтобы посчитать "targetProfit -> offset" ДО сохранения.
+function recomputeProfit(p, openPriceOverride) {
+  const dir = p.type === 'buy' ? 1 : -1;
+  const realMove = dir * (p.currentPrice - p.openPrice);
+  const k = realMove !== 0 ? p.profit / realMove : 0;
+  return k * (dir * (p.currentPrice - openPriceOverride));
+}
+
 export default router;

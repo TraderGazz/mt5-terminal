@@ -7,6 +7,7 @@ import PageLoading from '@/components/PageLoading';
 import ConnectionError from '@/components/ConnectionError';
 import PositionSheet, { type LivePositionData } from '@/components/trade/PositionSheet';
 import NewOrderSheet from '@/components/trade/NewOrderSheet';
+import EditPositionSheet from '@/components/trade/EditPositionSheet';
 import { useAccount, useAccountReady, useAccountError } from '@/data/account';
 import { usePositions, usePositionsReady, usePositionsError, refreshPositions } from '@/data/positions';
 import type { Position } from '@/data/positions';
@@ -14,7 +15,7 @@ import { useQuotes } from '@/data/useQuotes';
 import { refreshQuotes, type Quote } from '@/data/quotes';
 import { getSymbolMeta } from '@/mocks/symbols';
 import { formatPrice } from '@/lib/format';
-import { openTrade, closeTrade } from '@/api/rest';
+import { openTrade, closeTrade, updatePositionOverride, clearPositionOverride } from '@/api/rest';
 import { SYMBOL } from '@/config';
 import { useCurrentRole } from '@/components/auth/session';
 
@@ -85,6 +86,8 @@ export default function TradePage() {
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [closeConfirm, setCloseConfirm] = useState<Position | null>(null);
   const [closing, setClosing] = useState(false);
+  const [editSheet, setEditSheet] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const account = useAccount();
   const positions = usePositions();
@@ -171,6 +174,34 @@ export default function TradePage() {
       })
       .catch((err: Error) => setToast(err.message || 'Не удалось закрыть сделку'))
       .finally(() => setClosing(false));
+  };
+
+  const submitEditPosition = (openPrice: number, profit: number) => {
+    if (!selectedData) return;
+    const ticket = selectedData.position.id;
+    setSavingEdit(true);
+    updatePositionOverride(ticket, { openPrice, profit })
+      .then(() => {
+        setToast(`Позиция #${ticket} изменена`);
+        setEditSheet(false);
+        return refreshPositions();
+      })
+      .catch((err: Error) => setToast(err.message || 'Не удалось сохранить'))
+      .finally(() => setSavingEdit(false));
+  };
+
+  const resetEditPosition = () => {
+    if (!selectedData) return;
+    const ticket = selectedData.position.id;
+    setSavingEdit(true);
+    clearPositionOverride(ticket)
+      .then(() => {
+        setToast(`Позиция #${ticket}: правки сброшены`);
+        setEditSheet(false);
+        return refreshPositions();
+      })
+      .catch((err: Error) => setToast(err.message || 'Не удалось сбросить'))
+      .finally(() => setSavingEdit(false));
   };
 
   // --- pull to refresh ---
@@ -358,14 +389,30 @@ export default function TradePage() {
         </div>
       )}
 
-      {/* Position detail sheet — «Закрыть позицию» только у admin */}
+      {/* Position detail sheet — «Изменить»/«Закрыть позицию» только у admin */}
       <PositionSheet
         data={selectedData}
         onClose={() => setSelected(null)}
         onRequestClosePosition={
           isAdmin && selectedData ? () => setCloseConfirm(selectedData.position) : undefined
         }
+        onRequestEditPosition={isAdmin && selectedData ? () => setEditSheet(true) : undefined}
       />
+
+      {/* Правка витрины открытой позиции (admin) — без реального ордера */}
+      {selectedData && (
+        <EditPositionSheet
+          open={editSheet}
+          ticket={selectedData.position.id}
+          symbol={selectedData.position.symbol}
+          openPrice={selectedData.position.openPrice}
+          profit={selectedData.profit}
+          saving={savingEdit}
+          onSave={submitEditPosition}
+          onReset={resetEditPosition}
+          onClose={() => !savingEdit && setEditSheet(false)}
+        />
+      )}
 
       {/* Новый ордер (admin) — реальная рыночная заявка, не мок */}
       <NewOrderSheet
