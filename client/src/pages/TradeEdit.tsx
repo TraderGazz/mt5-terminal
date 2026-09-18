@@ -8,7 +8,7 @@ import ActionSheet from '@/components/ActionSheet';
 import EditRow, { EDIT_INPUT_CLASS } from '@/components/trade/EditRow';
 import { getDeal, updateDeal, useDealsVersion } from '@/data/history';
 import { getSymbolMeta } from '@/mocks/symbols';
-import type { Deal } from '@/data/history';
+import type { Deal, DealPatch } from '@/data/history';
 import { canEditTrades } from '@/components/auth/session';
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
@@ -166,20 +166,25 @@ export default function TradeEditPage() {
     setSaving(true);
     // 800ms mock latency (trade-edit.md «Behavior on save»)
     setTimeout(() => {
-      updateDeal(ticket, {
-        profit: parseDecimal(form.profit),
-        swap: parseDecimal(form.swap),
-        commission: parseDecimal(form.commission),
-        comment: form.comment.slice(0, 64),
-        openTime: fromDateTimeInput(form.openTime),
-        closeTime: fromDateTimeInput(form.closeTime),
-        ...(isBalance
-          ? {}
-          : {
-              openPrice: parseDecimal(form.openPrice),
-              closePrice: parseDecimal(form.closePrice),
-            }),
-      });
+      // Отправляем только РЕАЛЬНО изменённые поля. Важно для openTime/
+      // closeTime: <input type="datetime-local"> хранит точность только до
+      // минуты — если слать их всегда (даже нетронутыми), каждое сохранение
+      // молча обнуляло секунды закрытия/открытия. На плотных по времени
+      // сделках (несколько в одну минуту) это схлопывало их в одну и ту же
+      // секунду, и они пропадали из выбранного периода/сортировки в Истории
+      // (баг-репорт: "изменил три сделки, все они исчезли").
+      const patch: DealPatch = {};
+      if (form.profit !== initial.profit) patch.profit = parseDecimal(form.profit);
+      if (form.swap !== initial.swap) patch.swap = parseDecimal(form.swap);
+      if (form.commission !== initial.commission) patch.commission = parseDecimal(form.commission);
+      if (form.comment !== initial.comment) patch.comment = form.comment.slice(0, 64);
+      if (form.openTime !== initial.openTime) patch.openTime = fromDateTimeInput(form.openTime);
+      if (form.closeTime !== initial.closeTime) patch.closeTime = fromDateTimeInput(form.closeTime);
+      if (!isBalance) {
+        if (form.openPrice !== initial.openPrice) patch.openPrice = parseDecimal(form.openPrice);
+        if (form.closePrice !== initial.closePrice) patch.closePrice = parseDecimal(form.closePrice);
+      }
+      updateDeal(ticket, patch);
       // Auto-pop back to the detail page with a «Сохранено» toast.
       navigate(`/trade/${ticket}`, { replace: true, state: { saved: true } });
     }, 800);
