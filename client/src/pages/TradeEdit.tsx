@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { motion } from 'framer-motion';
 import { Briefcase, Minus, Plus } from 'lucide-react';
+import AppShell from '@/components/AppShell';
 import NavBar from '@/components/NavBar';
 import ActionSheet from '@/components/ActionSheet';
 import EditRow, { EDIT_INPUT_CLASS } from '@/components/trade/EditRow';
@@ -123,13 +124,15 @@ export default function TradeEditPage() {
 
   if (!deal || !form || !initial) {
     return (
-      <div className="flex min-h-full flex-col bg-bg-secondary">
-        <NavBar title="Редактирование" />
-        <div className="flex flex-1 flex-col items-center justify-center gap-1 px-8 text-center">
-          <Briefcase size={48} strokeWidth={1} className="text-text-secondary" />
-          <p className="mt-2 text-[17px] font-semibold text-text-secondary">Сделка не найдена</p>
+      <AppShell>
+        <div className="flex min-h-full flex-col bg-bg-secondary">
+          <NavBar title="Редактирование" />
+          <div className="flex flex-1 flex-col items-center justify-center gap-1 px-8 text-center">
+            <Briefcase size={48} strokeWidth={1} className="text-text-secondary" />
+            <p className="mt-2 text-[17px] font-semibold text-text-secondary">Сделка не найдена</p>
+          </div>
         </div>
-      </div>
+      </AppShell>
     );
   }
 
@@ -260,155 +263,157 @@ export default function TradeEditPage() {
   );
 
   return (
-    <div className="flex min-h-full flex-col bg-bg-secondary">
-      <NavBar
-        title="Редактирование"
-        subtitle={`#${deal.ticket}`}
-        left={
-          <button
-            type="button"
-            onClick={doCancel}
-            className="flex h-11 items-center px-2 text-[17px] text-accent active:opacity-50"
+    <AppShell>
+      <div className="flex min-h-full flex-col bg-bg-secondary">
+        <NavBar
+          title="Редактирование"
+          subtitle={`#${deal.ticket}`}
+          left={
+            <button
+              type="button"
+              onClick={doCancel}
+              className="flex h-11 items-center px-2 text-[17px] text-accent active:opacity-50"
+            >
+              Отмена
+            </button>
+          }
+          right={
+            <button
+              type="button"
+              onClick={doSave}
+              disabled={saveDisabled}
+              className={`flex h-11 items-center px-2 text-[17px] font-semibold text-accent active:opacity-50 ${
+                saveDisabled ? 'opacity-40' : ''
+              }`}
+            >
+              {saving ? (
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" opacity="0.25" />
+                  <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              ) : (
+                'Сохранить'
+              )}
+            </button>
+          }
+        />
+
+        {/* Form card */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="m-4 overflow-hidden rounded-[10px] bg-white"
+        >
+          <EditRow label="Прибыль" error={errors.profit} focused={focused === 'profit'}>
+            {moneyInput('profit')}
+          </EditRow>
+          <EditRow label="Своп" error={errors.swap} focused={focused === 'swap'}>
+            {moneyInput('swap')}
+          </EditRow>
+          <EditRow label="Комиссия" error={errors.commission} focused={focused === 'commission'}>
+            {moneyInput('commission')}
+          </EditRow>
+          <EditRow label="Комментарий" error={errors.comment} focused={focused === 'comment'}>
+            <input
+              type="text"
+              maxLength={64}
+              value={form.comment}
+              onChange={(e) => setField('comment', e.target.value)}
+              onFocus={() => setFocused('comment')}
+              onBlur={() => blurField('comment')}
+              placeholder="—"
+              className={EDIT_INPUT_CLASS}
+              aria-label="Комментарий"
+            />
+          </EditRow>
+          <EditRow label="Время открытия" error={errors.openTime} focused={focused === 'openTime'}>
+            {dateInput('openTime')}
+          </EditRow>
+          <EditRow
+            label="Время закрытия"
+            error={errors.closeTime}
+            focused={focused === 'closeTime'}
+            last={isBalance}
           >
-            Отмена
-          </button>
-        }
-        right={
-          <button
+            {dateInput('closeTime')}
+          </EditRow>
+          {!isBalance && (
+            <EditRow label="Цена открытия" error={errors.openPrice} focused={focused === 'openPrice'}>
+              {priceInput('openPrice')}
+            </EditRow>
+          )}
+          {!isBalance && (
+            <EditRow
+              label="Цена закрытия"
+              error={errors.closePrice}
+              focused={focused === 'closePrice'}
+              last
+            >
+              {priceInput('closePrice')}
+            </EditRow>
+          )}
+        </motion.div>
+
+        {/* Info note */}
+        <p className="mx-6 mb-4 text-center text-[12px] leading-[16px] text-text-secondary">
+          После сохранения сделка будет помечена как «(изм.)» в истории. Исходные значения
+          сохраняются в журнале изменений.
+        </p>
+
+        {/* Bottom actions */}
+        <div className="mx-4 mb-6 mt-2 flex flex-col gap-3">
+          <motion.button
             type="button"
+            whileTap={{ scale: 0.97, opacity: 0.85 }}
+            transition={{ duration: 0.12 }}
             onClick={doSave}
             disabled={saveDisabled}
-            className={`flex h-11 items-center px-2 text-[17px] font-semibold text-accent active:opacity-50 ${
+            className={`flex h-[50px] w-full items-center justify-center rounded-[12px] bg-accent text-[17px] font-semibold text-white ${
               saveDisabled ? 'opacity-40' : ''
             }`}
           >
             {saving ? (
-              <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
                 <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" opacity="0.25" />
                 <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
             ) : (
               'Сохранить'
             )}
-          </button>
-        }
-      />
-
-      {/* Form card */}
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="m-4 overflow-hidden rounded-[10px] bg-white"
-      >
-        <EditRow label="Прибыль" error={errors.profit} focused={focused === 'profit'}>
-          {moneyInput('profit')}
-        </EditRow>
-        <EditRow label="Своп" error={errors.swap} focused={focused === 'swap'}>
-          {moneyInput('swap')}
-        </EditRow>
-        <EditRow label="Комиссия" error={errors.commission} focused={focused === 'commission'}>
-          {moneyInput('commission')}
-        </EditRow>
-        <EditRow label="Комментарий" error={errors.comment} focused={focused === 'comment'}>
-          <input
-            type="text"
-            maxLength={64}
-            value={form.comment}
-            onChange={(e) => setField('comment', e.target.value)}
-            onFocus={() => setFocused('comment')}
-            onBlur={() => blurField('comment')}
-            placeholder="—"
-            className={EDIT_INPUT_CLASS}
-            aria-label="Комментарий"
-          />
-        </EditRow>
-        <EditRow label="Время открытия" error={errors.openTime} focused={focused === 'openTime'}>
-          {dateInput('openTime')}
-        </EditRow>
-        <EditRow
-          label="Время закрытия"
-          error={errors.closeTime}
-          focused={focused === 'closeTime'}
-          last={isBalance}
-        >
-          {dateInput('closeTime')}
-        </EditRow>
-        {!isBalance && (
-          <EditRow label="Цена открытия" error={errors.openPrice} focused={focused === 'openPrice'}>
-            {priceInput('openPrice')}
-          </EditRow>
-        )}
-        {!isBalance && (
-          <EditRow
-            label="Цена закрытия"
-            error={errors.closePrice}
-            focused={focused === 'closePrice'}
-            last
+          </motion.button>
+          <motion.button
+            type="button"
+            whileTap={{ scale: 0.97, opacity: 0.85 }}
+            transition={{ duration: 0.12 }}
+            onClick={() => dirty && setResetSheet(true)}
+            className={`h-[50px] w-full rounded-[12px] border border-loss bg-transparent text-[17px] font-semibold text-loss ${
+              dirty ? '' : 'opacity-40'
+            }`}
           >
-            {priceInput('closePrice')}
-          </EditRow>
-        )}
-      </motion.div>
+            Сбросить изменения
+          </motion.button>
+        </div>
 
-      {/* Info note */}
-      <p className="mx-6 mb-4 text-center text-[12px] leading-[16px] text-text-secondary">
-        После сохранения сделка будет помечена как «(изм.)» в истории. Исходные значения
-        сохраняются в журнале изменений.
-      </p>
+        {/* Cancel confirmation */}
+        <ActionSheet
+          open={cancelSheet}
+          onClose={() => setCancelSheet(false)}
+          title="Отменить изменения?"
+          actions={[
+            { label: 'Отменить правки', destructive: true, onSelect: () => navigate(-1) },
+            { label: 'Продолжить редактирование' },
+          ]}
+        />
 
-      {/* Bottom actions */}
-      <div className="mx-4 mb-6 mt-2 flex flex-col gap-3">
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.97, opacity: 0.85 }}
-          transition={{ duration: 0.12 }}
-          onClick={doSave}
-          disabled={saveDisabled}
-          className={`flex h-[50px] w-full items-center justify-center rounded-[12px] bg-accent text-[17px] font-semibold text-white ${
-            saveDisabled ? 'opacity-40' : ''
-          }`}
-        >
-          {saving ? (
-            <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" opacity="0.25" />
-              <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-          ) : (
-            'Сохранить'
-          )}
-        </motion.button>
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.97, opacity: 0.85 }}
-          transition={{ duration: 0.12 }}
-          onClick={() => dirty && setResetSheet(true)}
-          className={`h-[50px] w-full rounded-[12px] border border-loss bg-transparent text-[17px] font-semibold text-loss ${
-            dirty ? '' : 'opacity-40'
-          }`}
-        >
-          Сбросить изменения
-        </motion.button>
+        {/* Reset confirmation */}
+        <ActionSheet
+          open={resetSheet}
+          onClose={() => setResetSheet(false)}
+          title="Сбросить правки?"
+          actions={[{ label: 'Сбросить', destructive: true, onSelect: doReset }]}
+        />
       </div>
-
-      {/* Cancel confirmation */}
-      <ActionSheet
-        open={cancelSheet}
-        onClose={() => setCancelSheet(false)}
-        title="Отменить изменения?"
-        actions={[
-          { label: 'Отменить правки', destructive: true, onSelect: () => navigate(-1) },
-          { label: 'Продолжить редактирование' },
-        ]}
-      />
-
-      {/* Reset confirmation */}
-      <ActionSheet
-        open={resetSheet}
-        onClose={() => setResetSheet(false)}
-        title="Сбросить правки?"
-        actions={[{ label: 'Сбросить', destructive: true, onSelect: doReset }]}
-      />
-    </div>
+    </AppShell>
   );
 }
