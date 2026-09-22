@@ -20,6 +20,8 @@ import {
   IconTradays,
 } from '@/components/settings/icons';
 import { useAccount } from '@/data/account';
+import { clearAuth } from '@/api/auth';
+import { clearSession } from '@/components/auth/session';
 
 const IOS_EASE: [number, number, number, number] = [0.32, 0.72, 0, 1];
 
@@ -107,6 +109,14 @@ export default function SettingsPage() {
     }
   };
 
+  const doLogout = () => {
+    // Чистим оба хранилища сессии (mock и реальный JWT) — какое бы ни было
+    // активно, «Выйти» должно гарантированно вернуть на страницу входа.
+    clearAuth();
+    clearSession();
+    navigate('/login', { replace: true });
+  };
+
   const enter = (delay: number) => ({
     initial: firstMount ? ({ opacity: 0, y: 16 } as const) : false,
     animate: { opacity: 1, y: 0 } as const,
@@ -172,7 +182,7 @@ export default function SettingsPage() {
       </motion.div>
 
       {/* Menu group 3 */}
-      <motion.div {...enter(0.16)} className={`mb-4 mt-3 ${CARD_CLS}`}>
+      <motion.div {...enter(0.16)} className={`mt-3 ${CARD_CLS}`}>
         {GROUP_3.map(({ key, ...row }, i) => (
           <SettingsRow
             key={key}
@@ -181,6 +191,17 @@ export default function SettingsPage() {
             onClick={() => onRowTap({ key, ...row })}
           />
         ))}
+      </motion.div>
+
+      {/* Выйти — как в оригинале, возвращает на страницу авторизации */}
+      <motion.div {...enter(0.24)} className={`mb-4 mt-3 ${CARD_CLS}`}>
+        <button
+          type="button"
+          onClick={doLogout}
+          className="flex h-12 w-full items-center justify-center text-[17px] font-medium text-loss active:bg-[#D9D9DE]"
+        >
+          Выйти
+        </button>
       </motion.div>
 
       <StubModal row={stub} onClose={() => setStub(null)} />
