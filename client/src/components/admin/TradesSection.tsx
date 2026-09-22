@@ -504,13 +504,10 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
   const [form, setForm] = useState<EditForm>({
     profit: '', swap: '', commission: '', openPrice: '', closePrice: '', comment: '', dealType: '',
   });
-  // Остальные ноги той же позиции (см. openEdit) — грузятся с сервера
+  // Сумма остальных ног той же позиции (см. openEdit) — грузится с сервера
   // отдельным запросом ПО ВСЕЙ позиции, не из текущего (возможно узкого по
-  // датам) списка `rows`, иначе можно недосчитать ноги вне фильтра. При
-  // сохранении обнуляются вместе с редактируемой строкой (заявка заказчика:
-  // в списке админки тоже должны быть нули, не компенсирующие числа) — сама
-  // редактируемая строка получает введённый итог целиком.
-  const [editSiblings, setEditSiblings] = useState<ApiTradeRow[]>([]);
+  // датам) списка `rows`, иначе можно недосчитать ноги вне фильтра.
+  const [editSiblingsSum, setEditSiblingsSum] = useState(0);
   const [editLoading, setEditLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ApiTradeRow | null>(null);
   // Ручное добавление депозита/снятия/CFD — заявка заказчика.
@@ -646,19 +643,17 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
   // закрытия), а не одна строка (заявка/баг-репорт заказчика: обнулили одну
   // ногу позиции из трёх, на сайте почти ничего не изменилось — остальные
   // две ноги остались при своих значениях). Чтобы правка ОДНОЙ строки здесь
-  // давала предсказуемый результат и на сайте, и в самом списке админки,
-  // поле «Прибыль» в форме — это ИТОГ ПО ПОЗИЦИИ целиком (столько же,
-  // сколько видно на сайте); при сохранении редактируемая строка получает
-  // введённое число ЦЕЛИКОМ, а ВСЕ остальные ноги той же позиции обнуляются
-  // (заявка заказчика: "в админке тоже должны быть нули", не компенсирующие
-  // числа) — тогда сумма всех строк снова равна введённому итогу. Соседей
-  // грузим ОТДЕЛЬНЫМ запросом по position_id (не из текущего `rows`) — тот
-  // может быть уже обрезан фильтром дат/лимитом и недосчитать ноги вне
-  // текущего окна. Для позиции из одной строки (подавляющее большинство)
-  // соседей нет и поведение не меняется.
+  // давала предсказуемый результат на сайте, поле «Прибыль» в форме — это
+  // ИТОГ ПО ПОЗИЦИИ целиком (столько же, сколько видно на сайте), а не
+  // профит этой конкретной строки; при сохранении пересчитываем обратно в
+  // профит именно этой строки (см. saveEdit). Соседей грузим ОТДЕЛЬНЫМ
+  // запросом по position_id (не из текущего `rows`) — тот может быть уже
+  // обрезан фильтром дат/лимитом и недосчитать ноги вне текущего окна. Для
+  // позиции из одной строки (подавляющее большинство) сумма = 0 и поведение
+  // не меняется.
   const openEdit = (row: ApiTradeRow) => {
     setEditTarget(row);
-    setEditSiblings([]);
+    setEditSiblingsSum(0);
     setForm({
       profit: String(row.profit ?? 0),
       swap: String(row.swap ?? 0),
@@ -676,9 +671,10 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
     setEditLoading(true);
     getTrades({ position_id: row.position_id, limit: 50 })
       .then((r) => {
-        const siblings = r.trades.filter((t) => t.id !== row.id);
-        setEditSiblings(siblings);
-        const sum = siblings.reduce((s, t) => s + (Number(t.profit) || 0), 0);
+        const sum = r.trades
+          .filter((t) => t.id !== row.id)
+          .reduce((s, t) => s + (Number(t.profit) || 0), 0);
+        setEditSiblingsSum(sum);
         setForm((f) => ({ ...f, profit: String((Number(row.profit) || 0) + sum) }));
       })
       .catch(() => showToast('Не удалось посчитать соседние ноги позиции — правьте осторожно'))
@@ -696,45 +692,31 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
       showToast('Введите корректные числа');
       return;
     }
-    // Введённое число — итог ПО ПОЗИЦИИ целиком: редактируемая строка
-    // получает его без остатка, соседние ноги (editSiblings, загружено в
-    // openEdit) обнуляются, чтобы и в списке админки, и на сайте сумма
-    // сошлась к введённому числу без "компенсирующих" значений.
-    const profit = positionTotal;
+    // Введённое число — итог ПО ПОЗИЦИИ; сама строка получает остаток после
+    // вычета соседних ног (editSiblingsSum, загружено в openEdit), сами
+    // соседи не трогаются.
+    const profit = positionTotal - editSiblingsSum;
     const dealTypeChanged = form.dealType !== editTarget.deal_type;
-    Promise.all([
-      patchTrade(editTarget.id, {
-        profit, swap, commission, comment: form.comment,
-        open_price: openPrice, close_price: closePrice,
-        ...(dealTypeChanged ? { deal_type: form.dealType } : {}),
-      }),
-      ...editSiblings.map((s) => patchTrade(s.id, { profit: 0 })),
-    ])
+    patchTrade(editTarget.id, {
+      profit, swap, commission, comment: form.comment,
+      open_price: openPrice, close_price: closePrice,
+      ...(dealTypeChanged ? { deal_type: form.dealType } : {}),
+    })
       .then(() => {
         applyDelta(editTarget, { deal_type: form.dealType, profit, swap, commission });
-        for (const s of editSiblings) {
-          applyDelta(s, { deal_type: s.deal_type, profit: 0, swap: Number(s.swap) || 0, commission: Number(s.commission) || 0 });
-        }
-        const siblingIds = new Set(editSiblings.map((s) => s.id));
         setRows((prev) =>
-          (prev ?? []).map((r) => {
-            if (r.id === editTarget.id) {
-              return {
-                ...r,
-                profit, swap, commission, comment: form.comment,
-                open_price: openPrice, close_price: closePrice, is_edited: true,
-                deal_type: form.dealType,
-              };
-            }
-            if (siblingIds.has(r.id)) return { ...r, profit: 0, is_edited: true };
-            return r;
-          }),
+          (prev ?? []).map((r) =>
+            r.id === editTarget.id
+              ? {
+                  ...r,
+                  profit, swap, commission, comment: form.comment,
+                  open_price: openPrice, close_price: closePrice, is_edited: true,
+                  deal_type: form.dealType,
+                }
+              : r,
+          ),
         );
-        showToast(
-          editSiblings.length > 0
-            ? `Позиция #${editTarget.ticket} обновлена (обнулено ${editSiblings.length} соседних сделок)`
-            : `Запись #${editTarget.ticket} обновлена`,
-        );
+        showToast(`Запись #${editTarget.ticket} обновлена`);
         setEditTarget(null);
       })
       .catch((err: Error) => showToast(err.message || 'Не удалось сохранить'));
@@ -1030,16 +1012,15 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
               />
             </div>
           )}
-          {editSiblings.length > 0 && (
+          {editSiblingsSum !== 0 && (
             <p className="text-[13px] leading-[18px] text-text-secondary">
-              Эта сделка — часть позиции, закрытой в {editSiblings.length + 1} шага. Поле
-              ниже — итог по ВСЕЙ позиции (столько же, сколько видно на сайте). При
-              сохранении эта строка получит введённое число целиком, а остальные{' '}
-              {editSiblings.length} шага этой же позиции обнулятся.
+              Эта сделка — часть позиции, закрытой в несколько шагов. Поле ниже —
+              итог по ВСЕЙ позиции (столько же, сколько видно на сайте), не только по
+              этой строке — остальные шаги не изменятся.
             </p>
           )}
           <AdminInput
-            label={editSiblings.length > 0 ? 'Прибыль (итог по позиции)' : 'Прибыль / сумма'}
+            label={editSiblingsSum !== 0 ? 'Прибыль (итог по позиции)' : 'Прибыль / сумма'}
             inputMode="decimal"
             value={form.profit}
             onChange={(e) => setForm((f) => ({ ...f, profit: e.target.value }))}
