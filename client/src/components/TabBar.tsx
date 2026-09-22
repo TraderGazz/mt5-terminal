@@ -106,12 +106,13 @@ const TABS: TabDef[] = [
  * frame. Layout adds matching bottom padding to the scroll container.
  */
 export default function TabBar() {
-  // История снова недоступна инвестору (заявка заказчика) — видна, но не
-  // нажимается, тот же приём, что и у «Сделки» внутри самой Истории.
+  // История снова доступна инвестору по умолчанию (заявка заказчика) —
+  // включение/выключение теперь через тумблер в админке, см. следующий
+  // коммит (useHistoryEnabledForViewer). Пока тумблер не подключён —
+  // временно всегда включено.
   const role = useCurrentRole();
-  const tabs = role === 'viewer'
-    ? TABS.map((t) => (t.to === '/history' ? { ...t, disabled: true } : t))
-    : TABS;
+  const tabs = TABS;
+  void role;
   return (
     <nav
       aria-label="Основная навигация"
