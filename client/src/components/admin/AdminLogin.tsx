@@ -8,10 +8,17 @@ import { AdminButton, AdminInput, BrandGlyph } from './bits';
 import { IS_API } from '@/config';
 import { login as apiLogin } from '@/api/auth';
 
+const GENERIC_ERROR = 'Неверные данные администратора';
+
 export default function AdminLogin({ onLogin }: { onLogin: () => void }) {
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState(false);
+  // Раньше это был просто boolean — любая ошибка (в т.ч. "база недоступна",
+  // "нет связи с сервером") показывала один и тот же текст "неверные
+  // данные", что маскировало реальные сбои сервера под проблему с паролем
+  // (баг-репорт: "Неверные данные администратора" при живом падении backend).
+  // Теперь показываем текст ошибки от сервера, если он есть.
+  const [error, setError] = useState<string | null>(null);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -21,15 +28,15 @@ export default function AdminLogin({ onLogin }: { onLogin: () => void }) {
           // trader тоже пускаем — заказчик просил личный доступ к правке
           // сделок/итогов через админку, viewer (инвестор) — только просмотр.
           if (user.role === 'admin' || user.role === 'trader') onLogin();
-          else setError(true);
+          else setError('Недостаточно прав для входа в админ-панель');
         })
-        .catch(() => setError(true));
+        .catch((err: Error) => setError(err.message || GENERIC_ERROR));
       return;
     }
     if (login.trim() === 'admin' && password === 'admin') {
       onLogin();
     } else {
-      setError(true);
+      setError(GENERIC_ERROR);
     }
   };
 
@@ -62,7 +69,7 @@ export default function AdminLogin({ onLogin }: { onLogin: () => void }) {
               className="overflow-hidden"
             >
               <p className="rounded-[8px] bg-[rgba(255,59,48,0.10)] px-3 py-2 text-center text-[13px] text-loss">
-                Неверные данные администратора
+                {error}
               </p>
             </motion.div>
           )}
@@ -74,7 +81,7 @@ export default function AdminLogin({ onLogin }: { onLogin: () => void }) {
             value={login}
             onChange={(e) => {
               setLogin(e.target.value);
-              setError(false);
+              setError(null);
             }}
             autoComplete="username"
             placeholder="admin"
@@ -85,7 +92,7 @@ export default function AdminLogin({ onLogin }: { onLogin: () => void }) {
             value={password}
             onChange={(e) => {
               setPassword(e.target.value);
-              setError(false);
+              setError(null);
             }}
             autoComplete="current-password"
             placeholder="•••••"
