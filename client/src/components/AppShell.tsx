@@ -6,8 +6,14 @@ import type { ReactNode } from 'react';
  */
 export default function AppShell({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-[100dvh] w-full bg-[#00000014]">
-      <div className="relative mx-auto flex h-[100dvh] w-full max-w-[430px] flex-col bg-bg-grouped sm:border-x sm:border-[#0000001f]">
+    // h-[100dvh] + overflow-hidden (не min-h): страница сама никогда не
+    // скроллится, весь скролл — только через внутренние контейнеры (#app-scroll
+    // и т.п.). С min-h, если контент вылезал за экран хоть на пиксель,
+    // появлялся ВТОРОЙ, страничный скролл поверх внутреннего — два
+    // независимых скролла конфликтовали и интерфейс визуально "проваливался"
+    // при свайпе (баг-репорт заказчика).
+    <div className="h-[100dvh] w-full overflow-hidden bg-[#00000014]">
+      <div className="relative mx-auto flex h-[100dvh] w-full max-w-[430px] flex-col overflow-hidden bg-bg-grouped sm:border-x sm:border-[#0000001f]">
         {children}
       </div>
     </div>
