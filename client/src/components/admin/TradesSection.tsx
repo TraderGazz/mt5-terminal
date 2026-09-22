@@ -96,6 +96,7 @@ function toLedgerTradeRow(op: { ticket: number; profit: number; closeTime: numbe
   return {
     id: op.ticket,
     ticket: op.ticket,
+    position_id: null,
     symbol: '',
     type: '',
     deal_type: op.profit >= 0 ? 'balance' : 'withdrawal',
@@ -503,6 +504,11 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
   const [form, setForm] = useState<EditForm>({
     profit: '', swap: '', commission: '', openPrice: '', closePrice: '', comment: '', dealType: '',
   });
+  // Сумма остальных ног той же позиции (см. openEdit) — грузится с сервера
+  // отдельным запросом ПО ВСЕЙ позиции, не из текущего (возможно узкого по
+  // датам) списка `rows`, иначе можно недосчитать ноги вне фильтра.
+  const [editSiblingsSum, setEditSiblingsSum] = useState(0);
+  const [editLoading, setEditLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ApiTradeRow | null>(null);
   // Ручное добавление депозита/снятия/CFD — заявка заказчика.
   const [addModal, setAddModal] = useState(false);
@@ -633,8 +639,21 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
     );
   };
 
+  // Позиция на сайте — это СУММА всех строк с одним position_id (частичные
+  // закрытия), а не одна строка (заявка/баг-репорт заказчика: обнулили одну
+  // ногу позиции из трёх, на сайте почти ничего не изменилось — остальные
+  // две ноги остались при своих значениях). Чтобы правка ОДНОЙ строки здесь
+  // давала предсказуемый результат на сайте, поле «Прибыль» в форме — это
+  // ИТОГ ПО ПОЗИЦИИ целиком (столько же, сколько видно на сайте), а не
+  // профит этой конкретной строки; при сохранении пересчитываем обратно в
+  // профит именно этой строки (см. saveEdit). Соседей грузим ОТДЕЛЬНЫМ
+  // запросом по position_id (не из текущего `rows`) — тот может быть уже
+  // обрезан фильтром дат/лимитом и недосчитать ноги вне текущего окна. Для
+  // позиции из одной строки (подавляющее большинство) сумма = 0 и поведение
+  // не меняется.
   const openEdit = (row: ApiTradeRow) => {
     setEditTarget(row);
+    setEditSiblingsSum(0);
     setForm({
       profit: String(row.profit ?? 0),
       swap: String(row.swap ?? 0),
@@ -648,19 +667,35 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
       comment: (row.comment ?? '').replace(/\bdemo\b/gi, '').replace(/\s+/g, ' ').trim(),
       dealType: row.deal_type,
     });
+    if (row.position_id == null) return;
+    setEditLoading(true);
+    getTrades({ position_id: row.position_id, limit: 50 })
+      .then((r) => {
+        const sum = r.trades
+          .filter((t) => t.id !== row.id)
+          .reduce((s, t) => s + (Number(t.profit) || 0), 0);
+        setEditSiblingsSum(sum);
+        setForm((f) => ({ ...f, profit: String((Number(row.profit) || 0) + sum) }));
+      })
+      .catch(() => showToast('Не удалось посчитать соседние ноги позиции — правьте осторожно'))
+      .finally(() => setEditLoading(false));
   };
 
   const saveEdit = () => {
-    if (!editTarget) return;
-    const profit = Number(form.profit.replace(',', '.'));
+    if (!editTarget || editLoading) return;
+    const positionTotal = Number(form.profit.replace(',', '.'));
     const swap = Number(form.swap.replace(',', '.'));
     const commission = Number(form.commission.replace(',', '.'));
     const openPrice = Number(form.openPrice.replace(',', '.'));
     const closePrice = Number(form.closePrice.replace(',', '.'));
-    if (![profit, swap, commission, openPrice, closePrice].every(Number.isFinite)) {
+    if (![positionTotal, swap, commission, openPrice, closePrice].every(Number.isFinite)) {
       showToast('Введите корректные числа');
       return;
     }
+    // Введённое число — итог ПО ПОЗИЦИИ; сама строка получает остаток после
+    // вычета соседних ног (editSiblingsSum, загружено в openEdit), сами
+    // соседи не трогаются.
+    const profit = positionTotal - editSiblingsSum;
     const dealTypeChanged = form.dealType !== editTarget.deal_type;
     patchTrade(editTarget.id, {
       profit, swap, commission, comment: form.comment,
@@ -954,7 +989,9 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
             <AdminButton variant="secondary" onClick={() => setEditTarget(null)}>
               Отмена
             </AdminButton>
-            <AdminButton onClick={saveEdit}>Сохранить</AdminButton>
+            <AdminButton onClick={saveEdit} disabled={editLoading}>
+              {editLoading ? 'Считаю позицию…' : 'Сохранить'}
+            </AdminButton>
           </>
         }
       >
@@ -975,11 +1012,19 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
               />
             </div>
           )}
+          {editSiblingsSum !== 0 && (
+            <p className="text-[13px] leading-[18px] text-text-secondary">
+              Эта сделка — часть позиции, закрытой в несколько шагов. Поле ниже —
+              итог по ВСЕЙ позиции (столько же, сколько видно на сайте), не только по
+              этой строке — остальные шаги не изменятся.
+            </p>
+          )}
           <AdminInput
-            label="Прибыль / сумма"
+            label={editSiblingsSum !== 0 ? 'Прибыль (итог по позиции)' : 'Прибыль / сумма'}
             inputMode="decimal"
             value={form.profit}
             onChange={(e) => setForm((f) => ({ ...f, profit: e.target.value }))}
+            disabled={editLoading}
           />
           <AdminInput
             label="Своп"

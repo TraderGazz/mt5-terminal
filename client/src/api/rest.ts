@@ -160,6 +160,11 @@ export const patchTrade = (id: number, body: Record<string, unknown>) =>
 export interface ApiTradeRow {
   id: number;
   ticket: number;
+  // Позиция может закрываться НЕСКОЛЬКИМИ строками (частичные закрытия) —
+  // все они делят один position_id. Сайт агрегирует «Позиции» по этому
+  // полю (aggregatePositions), поэтому правка ОДНОЙ строки не обязательно
+  // меняет то, что видно на сайте, если у позиции есть соседи с тем же id.
+  position_id: number | null;
   symbol: string;
   // Направление buy/sell — ПУСТО для balance/withdrawal/cfd (см. deal_type).
   type: string;
@@ -195,6 +200,7 @@ export const getTrades = (q: {
   to?: string;
   limit?: number;
   offset?: number;
+  position_id?: number;
 }) =>
   api<{ trades: ApiTradeRow[]; totals: ApiTradesTotals }>('/trades', {
     query: q as Record<string, string | number | undefined>,

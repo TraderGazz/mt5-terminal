@@ -17,7 +17,7 @@ const canEdit = requireRole('admin', 'trader');
 //   symbol: exact symbol or 'all'
 //   limit, offset: pagination (defaults 200 / 0)
 router.get('/', async (req, res) => {
-  const { period, from, to, symbol } = req.query;
+  const { period, from, to, symbol, position_id: positionId } = req.query;
   const limit = Math.min(Number(req.query.limit) || 200, 1000);
   const offset = Number(req.query.offset) || 0;
 
@@ -29,7 +29,14 @@ router.get('/', async (req, res) => {
     where.push(`symbol = $${params.length}`);
   }
 
-  if (from || to) {
+  // Все ноги одной позиции (частичные закрытия) — независимо от периода:
+  // нужно админке, чтобы правка одной ноги считала сумму по ВСЕЙ позиции,
+  // а не только по тому, что попало в текущий фильтр дат (иначе на узком
+  // диапазоне можно недосчитать соседние ноги и посчитать неверно).
+  if (positionId) {
+    params.push(Number(positionId));
+    where.push(`position_id = $${params.length}`);
+  } else if (from || to) {
     if (from) {
       params.push(new Date(from));
       where.push(`close_time >= $${params.length}`);
