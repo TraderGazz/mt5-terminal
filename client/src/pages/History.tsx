@@ -14,12 +14,14 @@ import {
   useDealsVersion,
   useHistoryLoaded,
   useHistoryError,
+  type DealLeg,
 } from '@/data/history';
-import { depositTotalsForRange } from '@/data/depositLedger';
+import { depositTotalsForRange, ledgerBalanceRows, type LedgerBalanceRow } from '@/data/depositLedger';
 import { getSymbolMeta } from '@/mocks/symbols';
 import { formatMoneyMT5 } from '@/components/history/utils';
 import SegmentedControl from '@/components/history/SegmentedControl';
 import {
+  BalanceRow,
   DealLegRow,
   HistoryEmpty,
   OrderRow,
@@ -267,6 +269,48 @@ export default function HistoryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter.symbol, range, dealsVersion, sort]);
 
+  // Депозит/снятие СТРОКАМИ в Истории — заявка заказчика: только те, что
+  // реально есть в выписке (ledgerBalanceRows), НЕ синхронизированные с EA
+  // demo-записи из БД (там мусор — заказчик отдельно попросил почистить
+  // саму таблицу в админке). symbol у баланса нет — при выбранном
+  // конкретном символе строки скрываются целиком.
+  const balanceRows = useMemo(
+    () => (filter.symbol == null ? ledgerBalanceRows(range.from, range.to) : []),
+    [filter.symbol, range],
+  );
+
+  // Объединённый список для вкладки «Сделки»: сырые сделки + депозиты/
+  // снятия из выписки, отсортированные одним ключом сортировки.
+  const dealsTabRows = useMemo(() => {
+    type Row = { kind: 'leg'; leg: DealLeg } | { kind: 'balance'; op: LedgerBalanceRow };
+    const cmp = compareRows(sort);
+    const asSortable = (r: Row): SortableRow =>
+      r.kind === 'leg'
+        ? { ticket: r.leg.ticket, symbol: r.leg.symbol, type: r.leg.type ?? '', volume: r.leg.volume, openTime: r.leg.time, closeTime: r.leg.time, profit: r.leg.profit }
+        : { ticket: r.op.ticket, symbol: '', type: 'balance', volume: 0, openTime: r.op.closeTime, closeTime: r.op.closeTime, profit: r.op.profit };
+    const rows: Row[] = [
+      ...dealLegs.map((leg): Row => ({ kind: 'leg', leg })),
+      ...balanceRows.map((op): Row => ({ kind: 'balance', op })),
+    ];
+    return rows.sort((a, b) => cmp(asSortable(a), asSortable(b)));
+  }, [dealLegs, balanceRows, sort]);
+
+  // То же самое для вкладки «Позиции» — в оригинале депозит/снятие тоже
+  // идут вперемешку со всей историей там, не только в «Сделках».
+  const positionsTabRows = useMemo(() => {
+    type Row = { kind: 'position'; position: (typeof positions)[number] } | { kind: 'balance'; op: LedgerBalanceRow };
+    const cmp = compareRows(sort);
+    const asSortable = (r: Row): SortableRow =>
+      r.kind === 'position'
+        ? { ticket: r.position.ticket, symbol: r.position.symbol, type: r.position.type, volume: r.position.volume, openTime: r.position.openTime, closeTime: r.position.closeTime, profit: r.position.profit }
+        : { ticket: r.op.ticket, symbol: '', type: 'balance', volume: 0, openTime: r.op.closeTime, closeTime: r.op.closeTime, profit: r.op.profit };
+    const rows: Row[] = [
+      ...positions.map((position): Row => ({ kind: 'position', position })),
+      ...balanceRows.map((op): Row => ({ kind: 'balance', op })),
+    ];
+    return rows.sort((a, b) => cmp(asSortable(a), asSortable(b)));
+  }, [positions, balanceRows, sort]);
+
   // MT5 iOS opens History already scrolled to the very bottom (latest
   // entries + the totals block visible). Scroll the app scroll container
   // (Layout#app-scroll — not window) the first time real data is in —
@@ -436,8 +480,8 @@ export default function HistoryPage() {
     tab === 'orders'
       ? orders.length > 0
       : tab === 'positions'
-        ? positions.length > 0
-        : dealLegs.length > 0;
+        ? positionsTabRows.length > 0
+        : dealsTabRows.length > 0;
 
   const changeTab = (next: TabKey) => {
     if (next === tab) return;
@@ -624,44 +668,62 @@ export default function HistoryPage() {
             transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
           >
             {tab === 'deals' &&
-              (dealLegs.length === 0 ? (
+              (dealsTabRows.length === 0 ? (
                 <HistoryEmpty title="Нет сделок" />
               ) : (
                 <div className="bg-white">
-                  {dealLegs.map((leg, i) => (
-                    <DealLegRow
-                      key={leg.ticket}
-                      leg={leg}
-                      digits={digitsOf(leg.symbol)}
-                      last={i === dealLegs.length - 1}
-                      staggerDelay={stagger(i)}
-                      onTap={
-                        leg.entry === 'out' || leg.entry === 'inout'
-                          ? () => navigate(`/trade/${leg.ticket}`)
-                          : undefined
-                      }
-                    />
-                  ))}
+                  {dealsTabRows.map((row, i) =>
+                    row.kind === 'balance' ? (
+                      <BalanceRow
+                        key={`bal-${row.op.ticket}`}
+                        op={row.op}
+                        last={i === dealsTabRows.length - 1}
+                        staggerDelay={stagger(i)}
+                      />
+                    ) : (
+                      <DealLegRow
+                        key={row.leg.ticket}
+                        leg={row.leg}
+                        digits={digitsOf(row.leg.symbol)}
+                        last={i === dealsTabRows.length - 1}
+                        staggerDelay={stagger(i)}
+                        onTap={
+                          row.leg.entry === 'out' || row.leg.entry === 'inout'
+                            ? () => navigate(`/trade/${row.leg.ticket}`)
+                            : undefined
+                        }
+                      />
+                    ),
+                  )}
                 </div>
               ))}
 
             {tab === 'positions' &&
-              (positions.length === 0 ? (
+              (positionsTabRows.length === 0 ? (
                 <HistoryEmpty title="Нет закрытых позиций" />
               ) : (
                 <div className="bg-white">
-                  {positions.map((p, i) => (
-                    <PositionRow
-                      key={p.positionId}
-                      position={p}
-                      digits={digitsOf(p.symbol)}
-                      last={i === positions.length - 1}
-                      staggerDelay={stagger(i)}
-                      onTap={() => navigate(`/trade/${p.ticket}`)}
-                      onLongPress={() => setRowSheet(p)}
-                      onEdit={isAdmin ? () => navigate(`/trade/${p.ticket}/edit`) : undefined}
-                    />
-                  ))}
+                  {positionsTabRows.map((row, i) =>
+                    row.kind === 'balance' ? (
+                      <BalanceRow
+                        key={`bal-${row.op.ticket}`}
+                        op={row.op}
+                        last={i === positionsTabRows.length - 1}
+                        staggerDelay={stagger(i)}
+                      />
+                    ) : (
+                      <PositionRow
+                        key={row.position.positionId}
+                        position={row.position}
+                        digits={digitsOf(row.position.symbol)}
+                        last={i === positionsTabRows.length - 1}
+                        staggerDelay={stagger(i)}
+                        onTap={() => navigate(`/trade/${row.position.ticket}`)}
+                        onLongPress={() => setRowSheet(row.position)}
+                        onEdit={isAdmin ? () => navigate(`/trade/${row.position.ticket}/edit`) : undefined}
+                      />
+                    ),
+                  )}
                 </div>
               ))}
 

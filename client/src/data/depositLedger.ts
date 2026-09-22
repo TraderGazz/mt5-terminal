@@ -112,3 +112,28 @@ export function depositTotalsForRange(from: number, to: number): { deposit: numb
   }
   return { deposit, withdrawal };
 }
+
+export interface LedgerBalanceRow {
+  /** Синтетический тикет (для key/сортировки) — из выписки нет настоящего. */
+  ticket: number;
+  /** Положительная = депозит, отрицательная = снятие. */
+  profit: number;
+  closeTime: number;
+}
+
+/**
+ * Построчные депозиты/снятия ИЗ ВЫПИСКИ для показа в Истории (заявка
+ * заказчика: строки должны быть, но только те, что реально есть в таблице —
+ * не мусорные синхронизированные с EA demo-записи из БД). День с обеими
+ * операциями (депозит и снятие) даёт ДВЕ строки.
+ */
+export function ledgerBalanceRows(from: number, to: number): LedgerBalanceRow[] {
+  const rows: LedgerBalanceRow[] = [];
+  for (const [iso, dep, wd] of LEDGER) {
+    const t = parseIsoDateLocal(iso);
+    if (t < from || t > to) continue;
+    if (dep > 0) rows.push({ ticket: -t - 1, profit: dep, closeTime: t });
+    if (wd > 0) rows.push({ ticket: -t - 2, profit: -wd, closeTime: t });
+  }
+  return rows;
+}
