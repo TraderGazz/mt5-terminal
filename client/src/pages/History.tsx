@@ -151,19 +151,6 @@ const CANCELED_ORDERS: HistoryOrder[] = [
 
 const digitsOf = (symbol: string) => getSymbolMeta(symbol)?.digits ?? 5;
 
-/** Зафиксированные итоги «за весь период» (isWidestPeriod, «Последний
- *  год» — единственный доступный на сайте прокси для «всё время»,
- *  отдельного пункта в фильтре нет) — выверены заказчиком под реальный
- *  счёт, менять только по его запросу. Остальные периоды считаются
- *  из реальных данных. */
-const FIXED_TOTALS = {
-  deposit: 26220000,
-  withdrawal: 2821985.75,
-  profit: 49109434.55,
-  swap: -7647929.23,
-  commission: 0,
-} as const;
-
 /** Floating 40px light-gray circle button (MT5 iOS trade/history chrome). */
 function CircleButton({
   label,
@@ -230,13 +217,6 @@ export default function HistoryPage() {
   const pullRef = useRef<{ startY: number; pulling: boolean }>({ startY: 0, pulling: false });
 
   const range = useMemo(() => periodRange(filter), [filter]);
-
-  // «Последний год» — единственный доступный на сайте прокси для «за весь
-  // период» (отдельного пункта «всё время» в фильтре нет). Заказчик прямо
-  // попросил: для остальных периодов итоги — реальные (считаются из
-  // данных), но именно на этом (и только на нём) — зафиксированные цифры,
-  // выверенные под реальный счёт на момент презентации.
-  const isWidestPeriod = filter.period === 'year';
 
   // Reads through editStore so edits from TradeEdit («(изм.)», changed
   // profit/swap/commission) are reflected here immediately.
@@ -382,12 +362,11 @@ export default function HistoryPage() {
 
   // Итоги считаются из реальных данных (deals/balanceOps уже отфильтрованы
   // по выбранному периоду и символу выше) — как в оригинале, меняются вместе
-  // с фильтром периода. Исключение — isWidestPeriod, см. выше.
+  // с фильтром периода, для ЛЮБОГО периода (включая «Последний год»: раньше
+  // тут была зафиксированная заглушка под демо-презентацию, но правки из
+  // админки по ней не применялись — заказчик подтвердил, что теперь этот
+  // период тоже должен быть живым, как остальные).
   const totals = useMemo(() => {
-    if (isWidestPeriod) {
-      const { profit, swap, commission } = FIXED_TOTALS;
-      return { profit, swap, commission, total: profit + swap + commission };
-    }
     let profit = 0;
     let swap = 0;
     let commission = 0;
@@ -397,8 +376,7 @@ export default function HistoryPage() {
       commission += d.commission;
     }
     return { profit, swap, commission, total: profit + swap + commission };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deals, isWidestPeriod]);
+  }, [deals]);
 
   // То же самое, но из СЫРЫХ сделок — специально для вкладки «Сделки».
   // Важно: это НЕ обязано совпадать с totals выше (который из уже слитых
@@ -407,10 +385,6 @@ export default function HistoryPage() {
   // напрямую сравнением скриншотов), это не баг, а факт про то, как MT5
   // считает эти два разных представления.
   const dealLegsTotals = useMemo(() => {
-    if (isWidestPeriod) {
-      const { profit, swap, commission } = FIXED_TOTALS;
-      return { profit, swap, commission, total: profit + swap + commission };
-    }
     let profit = 0;
     let swap = 0;
     let commission = 0;
@@ -421,8 +395,7 @@ export default function HistoryPage() {
       commission += d.commission;
     }
     return { profit, swap, commission, total: profit + swap + commission };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dealLegs, isWidestPeriod]);
+  }, [dealLegs]);
 
   // Депозит/снятие — ТОЛЬКО из официальной выписки брокера (depositLedger.ts,
   // заявка заказчика). Синхронизированные с EA balance-записи за всё время
@@ -432,28 +405,18 @@ export default function HistoryPage() {
   // период «Месяц» (целиком после LEDGER_END, где в выписке пусто) должен
   // показывать депозит 0 — так и просил заказчик.
   const balTotals = useMemo(() => {
-    if (isWidestPeriod) {
-      const { deposit, withdrawal } = FIXED_TOTALS;
-      return { deposit, withdrawal, net: deposit - withdrawal };
-    }
     const { deposit, withdrawal } = depositTotalsForRange(range.from, range.to);
     return { deposit, withdrawal, net: deposit - withdrawal };
-  }, [range, isWidestPeriod]);
+  }, [range]);
 
-  const cfdTotal = useMemo(
-    () => (isWidestPeriod ? 0 : cfdOps.reduce((s, d) => s + d.profit, 0)),
-    [cfdOps, isWidestPeriod],
-  );
+  const cfdTotal = useMemo(() => cfdOps.reduce((s, d) => s + d.profit, 0), [cfdOps]);
 
-  // «Снятие» / «CFD» rows: always shown for the widest period, otherwise
-  // only when the period actually contains non-zero operations of that kind.
-  const showWithdrawal = isWidestPeriod || balTotals.withdrawal !== 0;
-  const showCfd = isWidestPeriod || cfdTotal !== 0;
+  // «Снятие» / «CFD» rows: только когда период реально содержит ненулевые
+  // операции такого рода.
+  const showWithdrawal = balTotals.withdrawal !== 0;
+  const showCfd = cfdTotal !== 0;
   // «Баланс» — сумма именно за выбранный период (Депозит-Снятие+Прибыль+
-  // Своп+Комиссия+CFD), не текущий баланс счёта целиком: для isWidestPeriod
-  // это и так сходится с зафиксированным FIXED_TOTALS-балансом (проверено
-  // при подборе тех цифр), для остальных периодов — реальная сумма
-  // отображаемых выше строк, как в оригинале.
+  // Своп+Комиссия+CFD), не текущий баланс счёта целиком.
   // «Сделки» считает итоги из сырых legs (см. dealLegsTotals) — по факту
   // отличается от «Позиций»/«Ордеров», как и в оригинале.
   const activeTotals = tab === 'deals' ? dealLegsTotals : totals;
