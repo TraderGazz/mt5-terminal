@@ -22,6 +22,7 @@ import {
   getPositions,
   patchTrade,
   deleteTrade,
+  createTrade,
   openTrade,
   closeTrade,
   updatePositionOverride,
@@ -69,7 +70,15 @@ interface EditForm {
   openPrice: string;
   closePrice: string;
   comment: string;
+  dealType: string;
 }
+
+// Переклассификация допустима только внутри "небиржевой" группы — заявка
+// заказчика: синхронизированные с терминала balance-записи (часто с
+// комментарием вроде "demo deposit") нужно руками раскидать по CFD или
+// пополнению. buy/sell сюда не входят — смена направления сделки ломает
+// сопоставление позиций.
+const RECLASSIFIABLE_TYPES = ['balance', 'withdrawal', 'cfd'] as const;
 
 export default function TradesSection({ showToast }: { showToast: (msg: string) => void }) {
   const [view, setView] = useState<ViewMode>('history');
@@ -438,16 +447,20 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
   const [to, setTo] = useState('');
   const [editTarget, setEditTarget] = useState<ApiTradeRow | null>(null);
   const [form, setForm] = useState<EditForm>({
-    profit: '', swap: '', commission: '', openPrice: '', closePrice: '', comment: '',
+    profit: '', swap: '', commission: '', openPrice: '', closePrice: '', comment: '', dealType: '',
   });
   const [deleteTarget, setDeleteTarget] = useState<ApiTradeRow | null>(null);
+  // Ручное добавление депозита/снятия/CFD — заявка заказчика.
+  const [addModal, setAddModal] = useState(false);
+  const [addForm, setAddForm] = useState({ dealType: 'balance' as 'balance' | 'withdrawal' | 'cfd', amount: '', date: '', comment: '' });
+  const [adding, setAdding] = useState(false);
   // Прибыль/своп/комиссия по ВСЕМУ периоду — считает сервер агрегатом по всей
   // БД (не зависит от LIMIT ниже). На плотных периодах сделок может быть в
   // разы больше лимита строк для отображения — если считать итог из `rows`,
   // хвост периода тихо выпадал бы из суммы. Живой пересчёт после правки/
   // удаления — через дельту сюда же, без повторного похода на сервер (заявка
   // заказчика: сумма обновляется сразу же после любой правки).
-  const [totals, setTotals] = useState<{ profit: number; swap: number; commission: number; count: number } | null>(null);
+  const [totals, setTotals] = useState<{ profit: number; swap: number; commission: number; cfd: number; count: number } | null>(null);
 
   const load = () => {
     getTrades({
@@ -466,6 +479,7 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
           profit: Number(r.totals.profit) || 0,
           swap: Number(r.totals.swap) || 0,
           commission: Number(r.totals.commission) || 0,
+          cfd: Number(r.totals.cfd) || 0,
           count: Number(r.totals.count) || 0,
         });
         setError(null);
@@ -483,7 +497,7 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
     return <AdminCard className="p-6 text-center text-[14px] text-text-secondary">Загрузка…</AdminCard>;
   }
 
-  const filtered = type === 'all' ? rows : rows.filter((r) => r.type === type);
+  const filtered = type === 'all' ? rows : rows.filter((r) => r.deal_type === type);
 
   // Депозит/снятие — ТОЛЬКО из официальной выписки заказчика (тот же
   // источник, что и на сайте, см. depositLedger.ts), не из таблицы `trades`:
@@ -497,17 +511,28 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
 
   const periodTotals = { deposit: ledger.deposit, withdrawal: ledger.withdrawal, ...totals };
   const periodBalance =
-    periodTotals.deposit - periodTotals.withdrawal + periodTotals.profit + periodTotals.swap + periodTotals.commission;
+    periodTotals.deposit -
+    periodTotals.withdrawal +
+    periodTotals.profit +
+    periodTotals.swap +
+    periodTotals.commission +
+    periodTotals.cfd;
 
-  // Вклад одной строки в итог сделок (buy/sell) — депозит/снятие сюда не
-  // входят (см. выше), редактирование строки type='balance'/'withdrawal' в
-  // таблице ниже не двигает итог, только саму запись в БД.
-  const contribution = (r: Pick<ApiTradeRow, 'type' | 'profit' | 'swap' | 'commission'>) => {
-    if (r.type !== 'buy' && r.type !== 'sell') return { profit: 0, swap: 0, commission: 0 };
-    return { profit: Number(r.profit) || 0, swap: Number(r.swap) || 0, commission: Number(r.commission) || 0 };
+  // Вклад одной строки в итог сделок (buy/sell) и CFD-корректировок —
+  // депозит/снятие сюда не входят (см. выше), редактирование строки
+  // deal_type='balance'/'withdrawal' в таблице ниже не двигает итог, только
+  // саму запись в БД.
+  const contribution = (r: Pick<ApiTradeRow, 'deal_type' | 'profit' | 'swap' | 'commission'>) => {
+    const profit = Number(r.profit) || 0;
+    if (r.deal_type === 'buy' || r.deal_type === 'sell') {
+      return { profit, swap: Number(r.swap) || 0, commission: Number(r.commission) || 0, cfd: 0 };
+    }
+    if (r.deal_type === 'cfd') return { profit: 0, swap: 0, commission: 0, cfd: profit };
+    return { profit: 0, swap: 0, commission: 0, cfd: 0 };
   };
 
-  const applyDelta = (before: ApiTradeRow, after: Pick<ApiTradeRow, 'type' | 'profit' | 'swap' | 'commission'>) => {
+  type Contributor = Pick<ApiTradeRow, 'deal_type' | 'profit' | 'swap' | 'commission'>;
+  const applyDelta = (before: Contributor, after: Contributor) => {
     const b = contribution(before);
     const a = contribution(after);
     setTotals((t) =>
@@ -516,6 +541,7 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
         profit: t.profit - b.profit + a.profit,
         swap: t.swap - b.swap + a.swap,
         commission: t.commission - b.commission + a.commission,
+        cfd: t.cfd - b.cfd + a.cfd,
       },
     );
   };
@@ -529,6 +555,7 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
       openPrice: String(row.open_price ?? 0),
       closePrice: String(row.close_price ?? 0),
       comment: row.comment ?? '',
+      dealType: row.deal_type,
     });
   };
 
@@ -543,16 +570,23 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
       showToast('Введите корректные числа');
       return;
     }
+    const dealTypeChanged = form.dealType !== editTarget.deal_type;
     patchTrade(editTarget.id, {
       profit, swap, commission, comment: form.comment,
       open_price: openPrice, close_price: closePrice,
+      ...(dealTypeChanged ? { deal_type: form.dealType } : {}),
     })
       .then(() => {
-        applyDelta(editTarget, { type: editTarget.type, profit, swap, commission });
+        applyDelta(editTarget, { deal_type: form.dealType, profit, swap, commission });
         setRows((prev) =>
           (prev ?? []).map((r) =>
             r.id === editTarget.id
-              ? { ...r, profit, swap, commission, comment: form.comment, open_price: openPrice, close_price: closePrice, is_edited: true }
+              ? {
+                  ...r,
+                  profit, swap, commission, comment: form.comment,
+                  open_price: openPrice, close_price: closePrice, is_edited: true,
+                  deal_type: form.dealType,
+                }
               : r,
           ),
         );
@@ -566,7 +600,7 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
     if (!deleteTarget) return;
     deleteTrade(deleteTarget.id)
       .then(() => {
-        applyDelta(deleteTarget, { type: deleteTarget.type, profit: 0, swap: 0, commission: 0 });
+        applyDelta(deleteTarget, { deal_type: deleteTarget.deal_type, profit: 0, swap: 0, commission: 0 });
         setRows((prev) => (prev ?? []).filter((r) => r.id !== deleteTarget.id));
         showToast(`Запись #${deleteTarget.ticket} удалена`);
         setDeleteTarget(null);
@@ -574,19 +608,62 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
       .catch((err: Error) => showToast(err.message || 'Не удалось удалить'));
   };
 
+  const submitAdd = () => {
+    const raw = Number(addForm.amount.replace(',', '.'));
+    if (!Number.isFinite(raw) || (addForm.dealType !== 'cfd' && raw <= 0)) {
+      showToast('Введите корректную сумму');
+      return;
+    }
+    if (!addForm.date) {
+      showToast('Укажите дату');
+      return;
+    }
+    // Снятие храним отрицательным profit (см. SUM(-profit) в totals на
+    // сервере) — админ вводит положительную сумму, знак подставляем сами.
+    const profit = addForm.dealType === 'withdrawal' ? -Math.abs(raw) : raw;
+    const iso = new Date(`${addForm.date}T12:00:00`).toISOString();
+    setAdding(true);
+    createTrade({
+      // Синтетический отрицательный тикет — реальные тикеты MT5 всегда положительные.
+      ticket: -Date.now(),
+      deal_type: addForm.dealType,
+      symbol: '',
+      profit,
+      swap: 0,
+      commission: 0,
+      open_time: iso,
+      close_time: iso,
+      comment: addForm.comment,
+    })
+      .then((r) => {
+        setRows((prev) => [r.trade, ...(prev ?? [])]);
+        applyDelta({ deal_type: '', profit: 0, swap: 0, commission: 0 }, { deal_type: addForm.dealType, profit, swap: 0, commission: 0 });
+        showToast('Запись добавлена');
+        setAddModal(false);
+        setAddForm({ dealType: 'balance', amount: '', date: '', comment: '' });
+      })
+      .catch((err: Error) => showToast(err.message || 'Не удалось добавить'))
+      .finally(() => setAdding(false));
+  };
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        <AdminButton
+          variant="secondary"
+          onClick={() => { setAddForm({ dealType: 'balance', amount: '', date: '', comment: '' }); setAddModal(true); }}
+        >
+          Добавить запись
+        </AdminButton>
         <SegmentedControl<TypeFilter>
           value={type}
           onChange={setType}
           className="w-auto"
           options={[
             { value: 'all', label: 'Все' },
-            { value: 'buy', label: 'buy' },
-            { value: 'sell', label: 'sell' },
             { value: 'balance', label: 'депозит' },
             { value: 'withdrawal', label: 'снятие' },
+            { value: 'cfd', label: 'CFD' },
           ]}
         />
       </div>
@@ -607,12 +684,13 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
             </AdminButton>
           )}
         </div>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-separator px-4 py-3 sm:grid-cols-3 md:grid-cols-6">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-separator px-4 py-3 sm:grid-cols-3 md:grid-cols-7">
           <TotalStat label="Депозит" value={periodTotals.deposit} />
           <TotalStat label="Снятие" value={periodTotals.withdrawal} />
           <TotalStat label="Прибыль" value={periodTotals.profit} />
           <TotalStat label="Своп" value={periodTotals.swap} />
           <TotalStat label="Комиссия" value={periodTotals.commission} />
+          <TotalStat label="CFD" value={periodTotals.cfd} />
           <TotalStat label="Баланс" value={periodBalance} bold />
         </div>
       </AdminCard>
@@ -656,7 +734,7 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <Pill tone={TYPE_TONE[r.type] ?? 'gray'}>{r.type}</Pill>
+                      <Pill tone={TYPE_TONE[r.deal_type] ?? 'gray'}>{r.deal_type}</Pill>
                     </td>
                     <td className="tnum px-4 py-3 text-right text-[13px] text-text-secondary">{fmtPrice(r.open_price)}</td>
                     <td className="tnum px-4 py-3 text-right text-[13px] text-text-secondary">{fmtPrice(r.close_price)}</td>
@@ -700,7 +778,7 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
                       #{r.ticket} {r.is_edited && '· изм.'}
                     </p>
                   </div>
-                  <Pill tone={TYPE_TONE[r.type] ?? 'gray'}>{r.type}</Pill>
+                  <Pill tone={TYPE_TONE[r.deal_type] ?? 'gray'}>{r.deal_type}</Pill>
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
                   <Field label="Цена откр." value={fmtPrice(r.open_price)} />
@@ -736,7 +814,7 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
       <AdminModal
         open={editTarget !== null}
         onClose={() => setEditTarget(null)}
-        title={editTarget ? `#${editTarget.ticket} · ${editTarget.symbol || editTarget.type}` : ''}
+        title={editTarget ? `#${editTarget.ticket} · ${editTarget.symbol || editTarget.deal_type}` : ''}
         footer={
           <>
             <AdminButton variant="secondary" onClick={() => setEditTarget(null)}>
@@ -786,6 +864,24 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
             value={form.comment}
             onChange={(e) => setForm((f) => ({ ...f, comment: e.target.value }))}
           />
+          {editTarget && RECLASSIFIABLE_TYPES.includes(editTarget.deal_type as (typeof RECLASSIFIABLE_TYPES)[number]) && (
+            <div>
+              <span className="mb-1 block text-[13px] text-text-secondary">Тип</span>
+              <SegmentedControl<(typeof RECLASSIFIABLE_TYPES)[number]>
+                value={form.dealType as (typeof RECLASSIFIABLE_TYPES)[number]}
+                onChange={(v) => setForm((f) => ({ ...f, dealType: v }))}
+                options={[
+                  { value: 'balance', label: 'Пополнение' },
+                  { value: 'withdrawal', label: 'Снятие' },
+                  { value: 'cfd', label: 'CFD' },
+                ]}
+              />
+              <p className="mt-1 text-[12px] text-text-secondary">
+                Для строк, пришедших с терминала (например с комментарием
+                «demo deposit») — раскидать по нужной категории.
+              </p>
+            </div>
+          )}
         </div>
       </AdminModal>
 
@@ -807,10 +903,60 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
       >
         {deleteTarget && (
           <p className="text-[14px] text-black">
-            Удалить {deleteTarget.type === 'balance' ? 'депозит' : deleteTarget.type === 'withdrawal' ? 'снятие' : 'сделку'} #{deleteTarget.ticket}{' '}
+            Удалить {deleteTarget.deal_type === 'balance' ? 'депозит' : deleteTarget.deal_type === 'withdrawal' ? 'снятие' : 'сделку'} #{deleteTarget.ticket}{' '}
             ({fmt(deleteTarget.profit)})? Действие необратимо.
           </p>
         )}
+      </AdminModal>
+
+      {/* Добавить запись — депозит/снятие/CFD вручную */}
+      <AdminModal
+        open={addModal}
+        onClose={() => !adding && setAddModal(false)}
+        title="Добавить запись"
+        footer={
+          <>
+            <AdminButton variant="secondary" onClick={() => setAddModal(false)} disabled={adding}>
+              Отмена
+            </AdminButton>
+            <AdminButton onClick={submitAdd} disabled={adding}>
+              {adding ? 'Добавляю…' : 'Добавить'}
+            </AdminButton>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <div>
+            <span className="mb-1 block text-[13px] text-text-secondary">Тип</span>
+            <SegmentedControl<'balance' | 'withdrawal' | 'cfd'>
+              value={addForm.dealType}
+              onChange={(v) => setAddForm((f) => ({ ...f, dealType: v }))}
+              options={[
+                { value: 'balance', label: 'Пополнение' },
+                { value: 'withdrawal', label: 'Снятие' },
+                { value: 'cfd', label: 'CFD' },
+              ]}
+            />
+          </div>
+          <AdminInput
+            label="Сумма"
+            inputMode="decimal"
+            value={addForm.amount}
+            onChange={(e) => setAddForm((f) => ({ ...f, amount: e.target.value }))}
+            placeholder={addForm.dealType === 'cfd' ? 'может быть отрицательной' : 'положительное число'}
+          />
+          <AdminInput
+            label="Дата"
+            type="date"
+            value={addForm.date}
+            onChange={(e) => setAddForm((f) => ({ ...f, date: e.target.value }))}
+          />
+          <AdminInput
+            label="Комментарий"
+            value={addForm.comment}
+            onChange={(e) => setAddForm((f) => ({ ...f, comment: e.target.value }))}
+          />
+        </div>
       </AdminModal>
     </div>
   );

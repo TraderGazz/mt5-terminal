@@ -62,16 +62,20 @@ router.get('/', async (req, res) => {
     // видимые 1000 строк обрезают период по факту раньше запрошенного `from`,
     // и депозит/снятие, случившиеся до этой отсечки, тихо выпадают из суммы
     // (заявка/баг-репорт заказчика: "в админке снятие 0, хотя на сайте есть").
-    // deposit/withdrawal — ОТДЕЛЬНЫЕ значения type (см. mt5-sync.js
-    // categorizeRawDeal), не 'balance' со знаком — раньше клиент считал totals
-    // сам по себе и никогда не смотрел на type='withdrawal', отсюда 0.
+    // ВАЖНО: категория строки — deal_type, НЕ type (type — направление
+    // buy/sell и для balance/withdrawal/cfd в БД всегда пусто, см. init.sql
+    // и подтверждено напрямую: `SELECT type, deal_type FROM trades GROUP BY
+    // ...` — balance-строки имели type='', deal_type='balance'). Раньше
+    // здесь ошибочно фильтровали по type — для этих категорий не находило
+    // вообще ничего.
     const totals = await query(
       `SELECT
-         COALESCE(SUM(profit) FILTER (WHERE type IN ('buy','sell')), 0) AS profit,
-         COALESCE(SUM(swap) FILTER (WHERE type IN ('buy','sell')), 0) AS swap,
-         COALESCE(SUM(commission) FILTER (WHERE type IN ('buy','sell')), 0) AS commission,
-         COALESCE(SUM(profit) FILTER (WHERE type = 'balance'), 0) AS deposit,
-         COALESCE(SUM(-profit) FILTER (WHERE type = 'withdrawal'), 0) AS withdrawal,
+         COALESCE(SUM(profit) FILTER (WHERE deal_type IN ('buy','sell')), 0) AS profit,
+         COALESCE(SUM(swap) FILTER (WHERE deal_type IN ('buy','sell')), 0) AS swap,
+         COALESCE(SUM(commission) FILTER (WHERE deal_type IN ('buy','sell')), 0) AS commission,
+         COALESCE(SUM(profit) FILTER (WHERE deal_type = 'balance'), 0) AS deposit,
+         COALESCE(SUM(-profit) FILTER (WHERE deal_type = 'withdrawal'), 0) AS withdrawal,
+         COALESCE(SUM(profit) FILTER (WHERE deal_type = 'cfd'), 0) AS cfd,
          COUNT(*)::int AS count
        FROM trades ${whereSql}`,
       params
@@ -99,7 +103,7 @@ router.get('/:id', async (req, res) => {
 const EDITABLE_FIELDS = [
   'profit', 'swap', 'commission', 'comment',
   'open_time', 'close_time', 'open_price', 'close_price',
-  'symbol', 'type', 'volume',
+  'symbol', 'type', 'deal_type', 'volume',
 ];
 
 router.patch('/:id', canEdit, async (req, res) => {
@@ -132,7 +136,7 @@ router.patch('/:id', canEdit, async (req, res) => {
 // POST /api/trades — create a trade (used by mt5-sync.py and admin tools).
 // Upserts by ticket to stay idempotent.
 const CREATABLE_FIELDS = [
-  'ticket', 'symbol', 'type', 'volume', 'open_price', 'close_price',
+  'ticket', 'symbol', 'type', 'deal_type', 'volume', 'open_price', 'close_price',
   'profit', 'swap', 'commission', 'open_time', 'close_time',
   'comment', 'position_id', 'order_ticket',
 ];

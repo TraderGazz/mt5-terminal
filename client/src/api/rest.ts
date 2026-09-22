@@ -161,7 +161,11 @@ export interface ApiTradeRow {
   id: number;
   ticket: number;
   symbol: string;
+  // Направление buy/sell — ПУСТО для balance/withdrawal/cfd (см. deal_type).
   type: string;
+  // Категория строки: buy/sell/balance/withdrawal/cfd — используй это, не
+  // type, для отображения/фильтрации типа (type для этих категорий пуст).
+  deal_type: string;
   volume: number;
   open_price: number;
   close_price: number;
@@ -180,6 +184,7 @@ export interface ApiTradesTotals {
   commission: number;
   deposit: number;
   withdrawal: number;
+  cfd: number;
   count: number;
 }
 
@@ -196,6 +201,13 @@ export const getTrades = (q: {
   });
 
 export const deleteTrade = (id: number) => api<{ deleted: true }>(`/trades/${id}`, { method: 'DELETE' });
+
+// Ручное добавление депозита/снятия/CFD-корректировки (заявка заказчика:
+// "если снятие, должна быть возможность добавить"). ticket — синтетический,
+// отрицательный (реальные тикеты MT5 всегда положительные), чтобы никогда
+// не столкнуться с настоящими.
+export const createTrade = (body: Record<string, unknown>) =>
+  api<{ trade: ApiTradeRow }>('/trades', { method: 'POST', body });
 
 // ---------- Admin: реальная торговля (server/routes/trading.js) ----------
 // В отличие от patchTrade/deleteTrade выше (правка ЗАПИСЕЙ в БД — витрина),
