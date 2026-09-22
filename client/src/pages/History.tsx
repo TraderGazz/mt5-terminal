@@ -713,7 +713,7 @@ export default function HistoryPage() {
                       />
                     ) : (
                       <PositionRow
-                        key={row.position.positionId}
+                        key={row.position.ticket}
                         position={row.position}
                         digits={digitsOf(row.position.symbol)}
                         last={i === positionsTabRows.length - 1}

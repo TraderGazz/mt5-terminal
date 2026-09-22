@@ -217,34 +217,35 @@ export interface ClosedPosition {
   isEdited: boolean;
 }
 
-/** Aggregates same-position deals into closed positions (newest first). */
+/**
+ * Раньше склеивала сделки с одним position_id (частичные закрытия) в одну
+ * строку — 1-в-1 с оригинальным MT5. Заказчик явно попросил разбить
+ * обратно на отдельные строки по каждой сделке из БД: со склейкой правка
+ * одной ноги позиции в админке не могла быть независимой от других (чтобы
+ * обнулить одну ногу, ЛИБО приходилось компенсировать/обнулять и
+ * остальные, либо на сайте сумма позиции не совпадала с введённым числом).
+ * Каждая сделка теперь — своя строка (не 1-в-1 с оригиналом для позиций с
+ * частичным закрытием, но по прямому запросу). Позиции без частичных
+ * закрытий (подавляющее большинство) выглядят как раньше — там на group
+ * всегда была одна сделка.
+ */
 export function aggregatePositions(deals: Deal[]): ClosedPosition[] {
-  const groups = new Map<number, Deal[]>();
-  for (const d of deals) {
-    const arr = groups.get(d.positionId) ?? [];
-    arr.push(d);
-    groups.set(d.positionId, arr);
-  }
-  return [...groups.values()]
-    .map((group) => {
-      const open = group.reduce((a, b) => (a.openTime <= b.openTime ? a : b));
-      const close = group.reduce((a, b) => (a.closeTime >= b.closeTime ? a : b));
-      return {
-        positionId: open.positionId,
-        ticket: close.ticket,
-        symbol: open.symbol,
-        type: open.type as 'buy' | 'sell',
-        volume: group.reduce((s, d) => s + d.volume, 0),
-        openTime: open.openTime,
-        openPrice: open.openPrice,
-        closeTime: close.closeTime,
-        closePrice: close.closePrice,
-        profit: group.reduce((s, d) => s + d.profit, 0),
-        swap: group.reduce((s, d) => s + d.swap, 0),
-        commission: group.reduce((s, d) => s + d.commission, 0),
-        isEdited: group.some((d) => d.isEdited),
-      };
-    })
+  return deals
+    .map((d) => ({
+      positionId: d.positionId,
+      ticket: d.ticket,
+      symbol: d.symbol,
+      type: d.type as 'buy' | 'sell',
+      volume: d.volume,
+      openTime: d.openTime,
+      openPrice: d.openPrice,
+      closeTime: d.closeTime,
+      closePrice: d.closePrice,
+      profit: d.profit,
+      swap: d.swap,
+      commission: d.commission,
+      isEdited: d.isEdited,
+    }))
     // Старые сверху, новые снизу — как во вкладке «Сделки» (auto-scroll вниз
     // на входе в Историю), а не наоборот.
     .sort((a, b) => a.closeTime - b.closeTime);
