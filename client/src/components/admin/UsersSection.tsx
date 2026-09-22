@@ -22,6 +22,7 @@ import {
   AdminCard,
   AdminInput,
   AdminModal,
+  IosToggle,
   Pill,
   SegmentedControl,
 } from './bits';
@@ -133,6 +134,32 @@ function RealUsersSection({ showToast }: { showToast: (msg: string) => void }) {
   const [roleTarget, setRoleTarget] = useState<ApiAdminUser | null>(null);
   const [resetTarget, setResetTarget] = useState<ApiAdminUser | null>(null);
   const [newPassword, setNewPassword] = useState('');
+  // Тумблер «История для инвестора» — заказчик несколько раз просил то
+  // включить, то выключить целиком для viewer-роли; теперь переключается
+  // здесь, без правки кода на каждый запрос (app_settings, см. api/admin.ts).
+  const [historyVisible, setHistoryVisible] = useState<boolean | null>(null);
+  const [historySaving, setHistorySaving] = useState(false);
+
+  useEffect(() => {
+    adminApi
+      .getAppSettings()
+      .then((s) => setHistoryVisible(s?.history_visible_to_viewer ?? true))
+      .catch(() => setHistoryVisible(true));
+  }, []);
+
+  const toggleHistoryVisible = () => {
+    if (historyVisible == null || historySaving) return;
+    const next = !historyVisible;
+    setHistorySaving(true);
+    adminApi
+      .updateAppSettings({ history_visible_to_viewer: next })
+      .then((s) => {
+        setHistoryVisible(s.history_visible_to_viewer);
+        showToast(next ? 'История включена для инвестора' : 'История выключена для инвестора');
+      })
+      .catch((err: Error) => showToast(err.message || 'Не удалось сохранить'))
+      .finally(() => setHistorySaving(false));
+  };
 
   const [name, setName] = useState('');
   const [login, setLogin] = useState('');
@@ -217,6 +244,21 @@ function RealUsersSection({ showToast }: { showToast: (msg: string) => void }) {
           </div>
         ))}
       </div>
+
+      <AdminCard className="flex items-center justify-between gap-3 p-4">
+        <div>
+          <p className="text-[14px] font-medium text-black">История для инвестора</p>
+          <p className="text-[12px] text-text-secondary">
+            Если выключено — вкладка «История» видна, но не открывается для роли «Только просмотр».
+          </p>
+        </div>
+        <IosToggle
+          checked={historyVisible ?? true}
+          disabled={historyVisible == null || historySaving}
+          onChange={toggleHistoryVisible}
+          label="История для инвестора"
+        />
+      </AdminCard>
 
       {/* Desktop/tablet: table */}
       <AdminCard className="hidden overflow-x-auto md:block">

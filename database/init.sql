@@ -205,6 +205,19 @@ CREATE TABLE IF NOT EXISTS sync_settings (
 INSERT INTO sync_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 
 -- ============================================================================
+-- app_settings — общие переключатели приложения, один ряд id = 1 (см.
+-- database/migrations/006_app_settings.sql). Первый флаг — видимость
+-- вкладки «История» для роли viewer (инвестор), тумблер в админке.
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS app_settings (
+    id                        INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    history_visible_to_viewer BOOLEAN NOT NULL DEFAULT TRUE,
+    updated_at                TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+INSERT INTO app_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+
+-- ============================================================================
 -- position_overrides — косметическая правка ОТКРЫТЫХ позиций (заявка
 -- заказчика, см. database/migrations/005_position_overrides.sql)
 -- ============================================================================

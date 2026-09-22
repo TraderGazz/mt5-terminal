@@ -195,6 +195,26 @@ router.patch('/sync-settings', wrap(async (req, res) => {
   res.json({ settings: rows[0] });
 }));
 
+// ---------- App settings (общие переключатели, напр. видимость Истории для инвестора) ----------
+
+router.get('/app-settings', wrap(async (req, res) => {
+  const { rows } = await query('SELECT * FROM app_settings WHERE id = 1');
+  res.json({ settings: rows[0] || null });
+}));
+
+router.patch('/app-settings', wrap(async (req, res) => {
+  const { history_visible_to_viewer: historyVisibleToViewer } = req.body || {};
+  if (historyVisibleToViewer === undefined) {
+    return res.status(400).json({ error: 'Nothing to update' });
+  }
+  await query('INSERT INTO app_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING');
+  const { rows } = await query(
+    `UPDATE app_settings SET history_visible_to_viewer = $1, updated_at = now() WHERE id = 1 RETURNING *`,
+    [Boolean(historyVisibleToViewer)]
+  );
+  res.json({ settings: rows[0] });
+}));
+
 // ---------- Report export (HTML / CSV) ----------
 
 function toCsv(rows) {

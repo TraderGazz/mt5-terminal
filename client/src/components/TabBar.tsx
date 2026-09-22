@@ -3,6 +3,7 @@ import { NavLink } from 'react-router';
 import { ArrowDownUp, History, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCurrentRole } from '@/components/auth/session';
+import { useHistoryVisibleToViewer } from '@/data/authSession';
 
 /** Props shared by lucide icons and the two custom inline-SVG icons below. */
 interface TabIconProps {
@@ -106,13 +107,15 @@ const TABS: TabDef[] = [
  * frame. Layout adds matching bottom padding to the scroll container.
  */
 export default function TabBar() {
-  // История снова доступна инвестору по умолчанию (заявка заказчика) —
-  // включение/выключение теперь через тумблер в админке, см. следующий
-  // коммит (useHistoryEnabledForViewer). Пока тумблер не подключён —
-  // временно всегда включено.
+  // История видна, но не нажимается инвестору, только если админ ВЫКЛЮЧИЛ
+  // тумблер «История для инвестора» (app_settings.history_visible_to_viewer,
+  // см. AdminShell → Пользователи). По умолчанию включено для всех.
   const role = useCurrentRole();
-  const tabs = TABS;
-  void role;
+  const historyVisible = useHistoryVisibleToViewer();
+  const tabs =
+    role === 'viewer' && !historyVisible
+      ? TABS.map((t) => (t.to === '/history' ? { ...t, disabled: true } : t))
+      : TABS;
   return (
     <nav
       aria-label="Основная навигация"

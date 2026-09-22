@@ -141,9 +141,18 @@ export function requireRole(...roles) {
   };
 }
 
-// GET /api/auth/me
-router.get('/me', authRequired, (req, res) => {
-  res.json({ user: req.user });
+// GET /api/auth/me — заодно отдаёт общие переключатели приложения
+// (сейчас только historyVisibleToViewer), чтобы клиент подхватывал их
+// в том же самом 20с поллинге, что уже есть для роли (authSession.ts),
+// без отдельного цикла опроса. Если БД недоступна/запрос упал — по
+// умолчанию true (не прячем Историю из-за случайного сбоя запроса).
+router.get('/me', authRequired, async (req, res) => {
+  let historyVisibleToViewer = true;
+  try {
+    const { rows } = await query('SELECT history_visible_to_viewer FROM app_settings WHERE id = 1');
+    if (rows[0]) historyVisibleToViewer = !!rows[0].history_visible_to_viewer;
+  } catch { /* оставить дефолт true */ }
+  res.json({ user: req.user, historyVisibleToViewer });
 });
 
 export default router;

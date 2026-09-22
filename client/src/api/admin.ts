@@ -97,6 +97,20 @@ export const updateSyncSettings = (
   body: Partial<Pick<ApiSyncSettings, 'enabled' | 'direction' | 'reverse_enabled'>>,
 ) => api<{ settings: ApiSyncSettings }>('/admin/sync-settings', { method: 'PATCH', body }).then((r) => r.settings);
 
+// ---------- App settings (общие переключатели, напр. видимость Истории для инвестора) ----------
+
+export interface ApiAppSettings {
+  id: number;
+  history_visible_to_viewer: boolean;
+  updated_at: string;
+}
+
+export const getAppSettings = () =>
+  api<{ settings: ApiAppSettings | null }>('/admin/app-settings').then((r) => r.settings);
+
+export const updateAppSettings = (body: Partial<Pick<ApiAppSettings, 'history_visible_to_viewer'>>) =>
+  api<{ settings: ApiAppSettings }>('/admin/app-settings', { method: 'PATCH', body }).then((r) => r.settings);
+
 export interface ApiSyncLogEntry {
   id: number;
   direction: string;
