@@ -4,19 +4,22 @@
  * «Торговля» — живой просмотр /api/positions: открыть/закрыть реальную
  * сделку (настоящий ордер брокеру), плюс косметическая правка цены
  * открытия/прибыли отдельной открытой позиции (витрина, без реального
- * ордера — см. server/routes/trading.js PATCH /position/:ticket). «История» — реальный
- * список строк из таблицы `trades` (сделки И балансовые операции —
- * депозиты/снятия хранятся там же с type='balance'/'withdrawal'), с
- * возможностью найти и поправить/удалить любую запись, включая цену
- * открытия/закрытия — заявка заказчика. Итог «Депозит/Снятие» в шапке при
- * этом СЧИТАЕТСЯ НЕ из этих строк, а из той же выписки заказчика, что и на
- * сайте (depositLedger.ts) — EA-синхронизированные balance-записи в БД
- * подтверждённо ненадёжны для этих сумм (см. depositLedger.ts).
+ * ордера — см. server/routes/trading.js PATCH /position/:ticket). «История» —
+ * список строк из таблицы `trades` (сделки, CFD, ручные депозиты/снятия) +
+ * депозиты/снятия ИЗ ВЫПИСКИ (ledgerBalanceRows, depositLedger.ts) — с
+ * возможностью найти и поправить/удалить любую запись из БД, включая цену
+ * открытия/закрытия (заявка заказчика). Строки из выписки — read-only
+ * (нет реального id в БД, правка только через сам файл в коде), помечены
+ * «из выписки»; EA-синхронизированные balance/withdrawal записи из `trades`
+ * (мусорные — см. depositLedger.ts) в списке скрыты полностью: заказчик
+ * нашёл дату из выписки, которой не было в БД, и попросил список
+ * депозитов/снятий сделать таким же, как на сайте. Итог «Депозит/Снятие» в
+ * шапке считается из той же выписки, что и раньше.
  */
 import { useEffect, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { formatDateTime } from '@/lib/format';
-import { depositTotalsForRange } from '@/data/depositLedger';
+import { depositTotalsForRange, ledgerBalanceRows } from '@/data/depositLedger';
 import {
   getTrades,
   getPositions,
@@ -79,6 +82,38 @@ interface EditForm {
 // пополнению. buy/sell сюда не входят — смена направления сделки ломает
 // сопоставление позиций.
 const RECLASSIFIABLE_TYPES = ['balance', 'withdrawal', 'cfd'] as const;
+
+// Строка из выписки, показанная в общей таблице поверх `trades` — заявка
+// заказчика: депозит/снятие в этом списке должны выглядеть так же, как на
+// сайте (т.е. по officialной выписке), а не по мусорным EA-синк записям
+// (там реальный тикет — заказчик нашёл дату из выписки, которой в БД
+// вообще нет). id/ticket отрицательные (как у ручных записей), не
+// редактируется/не удаляется — правки только через саму выписку в коде.
+const LEDGER_ROW_MARK = '__ledger' as const;
+type LedgerTradeRow = ApiTradeRow & { [LEDGER_ROW_MARK]: true };
+
+function toLedgerTradeRow(op: { ticket: number; profit: number; closeTime: number }): LedgerTradeRow {
+  return {
+    id: op.ticket,
+    ticket: op.ticket,
+    symbol: '',
+    type: '',
+    deal_type: op.profit >= 0 ? 'balance' : 'withdrawal',
+    volume: 0,
+    open_price: 0,
+    close_price: 0,
+    profit: op.profit,
+    swap: 0,
+    commission: 0,
+    open_time: null,
+    close_time: new Date(op.closeTime).toISOString(),
+    comment: '',
+    is_edited: false,
+    [LEDGER_ROW_MARK]: true,
+  };
+}
+
+const isLedgerRow = (r: ApiTradeRow): r is LedgerTradeRow => LEDGER_ROW_MARK in r;
 
 export default function TradesSection({ showToast }: { showToast: (msg: string) => void }) {
   const [view, setView] = useState<ViewMode>('history');
@@ -535,8 +570,6 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
     return <AdminCard className="p-6 text-center text-[14px] text-text-secondary">Загрузка…</AdminCard>;
   }
 
-  const filtered = type === 'all' ? rows : rows.filter((r) => r.deal_type === type);
-
   // Депозит/снятие — ТОЛЬКО из официальной выписки заказчика (тот же
   // источник, что и на сайте, см. depositLedger.ts), не из таблицы `trades`:
   // EA-синхронизированные balance-записи там подтверждённо ненадёжны (см.
@@ -546,6 +579,22 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
   const fromMs = from ? new Date(`${from}T00:00:00`).getTime() : -Infinity;
   const toMs = to ? new Date(`${to}T23:59:59.999`).getTime() : Infinity;
   const ledger = depositTotalsForRange(fromMs, toMs);
+
+  // Список строк — та же логика: депозит/снятие берём из выписки, а НЕ из
+  // мусорных EA-синк записей в `trades` (заказчик: в таблице есть дата с
+  // пополнением, а в этом списке её нет — потому что список раньше был
+  // 1-в-1 из БД, а итог сверху уже считался по выписке, два разных
+  // источника молча расходились). Ручные записи (отрицательный тикет,
+  // «Добавить запись») остаются видимы и редактируемы как раньше.
+  const nonLedgerRows = rows.filter(
+    (r) => !((r.deal_type === 'balance' || r.deal_type === 'withdrawal') && r.ticket > 0),
+  );
+  const merged: ApiTradeRow[] = [
+    ...nonLedgerRows,
+    ...ledgerBalanceRows(fromMs, toMs).map(toLedgerTradeRow),
+  ].sort((a, b) => new Date(b.close_time ?? 0).getTime() - new Date(a.close_time ?? 0).getTime());
+
+  const filtered = type === 'all' ? merged : merged.filter((r) => r.deal_type === type);
 
   const periodTotals = { deposit: ledger.deposit, withdrawal: ledger.withdrawal, ...totals };
   const periodBalance =
@@ -809,7 +858,7 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
                     <td className="px-5 py-3">
                       <span className="block text-[14px] text-black">{r.symbol || '—'}</span>
                       <span className="tnum block text-[12px] text-text-secondary">
-                        #{r.ticket} {r.is_edited && '· изм.'}
+                        {isLedgerRow(r) ? 'из выписки' : `#${r.ticket} ${r.is_edited ? '· изм.' : ''}`}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -824,19 +873,23 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
                       {r.close_time ? formatDateTime(new Date(r.close_time).getTime()) : '—'}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <div className="flex justify-end gap-1">
-                        <AdminButton variant="text" onClick={() => openEdit(r)}>
-                          Изменить
-                        </AdminButton>
-                        <button
-                          type="button"
-                          aria-label="Удалить"
-                          onClick={() => setDeleteTarget(r)}
-                          className="flex h-8 w-8 items-center justify-center rounded-full text-loss hover:bg-[rgba(255,59,48,0.08)]"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
+                      {isLedgerRow(r) ? (
+                        <span className="text-[12px] text-text-secondary">выписка</span>
+                      ) : (
+                        <div className="flex justify-end gap-1">
+                          <AdminButton variant="text" onClick={() => openEdit(r)}>
+                            Изменить
+                          </AdminButton>
+                          <button
+                            type="button"
+                            aria-label="Удалить"
+                            onClick={() => setDeleteTarget(r)}
+                            className="flex h-8 w-8 items-center justify-center rounded-full text-loss hover:bg-[rgba(255,59,48,0.08)]"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -854,7 +907,7 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
                   <div className="min-w-0">
                     <p className="text-[15px] font-medium text-black">{r.symbol || '—'}</p>
                     <p className="tnum text-[12px] text-text-secondary">
-                      #{r.ticket} {r.is_edited && '· изм.'}
+                      {isLedgerRow(r) ? 'из выписки' : `#${r.ticket} ${r.is_edited ? '· изм.' : ''}`}
                     </p>
                   </div>
                   <Pill tone={TYPE_TONE[r.deal_type] ?? 'gray'}>{r.deal_type}</Pill>
@@ -870,19 +923,21 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
                     value={r.close_time ? formatDateTime(new Date(r.close_time).getTime()) : '—'}
                   />
                 </div>
-                <div className="mt-3 flex gap-2 border-t border-separator pt-3">
-                  <AdminButton variant="secondary" className="flex-1" onClick={() => openEdit(r)}>
-                    Изменить
-                  </AdminButton>
-                  <button
-                    type="button"
-                    aria-label="Удалить"
-                    onClick={() => setDeleteTarget(r)}
-                    className="flex h-[38px] w-[46px] shrink-0 items-center justify-center rounded-[10px] bg-[rgba(255,59,48,0.08)] text-loss active:opacity-80"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
+                {!isLedgerRow(r) && (
+                  <div className="mt-3 flex gap-2 border-t border-separator pt-3">
+                    <AdminButton variant="secondary" className="flex-1" onClick={() => openEdit(r)}>
+                      Изменить
+                    </AdminButton>
+                    <button
+                      type="button"
+                      aria-label="Удалить"
+                      onClick={() => setDeleteTarget(r)}
+                      className="flex h-[38px] w-[46px] shrink-0 items-center justify-center rounded-[10px] bg-[rgba(255,59,48,0.08)] text-loss active:opacity-80"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
