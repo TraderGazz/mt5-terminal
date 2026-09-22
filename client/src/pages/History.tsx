@@ -14,12 +14,15 @@ import {
   useDealsVersion,
   useHistoryLoaded,
   useHistoryError,
+  type Deal,
+  type DealLeg,
 } from '@/data/history';
 import { depositTotalsForRange } from '@/data/depositLedger';
 import { getSymbolMeta } from '@/mocks/symbols';
 import { formatMoneyMT5 } from '@/components/history/utils';
 import SegmentedControl from '@/components/history/SegmentedControl';
 import {
+  BalanceRow,
   DealLegRow,
   HistoryEmpty,
   OrderRow,
@@ -267,6 +270,37 @@ export default function HistoryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter.symbol, range, dealsVersion, sort]);
 
+  // Балансовые операции (депозит/снятие) для показа СТРОКАМИ во вкладке
+  // «Сделки», как в оригинале — раньше нигде не отображались построчно,
+  // только участвовали в сводных итогах. Источник — getBalanceOps() (та же
+  // таблица `trades`, что и остальная админка), а не сырые deal_legs: так
+  // видны и синхронизированные с EA операции, и созданные админом вручную
+  // через «Добавить запись» (те в deal_legs не попадают). symbol у баланса
+  // нет — при выбранном конкретном символе строки скрываются целиком.
+  const balanceRows = useMemo(
+    () =>
+      getBalanceOps().filter(
+        (d) => filter.symbol == null && d.closeTime >= range.from && d.closeTime <= range.to,
+      ),
+    [filter.symbol, range, dealsVersion],
+  );
+
+  // Объединённый список для вкладки «Сделки»: сырые сделки + балансовые
+  // операции, отсортированные одним и тем же ключом сортировки.
+  const dealsTabRows = useMemo(() => {
+    type Row = { kind: 'leg'; leg: DealLeg } | { kind: 'balance'; op: Deal };
+    const cmp = compareRows(sort);
+    const asSortable = (r: Row): SortableRow =>
+      r.kind === 'leg'
+        ? { ticket: r.leg.ticket, symbol: r.leg.symbol, type: r.leg.type ?? '', volume: r.leg.volume, openTime: r.leg.time, closeTime: r.leg.time, profit: r.leg.profit }
+        : { ticket: r.op.ticket, symbol: '', type: 'balance', volume: 0, openTime: r.op.closeTime, closeTime: r.op.closeTime, profit: r.op.profit };
+    const rows: Row[] = [
+      ...dealLegs.map((leg): Row => ({ kind: 'leg', leg })),
+      ...balanceRows.map((op): Row => ({ kind: 'balance', op })),
+    ];
+    return rows.sort((a, b) => cmp(asSortable(a), asSortable(b)));
+  }, [dealLegs, balanceRows, sort]);
+
   // MT5 iOS opens History already scrolled to the very bottom (latest
   // entries + the totals block visible). Scroll the app scroll container
   // (Layout#app-scroll — not window) the first time real data is in —
@@ -437,7 +471,7 @@ export default function HistoryPage() {
       ? orders.length > 0
       : tab === 'positions'
         ? positions.length > 0
-        : dealLegs.length > 0;
+        : dealsTabRows.length > 0;
 
   const changeTab = (next: TabKey) => {
     if (next === tab) return;
@@ -624,24 +658,33 @@ export default function HistoryPage() {
             transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
           >
             {tab === 'deals' &&
-              (dealLegs.length === 0 ? (
+              (dealsTabRows.length === 0 ? (
                 <HistoryEmpty title="Нет сделок" />
               ) : (
                 <div className="bg-white">
-                  {dealLegs.map((leg, i) => (
-                    <DealLegRow
-                      key={leg.ticket}
-                      leg={leg}
-                      digits={digitsOf(leg.symbol)}
-                      last={i === dealLegs.length - 1}
-                      staggerDelay={stagger(i)}
-                      onTap={
-                        leg.entry === 'out' || leg.entry === 'inout'
-                          ? () => navigate(`/trade/${leg.ticket}`)
-                          : undefined
-                      }
-                    />
-                  ))}
+                  {dealsTabRows.map((row, i) =>
+                    row.kind === 'balance' ? (
+                      <BalanceRow
+                        key={`bal-${row.op.ticket}`}
+                        op={row.op}
+                        last={i === dealsTabRows.length - 1}
+                        staggerDelay={stagger(i)}
+                      />
+                    ) : (
+                      <DealLegRow
+                        key={row.leg.ticket}
+                        leg={row.leg}
+                        digits={digitsOf(row.leg.symbol)}
+                        last={i === dealsTabRows.length - 1}
+                        staggerDelay={stagger(i)}
+                        onTap={
+                          row.leg.entry === 'out' || row.leg.entry === 'inout'
+                            ? () => navigate(`/trade/${row.leg.ticket}`)
+                            : undefined
+                        }
+                      />
+                    ),
+                  )}
                 </div>
               ))}
 
