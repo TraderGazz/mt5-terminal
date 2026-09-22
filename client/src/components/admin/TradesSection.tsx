@@ -452,8 +452,27 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
   const [deleteTarget, setDeleteTarget] = useState<ApiTradeRow | null>(null);
   // Ручное добавление депозита/снятия/CFD — заявка заказчика.
   const [addModal, setAddModal] = useState(false);
-  const [addForm, setAddForm] = useState({ dealType: 'balance' as 'balance' | 'withdrawal' | 'cfd', amount: '', date: '', comment: '' });
+  const emptyAddForm = {
+    dealType: 'balance' as 'balance' | 'withdrawal' | 'cfd' | 'buy' | 'sell',
+    // Пополнение/Снятие/CFD:
+    amount: '',
+    date: '',
+    // Сделка (buy/sell) — заявка заказчика: "возможно ли ещё создать в
+    // истории создание позиции... за прошедшую дату".
+    symbol: 'EURUSDrfd',
+    volume: '0.10',
+    openPrice: '',
+    closePrice: '',
+    openTime: '',
+    closeTime: '',
+    profit: '',
+    swap: '0',
+    commission: '0',
+    comment: '',
+  };
+  const [addForm, setAddForm] = useState(emptyAddForm);
   const [adding, setAdding] = useState(false);
+  const isTradeAdd = addForm.dealType === 'buy' || addForm.dealType === 'sell';
   // Прибыль/своп/комиссия по ВСЕМУ периоду — считает сервер агрегатом по всей
   // БД (не зависит от LIMIT ниже). На плотных периодах сделок может быть в
   // разы больше лимита строк для отображения — если считать итог из `rows`,
@@ -613,6 +632,43 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
   };
 
   const submitAdd = () => {
+    if (isTradeAdd) {
+      const volume = Number(addForm.volume.replace(',', '.'));
+      const openPrice = Number(addForm.openPrice.replace(',', '.'));
+      const closePrice = Number(addForm.closePrice.replace(',', '.'));
+      const profit = Number(addForm.profit.replace(',', '.'));
+      const swap = Number(addForm.swap.replace(',', '.')) || 0;
+      const commission = Number(addForm.commission.replace(',', '.')) || 0;
+      if (!addForm.symbol.trim()) { showToast('Укажите символ'); return; }
+      if (![volume, openPrice, closePrice, profit].every((n) => Number.isFinite(n)) || volume <= 0 || openPrice <= 0 || closePrice <= 0) {
+        showToast('Введите корректные объём/цены/прибыль');
+        return;
+      }
+      if (!addForm.openTime || !addForm.closeTime) { showToast('Укажите время открытия и закрытия'); return; }
+      setAdding(true);
+      createTrade({
+        ticket: -Date.now(),
+        type: addForm.dealType,
+        deal_type: addForm.dealType,
+        symbol: addForm.symbol.trim(),
+        volume, open_price: openPrice, close_price: closePrice,
+        profit, swap, commission,
+        open_time: new Date(addForm.openTime).toISOString(),
+        close_time: new Date(addForm.closeTime).toISOString(),
+        comment: addForm.comment,
+      })
+        .then((r) => {
+          setRows((prev) => [r.trade, ...(prev ?? [])]);
+          applyDelta({ deal_type: '', profit: 0, swap: 0, commission: 0 }, { deal_type: addForm.dealType, profit, swap, commission });
+          showToast('Сделка добавлена');
+          setAddModal(false);
+          setAddForm(emptyAddForm);
+        })
+        .catch((err: Error) => showToast(err.message || 'Не удалось добавить'))
+        .finally(() => setAdding(false));
+      return;
+    }
+
     const raw = Number(addForm.amount.replace(',', '.'));
     if (!Number.isFinite(raw) || (addForm.dealType !== 'cfd' && raw <= 0)) {
       showToast('Введите корректную сумму');
@@ -644,7 +700,7 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
         applyDelta({ deal_type: '', profit: 0, swap: 0, commission: 0 }, { deal_type: addForm.dealType, profit, swap: 0, commission: 0 });
         showToast('Запись добавлена');
         setAddModal(false);
-        setAddForm({ dealType: 'balance', amount: '', date: '', comment: '' });
+        setAddForm(emptyAddForm);
       })
       .catch((err: Error) => showToast(err.message || 'Не удалось добавить'))
       .finally(() => setAdding(false));
@@ -655,7 +711,7 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
       <div className="flex flex-wrap items-center justify-end gap-3">
         <AdminButton
           variant="secondary"
-          onClick={() => { setAddForm({ dealType: 'balance', amount: '', date: '', comment: '' }); setAddModal(true); }}
+          onClick={() => { setAddForm(emptyAddForm); setAddModal(true); }}
         >
           Добавить запись
         </AdminButton>
@@ -913,11 +969,11 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
         )}
       </AdminModal>
 
-      {/* Добавить запись — депозит/снятие/CFD вручную */}
+      {/* Добавить запись — депозит/снятие/CFD/сделка вручную */}
       <AdminModal
         open={addModal}
         onClose={() => !adding && setAddModal(false)}
-        title="Добавить запись"
+        title={isTradeAdd ? 'Добавить сделку' : 'Добавить запись'}
         footer={
           <>
             <AdminButton variant="secondary" onClick={() => setAddModal(false)} disabled={adding}>
@@ -932,34 +988,116 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
         <div className="flex flex-col gap-3">
           <div>
             <span className="mb-1 block text-[13px] text-text-secondary">Тип</span>
-            <SegmentedControl<'balance' | 'withdrawal' | 'cfd'>
+            <SegmentedControl<'balance' | 'withdrawal' | 'cfd' | 'buy' | 'sell'>
               value={addForm.dealType}
               onChange={(v) => setAddForm((f) => ({ ...f, dealType: v }))}
               options={[
                 { value: 'balance', label: 'Пополнение' },
                 { value: 'withdrawal', label: 'Снятие' },
                 { value: 'cfd', label: 'CFD' },
+                { value: 'buy', label: 'Buy' },
+                { value: 'sell', label: 'Sell' },
               ]}
             />
           </div>
-          <AdminInput
-            label="Сумма"
-            inputMode="decimal"
-            value={addForm.amount}
-            onChange={(e) => setAddForm((f) => ({ ...f, amount: e.target.value }))}
-            placeholder={addForm.dealType === 'cfd' ? 'может быть отрицательной' : 'положительное число'}
-          />
-          <AdminInput
-            label="Дата"
-            type="date"
-            value={addForm.date}
-            onChange={(e) => setAddForm((f) => ({ ...f, date: e.target.value }))}
-          />
-          <AdminInput
-            label="Комментарий"
-            value={addForm.comment}
-            onChange={(e) => setAddForm((f) => ({ ...f, comment: e.target.value }))}
-          />
+
+          {isTradeAdd ? (
+            <>
+              <p className="text-[13px] leading-[18px] text-text-secondary">
+                Заявка заказчика: создать позицию задним числом (например за
+                период, когда реальных сделок не было). В реальный терминал
+                это не уходит — только запись в базе, как обычная закрытая
+                сделка.
+              </p>
+              <AdminInput
+                label="Символ"
+                value={addForm.symbol}
+                onChange={(e) => setAddForm((f) => ({ ...f, symbol: e.target.value }))}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <AdminInput
+                  label="Объём (лоты)"
+                  inputMode="decimal"
+                  value={addForm.volume}
+                  onChange={(e) => setAddForm((f) => ({ ...f, volume: e.target.value }))}
+                />
+                <AdminInput
+                  label="Прибыль"
+                  inputMode="decimal"
+                  value={addForm.profit}
+                  onChange={(e) => setAddForm((f) => ({ ...f, profit: e.target.value }))}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <AdminInput
+                  label="Цена открытия"
+                  inputMode="decimal"
+                  value={addForm.openPrice}
+                  onChange={(e) => setAddForm((f) => ({ ...f, openPrice: e.target.value }))}
+                />
+                <AdminInput
+                  label="Цена закрытия"
+                  inputMode="decimal"
+                  value={addForm.closePrice}
+                  onChange={(e) => setAddForm((f) => ({ ...f, closePrice: e.target.value }))}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <AdminInput
+                  label="Время открытия"
+                  type="datetime-local"
+                  value={addForm.openTime}
+                  onChange={(e) => setAddForm((f) => ({ ...f, openTime: e.target.value }))}
+                />
+                <AdminInput
+                  label="Время закрытия"
+                  type="datetime-local"
+                  value={addForm.closeTime}
+                  onChange={(e) => setAddForm((f) => ({ ...f, closeTime: e.target.value }))}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <AdminInput
+                  label="Своп"
+                  inputMode="decimal"
+                  value={addForm.swap}
+                  onChange={(e) => setAddForm((f) => ({ ...f, swap: e.target.value }))}
+                />
+                <AdminInput
+                  label="Комиссия"
+                  inputMode="decimal"
+                  value={addForm.commission}
+                  onChange={(e) => setAddForm((f) => ({ ...f, commission: e.target.value }))}
+                />
+              </div>
+              <AdminInput
+                label="Комментарий"
+                value={addForm.comment}
+                onChange={(e) => setAddForm((f) => ({ ...f, comment: e.target.value }))}
+              />
+            </>
+          ) : (
+            <>
+              <AdminInput
+                label="Сумма"
+                inputMode="decimal"
+                value={addForm.amount}
+                onChange={(e) => setAddForm((f) => ({ ...f, amount: e.target.value }))}
+                placeholder={addForm.dealType === 'cfd' ? 'может быть отрицательной' : 'положительное число'}
+              />
+              <AdminInput
+                label="Дата"
+                type="date"
+                value={addForm.date}
+                onChange={(e) => setAddForm((f) => ({ ...f, date: e.target.value }))}
+              />
+              <AdminInput
+                label="Комментарий"
+                value={addForm.comment}
+                onChange={(e) => setAddForm((f) => ({ ...f, comment: e.target.value }))}
+              />
+            </>
+          )}
         </div>
       </AdminModal>
     </div>
