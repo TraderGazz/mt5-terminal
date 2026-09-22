@@ -8,6 +8,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
 import Toast from '@/components/Toast';
 import type { ImportLogEntry } from '@/mocks';
+import { IS_API } from '@/config';
+import { clearAuth, getAuthUser } from '@/api/auth';
 import AdminLogin from '@/components/admin/AdminLogin';
 import AdminShell, { ADMIN_SECTIONS, type AdminSectionId } from '@/components/admin/AdminShell';
 import UsersSection from '@/components/admin/UsersSection';
@@ -28,12 +30,25 @@ const SECTION_TITLES: Record<AdminSectionId, string> = {
   reports: 'Создание торгового отчёта',
 };
 
-const AUTH_KEY = 'admin-auth';
+// В мок-режиме (без бэкенда) нет реального JWT — оставляем прежний локальный
+// флаг для admin/admin, только на этот путь он и был рассчитан изначально.
+const MOCK_AUTH_KEY = 'admin-auth';
+
+// В api-режиме гейт держит РЕАЛЬНУЮ роль из JWT (getAuthUser), а не отдельный
+// флаг в sessionStorage — раньше он использовался и тут тоже, и оказался не
+// привязан к тому, кто сейчас реально залогинен: если на этом браузере admin
+// хоть раз заходил в /admin, флаг оставался, и следующий, кто открывал /admin
+// с ЛЮБЫМ логином (например investor), проваливался прямо в оболочку мимо
+// проверки роли — отдельные разделы потом падали с сырым «Forbidden» от
+// бэкенда (баг-репорт заказчика, скриншот с инвестором внутри админки).
+function hasAdminAccess(): boolean {
+  if (!IS_API) return sessionStorage.getItem(MOCK_AUTH_KEY) === '1';
+  const role = getAuthUser()?.role;
+  return role === 'admin' || role === 'trader';
+}
 
 export default function Admin() {
-  const [authed, setAuthed] = useState(
-    () => sessionStorage.getItem(AUTH_KEY) === '1',
-  );
+  const [authed, setAuthed] = useState(() => hasAdminAccess());
   const [section, setSection] = useState<AdminSectionId>('users');
   const [toast, setToast] = useState<string | null>(null);
   /** Entries appended locally (balance edits) — shown atop the import log. */
@@ -43,15 +58,18 @@ export default function Admin() {
     return (
       <AdminLogin
         onLogin={() => {
-          sessionStorage.setItem(AUTH_KEY, '1');
-          setAuthed(true);
+          if (!IS_API) sessionStorage.setItem(MOCK_AUTH_KEY, '1');
+          setAuthed(hasAdminAccess());
         }}
       />
     );
   }
 
+  // Реальный logout (не только локальный флаг) — иначе обновление страницы
+  // после «Выйти» тут же пускало бы обратно, пока настоящий JWT ещё жив.
   const logout = () => {
-    sessionStorage.removeItem(AUTH_KEY);
+    if (!IS_API) sessionStorage.removeItem(MOCK_AUTH_KEY);
+    clearAuth();
     setAuthed(false);
   };
 

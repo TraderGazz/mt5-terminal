@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { NavLink } from 'react-router';
 import { ArrowDownUp, History, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useCurrentRole } from '@/components/auth/session';
 
 /** Props shared by lucide icons and the two custom inline-SVG icons below. */
 interface TabIconProps {
@@ -88,8 +89,6 @@ const TABS: TabDef[] = [
   { to: '/', label: 'Котировки', icon: ArrowDownUp, strokeWidth: 2, end: true },
   { to: '/chart', label: 'Чарт', icon: CandlesIcon, strokeWidth: 1.7 },
   { to: '/trade', label: 'Торговля', icon: TradeIcon, strokeWidth: 1.7, activeClassName: 'text-[#FF3B30]' },
-  // disabled переопределяется ниже по роли (только admin видит активной,
-  // пока в истории есть расхождения с оригиналом — заявка заказчика).
   { to: '/history', label: 'История', icon: History, strokeWidth: 1.7 },
   { to: '/settings', label: 'Настройки', icon: Settings, strokeWidth: 1.7 },
 ];
@@ -107,6 +106,12 @@ const TABS: TabDef[] = [
  * frame. Layout adds matching bottom padding to the scroll container.
  */
 export default function TabBar() {
+  // История снова недоступна инвестору (заявка заказчика) — видна, но не
+  // нажимается, тот же приём, что и у «Сделки» внутри самой Истории.
+  const role = useCurrentRole();
+  const tabs = role === 'viewer'
+    ? TABS.map((t) => (t.to === '/history' ? { ...t, disabled: true } : t))
+    : TABS;
   return (
     <nav
       aria-label="Основная навигация"
@@ -114,7 +119,7 @@ export default function TabBar() {
       style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}
     >
       <div className="pointer-events-auto flex h-[74px] items-stretch rounded-[26px] bg-white/85 p-2 shadow-[0_8px_28px_rgba(0,0,0,0.14)] backdrop-blur-[20px] backdrop-saturate-[180%]">
-        {TABS.map(({ to, label, icon: Icon, strokeWidth, end, activeClassName = 'text-accent', disabled }) => {
+        {tabs.map(({ to, label, icon: Icon, strokeWidth, end, activeClassName = 'text-accent', disabled }) => {
           if (disabled) {
             return (
               <span
