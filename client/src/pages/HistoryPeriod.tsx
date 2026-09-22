@@ -20,6 +20,7 @@ import {
 } from '@/components/history/historyFilter';
 import { formatRuShortDate, parseISODate, toISODate } from '@/components/history/utils';
 import { downloadCsvReport, openHtmlReport } from '@/components/history/report';
+import { useCurrentRole } from '@/components/auth/session';
 
 const SYMBOL_OPTIONS = ['EURUSD', 'USDRUB', 'XAUUSD', 'XAGUSD', 'GBPUSD'] as const;
 
@@ -40,11 +41,6 @@ const PERIOD_ROWS: readonly { value: PeriodKind; label: string }[] = [
 const TEMP_DISABLED_PERIODS = new Set<PeriodKind>([]);
 const VISIBLE_PERIOD_ROWS = PERIOD_ROWS.filter((row) => !TEMP_DISABLED_PERIODS.has(row.value));
 
-// Раньше временно показывало «Режим просмотра» вместо реальной генерации
-// HTML/CSV, пока в истории были непроверенные депозиты — заказчик разрешил
-// вернуть после того, как в админке появился инструмент для правки истории
-// («Сделки и депозиты»).
-const TEMP_REPORT_DISABLED = false;
 
 /** White iOS card (radius 14, 16px margins) on the grouped gray background. */
 function Card({ children, first }: { children: ReactNode; first?: boolean }) {
@@ -99,6 +95,9 @@ function RadioRow({ label, selected, last, disabled, onSelect }: RadioRowProps) 
 
 export default function HistoryPeriodPage() {
   const navigate = useNavigate();
+  // Заявка заказчика: инвестору (viewer) создание торгового отчёта
+  // недоступно — пункт остаётся на месте, но не нажимается.
+  const reportDisabled = useCurrentRole() === 'viewer';
   const applied = useHistoryFilter();
 
   const [symbol, setSymbol] = useState<string | null>(applied.symbol);
@@ -309,8 +308,11 @@ export default function HistoryPeriodPage() {
         <Card>
           <button
             type="button"
-            onClick={() => (TEMP_REPORT_DISABLED ? setToast('Режим просмотра') : setReportSheet(true))}
-            className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left active:bg-[#D9D9DE]"
+            onClick={() => (reportDisabled ? undefined : setReportSheet(true))}
+            disabled={reportDisabled}
+            className={`flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left active:bg-[#D9D9DE] ${
+              reportDisabled ? 'cursor-not-allowed opacity-40' : ''
+            }`}
           >
             <span className="min-w-0">
               <span className="block text-[17px] leading-[22px] tracking-[-0.41px] text-black">

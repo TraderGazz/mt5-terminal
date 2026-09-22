@@ -198,9 +198,15 @@ function TotalRow({ label, value }: { label: string; value: string }) {
 
 export default function HistoryPage() {
   const navigate = useNavigate();
+  const role = useCurrentRole();
   // Видимая кнопка-карандаш на самой сделке — заявка заказчика: явный вход
   // в редактирование прямо на сайте, только для admin (не trader/viewer).
-  const isAdmin = useCurrentRole() === 'admin';
+  const isAdmin = role === 'admin';
+  // «Сделки» видна инвестору, но не нажимается (заявка заказчика).
+  const tabs = useMemo(
+    () => TABS.map((t) => (t.value === 'deals' ? { ...t, disabled: role === 'viewer' } : t)),
+    [role],
+  );
   const filter = useHistoryFilter();
   const historyLoaded = useHistoryLoaded();
   const historyError = useHistoryError();
@@ -589,7 +595,7 @@ export default function HistoryPage() {
           </div>
           <div className="min-w-0 flex-1">
             <SegmentedControl
-              options={TABS}
+              options={tabs}
               value={tab}
               onChange={changeTab}
               layoutId="history-tab-thumb"

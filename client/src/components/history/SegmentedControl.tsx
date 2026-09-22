@@ -3,6 +3,8 @@ import { motion } from 'framer-motion';
 interface SegmentedOption<T extends string> {
   value: T;
   label: string;
+  /** Видна, но не нажимается (заявка заказчика: «Сделки» — недоступно инвестору). */
+  disabled?: boolean;
 }
 
 interface SegmentedControlProps<T extends string> {
@@ -32,8 +34,9 @@ export default function SegmentedControl<T extends string>({
           <button
             key={opt.value}
             type="button"
-            onClick={() => onChange(opt.value)}
-            className="relative min-w-0 flex-1 rounded-full"
+            onClick={() => (opt.disabled ? undefined : onChange(opt.value))}
+            disabled={opt.disabled}
+            className={`relative min-w-0 flex-1 rounded-full ${opt.disabled ? 'cursor-not-allowed' : ''}`}
           >
             {active && (
               <motion.span
@@ -44,7 +47,7 @@ export default function SegmentedControl<T extends string>({
             )}
             <span
               className={`relative z-10 block truncate px-1 text-[15px] font-medium leading-none tracking-[-0.24px] ${
-                active ? 'text-black' : 'text-[#8E8E93]'
+                opt.disabled ? 'text-[#C7C7CC]' : active ? 'text-black' : 'text-[#8E8E93]'
               }`}
             >
               {opt.label}

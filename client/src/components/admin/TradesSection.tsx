@@ -554,7 +554,11 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
       commission: String(row.commission ?? 0),
       openPrice: String(row.open_price ?? 0),
       closePrice: String(row.close_price ?? 0),
-      comment: row.comment ?? '',
+      // Заявка заказчика: "нигде в админке не должно быть demo" — синхронизированные
+      // с терминала записи (напр. с комментарием "demo deposit") скрывают это
+      // слово автоматически при показе. Сохраняется обратно только если админ
+      // сам впишет что-то новое в это поле.
+      comment: (row.comment ?? '').replace(/\bdemo\b/gi, '').replace(/\s+/g, ' ').trim(),
       dealType: row.deal_type,
     });
   };
