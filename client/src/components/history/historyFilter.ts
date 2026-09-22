@@ -91,6 +91,9 @@ export interface PeriodRange {
   to: number;
 }
 
+/** Начало периода «Последний год» — 01.02.2025, зафиксировано по просьбе заказчика. */
+export const YEAR_PERIOD_START = startOfDay(new Date(2025, 1, 1).getTime());
+
 /** Resolves the selected period to an absolute [from, to] range in ms. */
 export function periodRange(f: HistoryFilterState, now: number = Date.now()): PeriodRange {
   switch (f.period) {
@@ -109,11 +112,10 @@ export function periodRange(f: HistoryFilterState, now: number = Date.now()): Pe
       return { from: now - 3 * 29 * DAY, to: now };
     case '6m':
       return { from: now - 6 * 29 * DAY, to: now };
-    case 'year': {
-      const d = new Date(now);
-      d.setFullYear(d.getFullYear() - 1);
-      return { from: d.getTime(), to: now };
-    }
+    case 'year':
+      // Фиксированная дата начала (заказчик: «Последний год» с 01.02.2025),
+      // не плавающее «минус 365 дней» — пока явно не попросят подвинуть.
+      return { from: YEAR_PERIOD_START, to: now };
     case 'custom':
       return { from: f.customFrom, to: f.customTo };
   }
