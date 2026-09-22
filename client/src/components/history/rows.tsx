@@ -370,7 +370,7 @@ export function OrderRow({ order, digits, last, staggerDelay }: OrderRowProps) {
 /* ------------------------------------------------------------------ */
 
 interface BalanceRowProps {
-  op: Pick<Deal, 'profit' | 'comment' | 'closeTime'>;
+  op: Deal;
   last: boolean;
   staggerDelay: number;
 }
