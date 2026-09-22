@@ -1,9 +1,9 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
-import { Clock, Pencil } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Clock, Pencil } from 'lucide-react';
 import type { Deal, DealLeg } from '@/data/history';
-import { formatPrice, formatVolume } from '@/lib/format';
-import { formatDayTime, formatFullDateTime, formatMoneyMT5 } from './utils';
+import { formatPrice, formatVolume, formatDate, formatTimeShort } from '@/lib/format';
+import { formatDayTime, formatFullDateTime, formatMoneyMT5, formatSignedMoneyMT5 } from './utils';
 
 /* ------------------------------------------------------------------ */
 /* Shared bits                                                         */
@@ -375,33 +375,37 @@ interface BalanceRowProps {
   staggerDelay: number;
 }
 
-// Заказчик: должно выглядеть точно как в оригинале — тот же layout, что и
-// у DealLegRow (нет иконки, заголовок жирным + подпись серым слева, сумма
-// без «+» + дата справа), заголовок буквально «Balance» (не переведено —
-// так в самом MT5), без плюса перед положительной суммой.
 export function BalanceRow({ op, last, staggerDelay }: BalanceRowProps) {
   const deposit = op.profit >= 0;
+  const Icon = deposit ? ArrowDownLeft : ArrowUpRight;
   return (
     <RowShell last={last} staggerDelay={staggerDelay}>
-      <div className="flex items-start justify-between gap-2 px-2 py-[6px]">
-        <div className="min-w-0">
-          <div className="text-[17px] font-semibold leading-[22px] tracking-[-0.41px] text-black">
-            Balance
+      <div className="flex items-center gap-3 px-2 py-[6px]">
+        <span
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+            deposit ? 'bg-[#34C7591A] text-profit' : 'bg-[#FF3B301A] text-loss'
+          }`}
+        >
+          <Icon size={17} strokeWidth={1.8} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[17px] font-semibold leading-[22px] tracking-[-0.41px]">
+            {deposit ? 'Депозит' : 'Снятие'}
           </div>
-          <div className="mt-[2px] truncate text-[13px] leading-[18px] text-text-secondary">
+          <div className="mt-0.5 truncate text-[12px] leading-[15px] text-text-secondary">
             {op.comment || '—'}
           </div>
         </div>
         <div className="shrink-0 text-right">
           <div
-            className={`tnum text-[17px] font-semibold leading-[22px] ${
+            className={`tnum text-[16px] font-semibold leading-[20px] ${
               deposit ? 'text-accent' : 'text-loss'
             }`}
           >
-            {formatMoneyMT5(op.profit)}
+            {formatSignedMoneyMT5(op.profit)}
           </div>
-          <div className="tnum mt-[2px] text-[13px] leading-[18px] text-text-secondary">
-            {formatFullDateTime(op.closeTime)}
+          <div className="tnum mt-0.5 text-[11px] leading-[14px] text-text-secondary">
+            {formatDate(op.closeTime)} {formatTimeShort(op.closeTime)}
           </div>
         </div>
       </div>
