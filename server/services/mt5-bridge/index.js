@@ -62,6 +62,13 @@ class Bridge extends EventEmitter {
     }
   }
 
+  // Текущая сохранённая правка (или пустая) — нужна маршруту, чтобы при
+  // PATCH одного поля (например только цены) не затирать null'ом уже
+  // сохранённое другое (например profit_offset от предыдущей правки).
+  getPositionOverride(ticket) {
+    return this.overrides.get(Number(ticket)) ?? { openPriceOverride: null, profitOffset: null };
+  }
+
   // Правка сохраняется сразу и в памяти (эффект мгновенный), и в БД
   // (переживает рестарт сервера). Реальная позиция у брокера не трогается.
   async setPositionOverride(ticket, { openPriceOverride, profitOffset }) {

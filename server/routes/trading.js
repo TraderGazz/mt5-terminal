@@ -65,7 +65,16 @@ router.patch('/position/:ticket', async (req, res) => {
     const p = positions.find((x) => x.id === ticket);
     if (!p) return res.status(404).json({ error: 'Позиция не найдена (возможно уже закрыта)' });
 
-    const openPriceOverride = req.body?.openPrice != null ? Number(req.body.openPrice) : null;
+    // Клиент шлёт только реально изменённое админом поле (не оба всегда) —
+    // не тронутое поле нужно не занулять, а сохранить как было, иначе PATCH
+    // одной только цены открытия тихо стирал ранее заданную правку прибыли
+    // (и наоборот): баг-репорт «цену открытия поменял, но прибыль не
+    // пересчиталась» был как раз про это — прежний код всегда получал от
+    // клиента и цену, и прибыль (предзаполненную текущим значением), из-за
+    // чего пересчёт от новой цены каждый раз гасился обратно к старому
+    // числу.
+    const existing = bridge.getPositionOverride(ticket);
+    const openPriceOverride = req.body?.openPrice != null ? Number(req.body.openPrice) : existing.openPriceOverride;
     const targetProfit = req.body?.profit != null ? Number(req.body.profit) : null;
     if (req.body?.openPrice != null && !Number.isFinite(openPriceOverride)) {
       return res.status(400).json({ error: 'Некорректная цена открытия' });
@@ -79,7 +88,9 @@ router.patch('/position/:ticket', async (req, res) => {
     // это в фиксированную добавку (offset) поверх текущей рассчитанной
     // прибыли (уже с учётом новой цены открытия, если она тоже меняется в
     // этом же запросе), чтобы дальше "плыло" вместе с рынком, не замерло.
-    let profitOffset = null;
+    // Если прибыль в этом запросе не меняли — сохраняем прежний offset
+    // (он и так "плывущий", не завязан на конкретную цену открытия).
+    let profitOffset = existing.profitOffset;
     if (targetProfit != null) {
       const baseProfit = openPriceOverride != null ? recomputeProfit(p, openPriceOverride) : p.profit;
       profitOffset = targetProfit - baseProfit;

@@ -123,6 +123,9 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
   // трогается (см. server/routes/trading.js PATCH /position/:ticket).
   const [editTarget, setEditTarget] = useState<ApiPosition | null>(null);
   const [editForm, setEditForm] = useState({ openPrice: '', profit: '' });
+  // Исходные значения на момент открытия формы — нужны для dirty-check в
+  // submitEdit (см. комментарий там): нельзя слать оба поля всегда.
+  const [editInitial, setEditInitial] = useState({ openPrice: '', profit: '' });
   const [savingEdit, setSavingEdit] = useState(false);
 
   const load = () => {
@@ -135,19 +138,35 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
 
   const openEdit = (p: ApiPosition) => {
     setEditTarget(p);
-    setEditForm({ openPrice: String(p.openPrice), profit: String(p.profit) });
+    const initial = { openPrice: String(p.openPrice), profit: String(p.profit) };
+    setEditForm(initial);
+    setEditInitial(initial);
   };
 
   const submitEdit = () => {
     if (!editTarget) return;
-    const openPrice = Number(editForm.openPrice.replace(',', '.'));
-    const profit = Number(editForm.profit.replace(',', '.'));
-    if (!Number.isFinite(openPrice) || !Number.isFinite(profit)) {
-      showToast('Введите корректные числа');
+    // ВАЖНО: слать только реально изменённое поле. Поля предзаполнены
+    // текущими цифрами (чтобы было от чего отталкиваться) — если слать
+    // profit всегда, сервер пересчитывает profit_offset так, что он ровно
+    // гасит пересчёт от новой цены открытия, и прибыль визуально "не
+    // меняется" при правке одной только цены (баг-репорт заказчика).
+    const patch: { openPrice?: number; profit?: number } = {};
+    if (editForm.openPrice !== editInitial.openPrice) {
+      const openPrice = Number(editForm.openPrice.replace(',', '.'));
+      if (!Number.isFinite(openPrice)) { showToast('Введите корректную цену открытия'); return; }
+      patch.openPrice = openPrice;
+    }
+    if (editForm.profit !== editInitial.profit) {
+      const profit = Number(editForm.profit.replace(',', '.'));
+      if (!Number.isFinite(profit)) { showToast('Введите корректную прибыль'); return; }
+      patch.profit = profit;
+    }
+    if (patch.openPrice == null && patch.profit == null) {
+      setEditTarget(null);
       return;
     }
     setSavingEdit(true);
-    updatePositionOverride(editTarget.id, { openPrice, profit })
+    updatePositionOverride(editTarget.id, patch)
       .then(() => {
         showToast(`Позиция #${editTarget.id} изменена`);
         setEditTarget(null);
