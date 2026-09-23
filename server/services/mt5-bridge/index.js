@@ -11,7 +11,7 @@ import { EventEmitter } from 'node:events';
 import { MockBridge } from './mock.js';
 import { RealBridge } from './real.js';
 import * as N from './normalize.js';
-import { query, isDbReady } from '../../db.js';
+import { query } from '../../db.js';
 
 const MODE = (process.env.MT5_BRIDGE || 'mock').toLowerCase();
 const SYMBOL = process.env.MT5_SYMBOL || 'EURUSD';
@@ -47,8 +47,15 @@ class Bridge extends EventEmitter {
     console.log(`[mt5-bridge] режим = ${this.mode}, символ = ${this.symbol}`);
   }
 
+  // ВАЖНО: не гейтим на isDbReady() — initDb()/bridge.start() в
+  // server/index.js вызываются подряд синхронно, а подключение к БД
+  // устанавливается асинхронно, так что на этот момент isDbReady() почти
+  // ВСЕГДА ещё false (флаг просто не успел выставиться) — раньше это
+  // тихо пропускало загрузку правок при КАЖДОМ рестарте процесса, хотя
+  // сами данные в БД целы (баг-репорт: "позиции вернулись обратно" после
+  // каждого деплоя). query() ниже и так безопасно ждёт установления
+  // соединения пула (pg сам это умеет), а catch — реальные сбои.
   async #loadOverrides() {
-    if (!isDbReady()) return;
     try {
       const { rows } = await query('SELECT ticket, open_price_override, profit_offset FROM position_overrides');
       for (const r of rows) {
@@ -73,7 +80,10 @@ class Bridge extends EventEmitter {
   // (переживает рестарт сервера). Реальная позиция у брокера не трогается.
   async setPositionOverride(ticket, { openPriceOverride, profitOffset }) {
     this.overrides.set(Number(ticket), { openPriceOverride: openPriceOverride ?? null, profitOffset: profitOffset ?? null });
-    if (!isDbReady()) return;
+    // Не гейтим на isDbReady() (см. #loadOverrides) — если запрос реально
+    // упадёт, пусть бросает наверх: маршрут (routes/trading.js) вернёт
+    // админу настоящую ошибку вместо тихого "как будто сохранилось", пока
+    // на деле в БД ничего не записалось.
     await query(
       `INSERT INTO position_overrides (ticket, open_price_override, profit_offset, updated_at)
        VALUES ($1, $2, $3, now())
@@ -87,7 +97,6 @@ class Bridge extends EventEmitter {
 
   async clearPositionOverride(ticket) {
     this.overrides.delete(Number(ticket));
-    if (!isDbReady()) return;
     await query('DELETE FROM position_overrides WHERE ticket = $1', [ticket]);
   }
 
