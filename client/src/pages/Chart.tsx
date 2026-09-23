@@ -96,14 +96,17 @@ export default function ChartPage() {
   const changeSymbol = (code: string) => setSearchParams({ symbol: code });
 
   return (
-    // Layout reserves ~92px under the content for the floating TabBar; grow
-    // the page into that zone so the white chart background runs edge-to-edge
-    // under the pill (the chart canvas itself keeps the 92px bottom inset, so
-    // the time axis stays visible above the TabBar).
-    <div
-      className="flex min-h-0 flex-col overflow-hidden bg-white"
-      style={{ height: 'calc(100% + 92px + env(safe-area-inset-bottom, 0px))' }}
-    >
+    // Layout reserves ~92px under the content for the floating TabBar; run the
+    // white chart background edge-to-edge under that zone too (the chart
+    // canvas itself keeps its own bottom inset below, so the time axis stays
+    // visible above the TabBar). absolute+inset-0 anchors to #app-scroll's
+    // PADDING box (its nearest `relative` ancestor), covering exactly that
+    // reserved zone without ever exceeding it — a previous height:calc(100%
+    // + 92px) hack relied on exact arithmetic that could drift by a pixel
+    // when the browser's dvh unit shifted mid-gesture (iOS address bar
+    // show/hide), leaving #app-scroll just tall enough to scroll — baг-репорт
+    // "страница опять съезжает" on the Chart page specifically.
+    <div className="absolute inset-0 flex flex-col overflow-hidden bg-white">
       {/* MT5 iOS top strip: timeframe on the left, flat tool icons on the right. */}
       <div className="flex h-11 shrink-0 items-center justify-between bg-white pl-4 pr-1">
         <button
