@@ -117,8 +117,28 @@ class Bridge extends EventEmitter {
 
   // ---- нормализованные снапшоты ----
 
+  // Заявка заказчика: косметическая правка позиции должна тянуть за собой
+  // и зависимые общие показатели (Прибыль итого, Средства, Свободная
+  // маржа), не только саму строку позиции в списке — раньше account()
+  // был полностью независимым снапшотом от брокера, applyOverride() из
+  // positions() его вообще не касался (баг-репорт: "поменялись позиции, но
+  // не поменялись прибыль/средства/маржа"). Маржа (margin) саму НЕ трогаем —
+  // она считается от объёма/плеча, не от прибыли, реальному брокеру
+  // косметика не передаётся, поэтому это число остаётся настоящим.
   async account() {
-    return N.normalizeAccount(await this.impl.getAccount());
+    const acc = N.normalizeAccount(await this.impl.getAccount());
+    if (this.overrides.size === 0) return acc;
+    // Один поход к брокеру (rawPositions), не два — positions() внутри себя
+    // тоже вызывает rawPositions(), дублировать запрос незачем.
+    const raw = await this.rawPositions();
+    const delta = raw.reduce((s, p) => s + (this.#applyOverride(p).profit - p.profit), 0);
+    if (delta === 0) return acc;
+    return {
+      ...acc,
+      floatingProfit: acc.floatingProfit + delta,
+      equity: acc.equity + delta,
+      freeMargin: acc.freeMargin + delta,
+    };
   }
 
   async positions() {
