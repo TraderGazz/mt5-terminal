@@ -8,6 +8,7 @@ import ConnectionError from '@/components/ConnectionError';
 import PositionSheet, { type LivePositionData } from '@/components/trade/PositionSheet';
 import NewOrderSheet from '@/components/trade/NewOrderSheet';
 import EditPositionSheet from '@/components/trade/EditPositionSheet';
+import ModifySlTpSheet from '@/components/trade/ModifySlTpSheet';
 import { useAccount, useAccountReady, useAccountError } from '@/data/account';
 import { usePositions, usePositionsReady, usePositionsError, refreshPositions } from '@/data/positions';
 import type { Position } from '@/data/positions';
@@ -15,7 +16,13 @@ import { useQuotes } from '@/data/useQuotes';
 import { refreshQuotes, type Quote } from '@/data/quotes';
 import { getSymbolMeta } from '@/mocks/symbols';
 import { formatPrice } from '@/lib/format';
-import { openTrade, closeTrade, updatePositionOverride, clearPositionOverride } from '@/api/rest';
+import {
+  openTrade,
+  closeTrade,
+  modifyPosition,
+  updatePositionOverride,
+  clearPositionOverride,
+} from '@/api/rest';
 import { SYMBOL } from '@/config';
 import { useCurrentRole } from '@/components/auth/session';
 
@@ -78,16 +85,22 @@ function AccountRow({ label, value }: { label: string; value: string }) {
 }
 
 export default function TradePage() {
-  // Реальные открытие/закрытие сделок прямо на сайте — заявка заказчика,
-  // только для admin (не trader/viewer). Это настоящий ордер брокеру через
-  // MT5-мост, не мок/запись для витрины — как и в отдельной админке.
-  const isAdmin = useCurrentRole() === 'admin';
+  // Реальные открытие/закрытие/изменение сделок прямо на сайте — заявка
+  // заказчика, для admin И trader (не viewer/инвестор). Это настоящий ордер
+  // брокеру через MT5-мост, не мок/запись для витрины — как и в отдельной
+  // админке. Косметическая правка витрины (цена/прибыль "как будто") —
+  // отдельно, только admin (canEditShowcase).
+  const role = useCurrentRole();
+  const canTrade = role === 'admin' || role === 'trader';
+  const canEditShowcase = role === 'admin';
   const [orderSheet, setOrderSheet] = useState(false);
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [closeConfirm, setCloseConfirm] = useState<Position | null>(null);
   const [closing, setClosing] = useState(false);
   const [editSheet, setEditSheet] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [modifySheet, setModifySheet] = useState(false);
+  const [savingModify, setSavingModify] = useState(false);
 
   const account = useAccount();
   const positions = usePositions();
@@ -149,9 +162,9 @@ export default function TradePage() {
 
   const symbolQuote = quoteMap.get(SYMBOL);
 
-  const submitOpen = (type: 'buy' | 'sell', volume: number) => {
+  const submitOpen = (type: 'buy' | 'sell', volume: number, stopLoss?: number, takeProfit?: number) => {
     setSubmittingOrder(true);
-    openTrade({ type, volume })
+    openTrade({ type, volume, stopLoss, takeProfit })
       .then((r) => {
         setToast(`Сделка открыта: ${type} ${volume} лот, тикет #${r.order ?? r.deal ?? '—'}`);
         setOrderSheet(false);
@@ -188,6 +201,20 @@ export default function TradePage() {
       })
       .catch((err: Error) => setToast(err.message || 'Не удалось сохранить'))
       .finally(() => setSavingEdit(false));
+  };
+
+  const submitModifyPosition = (stopLoss?: number, takeProfit?: number) => {
+    if (!selectedData) return;
+    const ticket = selectedData.position.id;
+    setSavingModify(true);
+    modifyPosition(ticket, { stopLoss, takeProfit })
+      .then(() => {
+        setToast(`Позиция #${ticket}: SL/TP изменены`);
+        setModifySheet(false);
+        return refreshPositions();
+      })
+      .catch((err: Error) => setToast(err.message || 'Не удалось изменить позицию'))
+      .finally(() => setSavingModify(false));
   };
 
   const resetEditPosition = () => {
@@ -307,12 +334,12 @@ export default function TradePage() {
           type="button"
           aria-label="Новый ордер"
           onClick={() =>
-            isAdmin
+            canTrade
               ? setOrderSheet(true)
               : setToast('Только просмотр. Совершение сделок недоступно')
           }
           className={`absolute right-5 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full active:opacity-50 ${
-            isAdmin ? 'bg-accent text-white' : 'bg-[#F2F2F4] text-[#8E8E93]'
+            canTrade ? 'bg-accent text-white' : 'bg-[#F2F2F4] text-[#8E8E93]'
           }`}
         >
           <Plus size={22} strokeWidth={1.5} />
@@ -389,15 +416,31 @@ export default function TradePage() {
         </div>
       )}
 
-      {/* Position detail sheet — «Изменить»/«Закрыть позицию» только у admin */}
+      {/* Position detail sheet — «Изменить»/«Закрыть позицию» для admin+trader,
+          «Изменить витрину» дополнительно только у admin */}
       <PositionSheet
         data={selectedData}
         onClose={() => setSelected(null)}
         onRequestClosePosition={
-          isAdmin && selectedData ? () => setCloseConfirm(selectedData.position) : undefined
+          canTrade && selectedData ? () => setCloseConfirm(selectedData.position) : undefined
         }
-        onRequestEditPosition={isAdmin && selectedData ? () => setEditSheet(true) : undefined}
+        onRequestModifyPosition={canTrade && selectedData ? () => setModifySheet(true) : undefined}
+        onRequestEditShowcase={canEditShowcase && selectedData ? () => setEditSheet(true) : undefined}
       />
+
+      {/* Настоящий S/L и T/P (admin+trader) — реальный ордер брокеру */}
+      {selectedData && (
+        <ModifySlTpSheet
+          open={modifySheet}
+          ticket={selectedData.position.id}
+          symbol={selectedData.position.symbol}
+          stopLoss={selectedData.position.stopLoss}
+          takeProfit={selectedData.position.takeProfit}
+          saving={savingModify}
+          onSave={submitModifyPosition}
+          onClose={() => !savingModify && setModifySheet(false)}
+        />
+      )}
 
       {/* Правка витрины открытой позиции (admin) — без реального ордера */}
       {selectedData && (
@@ -414,7 +457,7 @@ export default function TradePage() {
         />
       )}
 
-      {/* Новый ордер (admin) — реальная рыночная заявка, не мок */}
+      {/* Новый ордер (admin+trader) — реальная рыночная заявка, не мок */}
       <NewOrderSheet
         open={orderSheet}
         symbol={SYMBOL}
@@ -426,7 +469,7 @@ export default function TradePage() {
         onClose={() => !submittingOrder && setOrderSheet(false)}
       />
 
-      {/* Подтверждение закрытия позиции (admin) */}
+      {/* Подтверждение закрытия позиции (admin+trader) */}
       <ActionSheet
         open={closeConfirm !== null}
         onClose={() => !closing && setCloseConfirm(null)}

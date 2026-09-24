@@ -232,11 +232,18 @@ class Bridge extends EventEmitter {
   // рыночный ордер, только 'buy'/'sell'. Возвращает как есть то, что даёт
   // EA/мок (тикет сделки/ордера, цену исполнения) — это результат действия,
   // не снапшот, глубокая нормализация тут не нужна.
-  async openTrade({ symbol, type, volume, comment } = {}) {
+  async openTrade({ symbol, type, volume, comment, stopLoss, takeProfit } = {}) {
     if (typeof this.impl.placeOrder !== 'function') {
       throw new Error('Мост не поддерживает открытие сделок');
     }
-    return this.impl.placeOrder({ symbol: symbol || this.symbol, order_type: type, volume, comment });
+    return this.impl.placeOrder({
+      symbol: symbol || this.symbol,
+      order_type: type,
+      volume,
+      comment,
+      sl: stopLoss,
+      tp: takeProfit,
+    });
   }
 
   async closeTrade({ ticket, volume } = {}) {
@@ -244,6 +251,16 @@ class Bridge extends EventEmitter {
       throw new Error('Мост не поддерживает закрытие сделок');
     }
     return this.impl.closeOrder({ ticket, volume });
+  }
+
+  // Правка SL/TP уже открытой позиции — настоящий ордер брокеру (заявка
+  // заказчика "изменить позицию как в оригинале MT5"), в отличие от
+  // setPositionOverride() выше (косметика, без реального ордера).
+  async modifyPosition({ ticket, stopLoss, takeProfit } = {}) {
+    if (typeof this.impl.modifyOrder !== 'function') {
+      throw new Error('Мост не поддерживает правку SL/TP');
+    }
+    return this.impl.modifyOrder({ ticket, sl: stopLoss, tp: takeProfit });
   }
 
   async history({ from, to } = {}) {

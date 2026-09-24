@@ -19,6 +19,8 @@ function fromApi(list: ApiPosition[]): Position[] {
     profit: p.profit,
     swap: p.swap,
     commission: p.commission,
+    stopLoss: p.stopLoss,
+    takeProfit: p.takeProfit,
   }));
 }
 

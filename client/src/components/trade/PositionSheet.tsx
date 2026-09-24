@@ -16,23 +16,29 @@ export interface LivePositionData {
 interface PositionSheetProps {
   data: LivePositionData | null;
   onClose: () => void;
-  /** Admin-only (заявка заказчика): реальное закрытие позиции по рынку —
+  /** admin/trader (заявка заказчика): реальное закрытие позиции по рынку —
    * родитель сам показывает подтверждение и шлёт запрос брокеру. */
   onRequestClosePosition?: () => void;
-  /** Admin-only: косметическая правка цены открытия/прибыли (витрина). */
-  onRequestEditPosition?: () => void;
+  /** admin/trader: настоящий S/L и T/P — как в оригинале MT5, реальный
+   * ордер брокеру (CTrade.PositionModify). */
+  onRequestModifyPosition?: () => void;
+  /** Admin-only: косметическая правка цены открытия/прибыли (витрина, без
+   * реального ордера) — отдельно от настоящего изменения выше. */
+  onRequestEditShowcase?: () => void;
 }
 
 /**
  * Position detail sheet (trade.md): slides up 350ms over a dimmed backdrop,
  * closed by swipe-down / backdrop tap. Scoped to the phone column. Read-only
- * for everyone except admin, у которого внизу появляется «Закрыть позицию».
+ * for viewer; admin/trader видят «Закрыть позицию»/«Изменить», admin
+ * дополнительно — «Изменить витрину».
  */
 export default function PositionSheet({
   data,
   onClose,
   onRequestClosePosition,
-  onRequestEditPosition,
+  onRequestModifyPosition,
+  onRequestEditShowcase,
 }: PositionSheetProps) {
   return (
     <AnimatePresence>
@@ -90,8 +96,14 @@ export default function PositionSheet({
                   value={formatPrice(data.position.openPrice, data.digits)}
                 />
                 <FlatRow label="Текущая цена" value={formatPrice(data.close, data.digits)} />
-                <FlatRow label="S / L" value="—" />
-                <FlatRow label="T / P" value="—" />
+                <FlatRow
+                  label="S / L"
+                  value={data.position.stopLoss > 0 ? formatPrice(data.position.stopLoss, data.digits) : '—'}
+                />
+                <FlatRow
+                  label="T / P"
+                  value={data.position.takeProfit > 0 ? formatPrice(data.position.takeProfit, data.digits) : '—'}
+                />
                 <FlatRow
                   label="Своп"
                   value={formatMoney(data.position.swap)}
@@ -106,15 +118,15 @@ export default function PositionSheet({
                 <FlatRow
                   label="Время открытия"
                   value={formatDateTime(data.position.openTime)}
-                  last={!onRequestClosePosition && !onRequestEditPosition}
+                  last={!onRequestClosePosition && !onRequestModifyPosition && !onRequestEditShowcase}
                 />
               </div>
-              {(onRequestClosePosition || onRequestEditPosition) && (
+              {(onRequestClosePosition || onRequestModifyPosition) && (
                 <div className="flex gap-2 px-4 pt-3">
-                  {onRequestEditPosition && (
+                  {onRequestModifyPosition && (
                     <button
                       type="button"
-                      onClick={onRequestEditPosition}
+                      onClick={onRequestModifyPosition}
                       className="h-[44px] flex-1 rounded-[10px] bg-fill text-[16px] font-semibold text-accent active:opacity-85"
                     >
                       Изменить
@@ -129,6 +141,17 @@ export default function PositionSheet({
                       Закрыть позицию
                     </button>
                   )}
+                </div>
+              )}
+              {onRequestEditShowcase && (
+                <div className="px-4 pt-2">
+                  <button
+                    type="button"
+                    onClick={onRequestEditShowcase}
+                    className="h-[40px] w-full rounded-[10px] text-[14px] font-medium text-text-secondary active:opacity-70"
+                  >
+                    Изменить витрину
+                  </button>
                 </div>
               )}
             </motion.div>

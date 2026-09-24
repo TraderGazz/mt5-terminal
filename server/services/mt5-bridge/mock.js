@@ -188,13 +188,25 @@ export class MockBridge extends EventEmitter {
 
   // ---- открытие/закрытие сделок (имитация — для dev без реального EA) ----
 
-  async placeOrder({ volume, order_type, comment } = {}) {
+  async placeOrder({ volume, order_type, comment, sl, tp } = {}) {
     const vol = Number(volume) || 0.1;
     const p = this.#mkPosition(order_type === 'sell' ? 'sell' : 'buy', vol, this.mid, Date.now());
     if (comment) p.comment = comment;
+    if (sl != null) p.sl = Number(sl) || 0;
+    if (tp != null) p.tp = Number(tp) || 0;
     this.positions.push(p);
     const ask = round(this.mid + 12e-5);
     return { msg: 'order_send', type: `order_type_${order_type}`, deal: p.ticket, order: p.ticket, volume: vol, price: p.price_open, bid: round(this.mid), ask };
+  }
+
+  // Правка SL/TP открытой позиции (мок для dev-режима без реального EA) —
+  // та же логика "0/не передано = не менять", что и у реального ModifyOrder.
+  async modifyOrder({ ticket, sl, tp } = {}) {
+    const p = this.positions.find((x) => x.ticket === Number(ticket));
+    if (!p) throw new Error(`Position not found for ticket: ${ticket}`);
+    if (sl != null && Number(sl) > 0) p.sl = Number(sl);
+    if (tp != null && Number(tp) > 0) p.tp = Number(tp);
+    return { message: 'order modified successfully', ticket: p.ticket, sl: p.sl, tp: p.tp };
   }
 
   async closeOrder({ ticket } = {}) {

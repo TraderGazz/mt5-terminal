@@ -11,6 +11,9 @@ export interface Position {
   profit: number;
   swap: number;
   commission: number;
+  /** 0 = нет уровня. */
+  stopLoss: number;
+  takeProfit: number;
 }
 
 const HOUR = 3600_000;
@@ -27,6 +30,8 @@ export const POSITIONS: Position[] = [
     profit: -30150.0,
     swap: -128.4,
     commission: -350.0,
+    stopLoss: 1.15200,
+    takeProfit: 0,
   },
   {
     id: 78542211,
@@ -39,6 +44,8 @@ export const POSITIONS: Position[] = [
     profit: -1164.0,
     swap: 0,
     commission: -70.0,
+    stopLoss: 0,
+    takeProfit: 4400.00,
   },
   {
     id: 78543087,
@@ -51,5 +58,7 @@ export const POSITIONS: Position[] = [
     profit: -10395.0,
     swap: -96.15,
     commission: -210.0,
+    stopLoss: 0,
+    takeProfit: 0,
   },
 ];

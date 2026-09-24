@@ -9,14 +9,16 @@ interface NewOrderSheetProps {
   bid: number | undefined;
   ask: number | undefined;
   submitting: boolean;
-  onSubmit: (type: 'buy' | 'sell', volume: number) => void;
+  onSubmit: (type: 'buy' | 'sell', volume: number, stopLoss?: number, takeProfit?: number) => void;
   onClose: () => void;
 }
 
 /**
- * Admin-only «Новый ордер» (заявка заказчика: открывать сделки прямо с
- * сайта). В отличие от остального сайта — это РЕАЛЬНЫЙ рыночный ордер
- * брокеру через MT5-мост, не мок и не запись в БД для витрины.
+ * «Новый ордер» (заявка заказчика: открывать сделки прямо с сайта, для
+ * admin и trader). В отличие от остального сайта — это РЕАЛЬНЫЙ рыночный
+ * ордер брокеру через MT5-мост, не мок и не запись в БД для витрины.
+ * S/L и T/P необязательны — пустое поле значит "без уровня", как в
+ * оригинальном MT5.
  */
 export default function NewOrderSheet({
   open,
@@ -29,8 +31,20 @@ export default function NewOrderSheet({
   onClose,
 }: NewOrderSheetProps) {
   const [volume, setVolume] = useState('0.01');
+  const [stopLoss, setStopLoss] = useState('');
+  const [takeProfit, setTakeProfit] = useState('');
   const vol = Number(volume.replace(',', '.'));
   const valid = Number.isFinite(vol) && vol > 0;
+
+  const parseLevel = (s: string): number | undefined => {
+    if (!s.trim()) return undefined;
+    const n = Number(s.replace(',', '.'));
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  };
+
+  const submit = (type: 'buy' | 'sell') => {
+    onSubmit(type, vol, parseLevel(stopLoss), parseLevel(takeProfit));
+  };
 
   return (
     <AnimatePresence>
@@ -65,7 +79,7 @@ export default function NewOrderSheet({
                 )}
               </div>
 
-              <div className="mx-4 rounded-[10px] bg-white px-4 py-3">
+              <div className="mx-4 flex flex-col gap-2 rounded-[10px] bg-white px-4 py-3">
                 <label className="flex items-center justify-between gap-3">
                   <span className="text-[15px] text-black">Объём (лоты)</span>
                   <input
@@ -74,6 +88,28 @@ export default function NewOrderSheet({
                     onChange={(e) => setVolume(e.target.value)}
                     disabled={submitting}
                     className="tnum w-24 rounded-[8px] bg-fill px-2 py-1.5 text-right text-[15px] text-black outline-none"
+                  />
+                </label>
+                <label className="flex items-center justify-between gap-3 border-t border-separator pt-2">
+                  <span className="text-[15px] text-black">Stop Loss</span>
+                  <input
+                    inputMode="decimal"
+                    placeholder="—"
+                    value={stopLoss}
+                    onChange={(e) => setStopLoss(e.target.value)}
+                    disabled={submitting}
+                    className="tnum w-24 rounded-[8px] bg-fill px-2 py-1.5 text-right text-[15px] text-black outline-none placeholder:text-text-secondary"
+                  />
+                </label>
+                <label className="flex items-center justify-between gap-3">
+                  <span className="text-[15px] text-black">Take Profit</span>
+                  <input
+                    inputMode="decimal"
+                    placeholder="—"
+                    value={takeProfit}
+                    onChange={(e) => setTakeProfit(e.target.value)}
+                    disabled={submitting}
+                    className="tnum w-24 rounded-[8px] bg-fill px-2 py-1.5 text-right text-[15px] text-black outline-none placeholder:text-text-secondary"
                   />
                 </label>
               </div>
@@ -87,7 +123,7 @@ export default function NewOrderSheet({
                 <button
                   type="button"
                   disabled={!valid || submitting}
-                  onClick={() => onSubmit('sell', vol)}
+                  onClick={() => submit('sell')}
                   className="h-[50px] flex-1 rounded-[12px] bg-loss text-[17px] font-semibold text-white disabled:opacity-40"
                 >
                   Sell
@@ -95,7 +131,7 @@ export default function NewOrderSheet({
                 <button
                   type="button"
                   disabled={!valid || submitting}
-                  onClick={() => onSubmit('buy', vol)}
+                  onClick={() => submit('buy')}
                   className="h-[50px] flex-1 rounded-[12px] bg-accent text-[17px] font-semibold text-white disabled:opacity-40"
                 >
                   Buy

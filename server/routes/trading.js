@@ -10,9 +10,11 @@ import { getBridge } from '../services/mt5-bridge/index.js';
 
 const router = Router();
 
-router.use(authRequired, requireRole('admin'));
+// trader тоже пускаем к реальной торговле (заявка заказчика: "у
+// администратора (трейдера)" — investor/viewer по-прежнему без доступа).
+router.use(authRequired, requireRole('admin', 'trader'));
 
-// POST /api/trading/open — { type: 'buy'|'sell', volume: number, comment? }
+// POST /api/trading/open — { type: 'buy'|'sell', volume: number, comment?, stopLoss?, takeProfit? }
 router.post('/open', async (req, res) => {
   const { type, comment } = req.body || {};
   const volume = Number(req.body?.volume);
@@ -22,9 +24,17 @@ router.post('/open', async (req, res) => {
   if (!Number.isFinite(volume) || volume <= 0) {
     return res.status(400).json({ error: 'Некорректный объём' });
   }
+  const stopLoss = req.body?.stopLoss != null ? Number(req.body.stopLoss) : undefined;
+  const takeProfit = req.body?.takeProfit != null ? Number(req.body.takeProfit) : undefined;
+  if (stopLoss != null && !Number.isFinite(stopLoss)) {
+    return res.status(400).json({ error: 'Некорректный стоп-лосс' });
+  }
+  if (takeProfit != null && !Number.isFinite(takeProfit)) {
+    return res.status(400).json({ error: 'Некорректный тейк-профит' });
+  }
   const bridge = getBridge();
   try {
-    const result = await bridge.openTrade({ type, volume, comment });
+    const result = await bridge.openTrade({ type, volume, comment, stopLoss, takeProfit });
     console.log(`[trading] ${req.user.login} открыл ${type} ${volume} лот — тикет ${result.order ?? result.deal}`);
     res.json(result);
   } catch (err) {
@@ -51,10 +61,43 @@ router.post('/close', async (req, res) => {
   }
 });
 
+// POST /api/trading/position/:ticket/modify — { stopLoss?, takeProfit? } —
+// заявка заказчика: "изменить позицию как в оригинале MT5" (настоящий
+// стоп-лосс/тейк-профит, реальный ордер брокеру через CTrade.PositionModify).
+// Не путать с PATCH ниже — та правка чисто витринная, эта — настоящая.
+router.post('/position/:ticket/modify', async (req, res) => {
+  const ticket = Number(req.params.ticket);
+  if (!Number.isFinite(ticket) || ticket <= 0) {
+    return res.status(400).json({ error: 'Некорректный тикет' });
+  }
+  const stopLoss = req.body?.stopLoss != null ? Number(req.body.stopLoss) : undefined;
+  const takeProfit = req.body?.takeProfit != null ? Number(req.body.takeProfit) : undefined;
+  if (stopLoss != null && !Number.isFinite(stopLoss)) {
+    return res.status(400).json({ error: 'Некорректный стоп-лосс' });
+  }
+  if (takeProfit != null && !Number.isFinite(takeProfit)) {
+    return res.status(400).json({ error: 'Некорректный тейк-профит' });
+  }
+  if (stopLoss == null && takeProfit == null) {
+    return res.status(400).json({ error: 'Укажите стоп-лосс и/или тейк-профит' });
+  }
+  const bridge = getBridge();
+  try {
+    const result = await bridge.modifyPosition({ ticket, stopLoss, takeProfit });
+    console.log(`[trading] ${req.user.login} изменил SL/TP позиции #${ticket}`);
+    res.json(result);
+  } catch (err) {
+    console.error('[trading] modify error:', err.message);
+    res.status(502).json({ error: err.message || 'Не удалось изменить позицию' });
+  }
+});
+
 // PATCH /api/trading/position/:ticket — { openPrice?, profit? } — заявка
 // заказчика: косметическая правка ОТКРЫТОЙ позиции (не запись в БД, как
 // закрытые сделки, — позиция живая). Реального ордера брокеру НЕ уходит.
-router.patch('/position/:ticket', async (req, res) => {
+// Только admin — витрина (обман глаза для показа) остаётся его правом,
+// в отличие от настоящей торговли выше, которую только что открыли trader'у.
+router.patch('/position/:ticket', requireRole('admin'), async (req, res) => {
   const ticket = Number(req.params.ticket);
   if (!Number.isFinite(ticket) || ticket <= 0) {
     return res.status(400).json({ error: 'Некорректный тикет' });
@@ -106,7 +149,7 @@ router.patch('/position/:ticket', async (req, res) => {
 });
 
 // DELETE /api/trading/position/:ticket — сброс правки, вернуть настоящие цифры.
-router.delete('/position/:ticket', async (req, res) => {
+router.delete('/position/:ticket', requireRole('admin'), async (req, res) => {
   const ticket = Number(req.params.ticket);
   if (!Number.isFinite(ticket) || ticket <= 0) {
     return res.status(400).json({ error: 'Некорректный тикет' });

@@ -68,14 +68,17 @@ export class RealBridge extends EventEmitter {
   }
 
   // Реальная рыночная заявка брокеру (EA: CTrade.PositionOpen) — заявка
-  // заказчика "открывать/закрывать сделки из админки". order_type только
-  // 'buy'/'sell' (рыночный ордер) — отложенные заявки админке не нужны.
-  async placeOrder({ symbol, volume, order_type, comment } = {}) {
+  // заказчика "открывать/закрывать сделки из сайта/админки". order_type
+  // только 'buy'/'sell' (рыночный ордер) — отложенные заявки не нужны.
+  // sl/tp опциональны — EA трактует 0/отсутствие как "без стоп-лосса/тейк-профита".
+  async placeOrder({ symbol, volume, order_type, comment, sl, tp } = {}) {
     return post('/order', {
       symbol: symbol || this.symbol,
       volume,
       order_type,
       comment: comment || '',
+      ...(sl != null ? { sl } : {}),
+      ...(tp != null ? { tp } : {}),
     });
   }
 
@@ -83,6 +86,21 @@ export class RealBridge extends EventEmitter {
   // не передан или превышает остаток — см. CommandCore::CloseOrder).
   async closeOrder({ ticket, volume } = {}) {
     return post('/order/close', { ticket, volume: volume || 0 });
+  }
+
+  // Правка SL/TP уже открытой позиции (EA: CTrade.PositionModify) — заявка
+  // заказчика "изменить позицию как в оригинале MT5". Настоящий ордер
+  // брокеру, в отличие от косметической правки цены/прибыли витрины
+  // (position_overrides) — реальная позиция у брокера меняется взаправду.
+  // EA сам подставляет текущий SL/TP, если поле не передано (см.
+  // CommandCore::ModifyOrder — order.sl > 0 ? order.sl : current_sl), так
+  // что 0/undefined значит "не менять это поле", а не "снять уровень".
+  async modifyOrder({ ticket, sl, tp } = {}) {
+    return post('/order/modify', {
+      ticket,
+      ...(sl != null ? { sl } : {}),
+      ...(tp != null ? { tp } : {}),
+    });
   }
 
   // Сырые deals за диапазон (без реконструкции в позиции на стороне EA —

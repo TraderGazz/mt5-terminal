@@ -223,11 +223,25 @@ export interface ApiTradeResult {
   ask?: number;
 }
 
-export const openTrade = (body: { type: 'buy' | 'sell'; volume: number; comment?: string }) =>
-  api<ApiTradeResult>('/trading/open', { method: 'POST', body });
+export const openTrade = (body: {
+  type: 'buy' | 'sell';
+  volume: number;
+  comment?: string;
+  stopLoss?: number;
+  takeProfit?: number;
+}) => api<ApiTradeResult>('/trading/open', { method: 'POST', body });
 
 export const closeTrade = (body: { ticket: number; volume?: number }) =>
   api<ApiTradeResult>('/trading/close', { method: 'POST', body });
+
+// Настоящий SL/TP уже открытой позиции (CTrade.PositionModify у брокера) —
+// заявка заказчика "изменить позицию как в оригинале MT5". В отличие от
+// updatePositionOverride ниже — реальный ордер, реальная позиция меняется.
+export const modifyPosition = (ticket: number, body: { stopLoss?: number; takeProfit?: number }) =>
+  api<{ ticket: number; sl?: number; tp?: number }>(`/trading/position/${ticket}/modify`, {
+    method: 'POST',
+    body,
+  });
 
 // Косметическая правка ОТКРЫТОЙ позиции (не запись в БД — позиция живая):
 // заявка заказчика, цена открытия и/или прибыль/убыток "как будто". Реальная
