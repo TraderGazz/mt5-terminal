@@ -16,10 +16,10 @@ export interface LivePositionData {
 interface PositionSheetProps {
   data: LivePositionData | null;
   onClose: () => void;
-  /** admin/trader (заявка заказчика): реальное закрытие позиции по рынку —
+  /** Admin-only (заявка заказчика): реальное закрытие позиции по рынку —
    * родитель сам показывает подтверждение и шлёт запрос брокеру. */
   onRequestClosePosition?: () => void;
-  /** admin/trader: настоящий S/L и T/P — как в оригинале MT5, реальный
+  /** Admin-only: настоящий S/L и T/P — как в оригинале MT5, реальный
    * ордер брокеру (CTrade.PositionModify). */
   onRequestModifyPosition?: () => void;
   /** Admin-only: косметическая правка цены открытия/прибыли (витрина, без
@@ -30,8 +30,8 @@ interface PositionSheetProps {
 /**
  * Position detail sheet (trade.md): slides up 350ms over a dimmed backdrop,
  * closed by swipe-down / backdrop tap. Scoped to the phone column. Read-only
- * for viewer; admin/trader видят «Закрыть позицию»/«Изменить», admin
- * дополнительно — «Изменить витрину».
+ * for everyone except admin, у которого внизу «Закрыть позицию»/«Изменить»
+ * и дополнительно «Изменить витрину».
  */
 export default function PositionSheet({
   data,

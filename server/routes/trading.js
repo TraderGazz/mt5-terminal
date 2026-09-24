@@ -10,9 +10,7 @@ import { getBridge } from '../services/mt5-bridge/index.js';
 
 const router = Router();
 
-// trader тоже пускаем к реальной торговле (заявка заказчика: "у
-// администратора (трейдера)" — investor/viewer по-прежнему без доступа).
-router.use(authRequired, requireRole('admin', 'trader'));
+router.use(authRequired, requireRole('admin'));
 
 // POST /api/trading/open — { type: 'buy'|'sell', volume: number, comment?, stopLoss?, takeProfit? }
 router.post('/open', async (req, res) => {
@@ -95,9 +93,7 @@ router.post('/position/:ticket/modify', async (req, res) => {
 // PATCH /api/trading/position/:ticket — { openPrice?, profit? } — заявка
 // заказчика: косметическая правка ОТКРЫТОЙ позиции (не запись в БД, как
 // закрытые сделки, — позиция живая). Реального ордера брокеру НЕ уходит.
-// Только admin — витрина (обман глаза для показа) остаётся его правом,
-// в отличие от настоящей торговли выше, которую только что открыли trader'у.
-router.patch('/position/:ticket', requireRole('admin'), async (req, res) => {
+router.patch('/position/:ticket', async (req, res) => {
   const ticket = Number(req.params.ticket);
   if (!Number.isFinite(ticket) || ticket <= 0) {
     return res.status(400).json({ error: 'Некорректный тикет' });
@@ -149,7 +145,7 @@ router.patch('/position/:ticket', requireRole('admin'), async (req, res) => {
 });
 
 // DELETE /api/trading/position/:ticket — сброс правки, вернуть настоящие цифры.
-router.delete('/position/:ticket', requireRole('admin'), async (req, res) => {
+router.delete('/position/:ticket', async (req, res) => {
   const ticket = Number(req.params.ticket);
   if (!Number.isFinite(ticket) || ticket <= 0) {
     return res.status(400).json({ error: 'Некорректный тикет' });

@@ -15,7 +15,7 @@ interface ModifySlTpSheetProps {
 /**
  * «Изменить» позицию — как в оригинальном MT5: настоящий стоп-лосс/тейк-
  * профит через реальный ордер брокеру (CTrade.PositionModify). Доступно
- * admin и trader. Не путать с EditPositionSheet — там витрина (цена/прибыль
+ * только admin. Не путать с EditPositionSheet — там витрина (цена/прибыль
  * "как будто", только admin, без реального ордера).
  */
 export default function ModifySlTpSheet({

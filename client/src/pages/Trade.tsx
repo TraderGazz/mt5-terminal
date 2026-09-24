@@ -86,12 +86,13 @@ function AccountRow({ label, value }: { label: string; value: string }) {
 
 export default function TradePage() {
   // Реальные открытие/закрытие/изменение сделок прямо на сайте — заявка
-  // заказчика, для admin И trader (не viewer/инвестор). Это настоящий ордер
-  // брокеру через MT5-мост, не мок/запись для витрины — как и в отдельной
-  // админке. Косметическая правка витрины (цена/прибыль "как будто") —
-  // отдельно, только admin (canEditShowcase).
+  // заказчика, только для admin (в проекте на практике только две роли:
+  // admin и viewer/только просмотр — "трейдер" в формулировке заказчика
+  // был не отдельной ролью, а просто синонимом администратора). Это
+  // настоящий ордер брокеру через MT5-мост, не мок/запись для витрины —
+  // как и в отдельной админке.
   const role = useCurrentRole();
-  const canTrade = role === 'admin' || role === 'trader';
+  const canTrade = role === 'admin';
   const canEditShowcase = role === 'admin';
   const [orderSheet, setOrderSheet] = useState(false);
   const [submittingOrder, setSubmittingOrder] = useState(false);
@@ -416,8 +417,8 @@ export default function TradePage() {
         </div>
       )}
 
-      {/* Position detail sheet — «Изменить»/«Закрыть позицию» для admin+trader,
-          «Изменить витрину» дополнительно только у admin */}
+      {/* Position detail sheet — «Изменить»/«Закрыть позицию»/«Изменить
+          витрину» только у admin */}
       <PositionSheet
         data={selectedData}
         onClose={() => setSelected(null)}
@@ -428,7 +429,7 @@ export default function TradePage() {
         onRequestEditShowcase={canEditShowcase && selectedData ? () => setEditSheet(true) : undefined}
       />
 
-      {/* Настоящий S/L и T/P (admin+trader) — реальный ордер брокеру */}
+      {/* Настоящий S/L и T/P (admin) — реальный ордер брокеру */}
       {selectedData && (
         <ModifySlTpSheet
           open={modifySheet}
@@ -457,7 +458,7 @@ export default function TradePage() {
         />
       )}
 
-      {/* Новый ордер (admin+trader) — реальная рыночная заявка, не мок */}
+      {/* Новый ордер (admin) — реальная рыночная заявка, не мок */}
       <NewOrderSheet
         open={orderSheet}
         symbol={SYMBOL}
@@ -469,7 +470,7 @@ export default function TradePage() {
         onClose={() => !submittingOrder && setOrderSheet(false)}
       />
 
-      {/* Подтверждение закрытия позиции (admin+trader) */}
+      {/* Подтверждение закрытия позиции (admin) */}
       <ActionSheet
         open={closeConfirm !== null}
         onClose={() => !closing && setCloseConfirm(null)}
