@@ -15,7 +15,7 @@ export default function LoginPage() {
     setBusy(true);
     setError(null);
     login(loginId.trim(), password)
-      .then(() => navigate('/trade', { replace: true }))
+      .then(() => navigate('/', { replace: true }))
       .catch((err: Error) => { setError(err.message); setBusy(false); setPassword(''); });
   };
 

@@ -9,12 +9,13 @@ export interface Position {
   id: number; symbol: string; type: 'buy' | 'sell'; volume: number;
   openPrice: number; currentPrice: number; openTime: string | null;
   profit: number; swap: number; commission: number;
+  stopLoss: number; takeProfit: number;
 }
 export interface HistoryRow {
   ticket: number; symbol: string; dealType: string; type?: string; volume: number;
   openPrice: number; closePrice: number; profit: number; swap: number; commission: number;
   openTime: string | null; closeTime: string | null; comment: string; isEdited?: boolean;
-  price?: number; state?: string;
+  price?: number; state?: string; stopLoss: number; takeProfit: number;
 }
 export interface HistoryTotals {
   deposit: number; withdrawal: number; profit: number; cfd: number;
@@ -31,3 +32,7 @@ export interface HistoryResponse {
 export const getAccount = () => api<{ account: Account }>('/account').then((r) => r.account);
 export const getPositions = () => api<{ positions: Position[] }>('/positions').then((r) => r.positions);
 export const getHistory = (q: Record<string, string | undefined>) => api<HistoryResponse>('/history', { query: q });
+
+export interface Candle { time: number; open: number; high: number; low: number; close: number; volume: number }
+export const getCandles = (timeframe: string, count = 300) =>
+  api<{ symbol: string; timeframe: string; bars: Candle[] }>('/candles', { query: { timeframe, count } });

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router';
+import { Outlet, useNavigate } from 'react-router';
 import { getAccount, type Account } from '@/api/rest';
 import { wsClient } from '@/api/ws';
 import { logout } from '@/api/auth';
@@ -30,23 +30,13 @@ export default function Shell() {
     return off;
   }, []);
 
-  const tab = 'px-4 py-3 text-[14px] font-medium border-b-2 -mb-px transition-colors';
-
   return (
-    <div className="mx-auto flex min-h-full max-w-[1200px] flex-col bg-white">
-      <header className="flex items-center gap-6 border-b border-hairline px-6">
+    <div className="flex h-full flex-col bg-white">
+      <header className="flex shrink-0 items-center gap-6 border-b border-hairline px-6">
         <span className="flex items-center gap-2 py-3 pr-2 font-semibold tracking-[-0.3px]">
           <span className="flex h-7 w-7 items-center justify-center rounded-md bg-accent text-[13px] font-bold text-white">MT</span>
           MetaTrader 5
         </span>
-        <nav className="flex">
-          <NavLink to="/trade" className={({ isActive }) => `${tab} ${isActive ? 'border-accent text-accent' : 'border-transparent text-text-2 hover:text-black'}`}>
-            Торговля
-          </NavLink>
-          <NavLink to="/history" className={({ isActive }) => `${tab} ${isActive ? 'border-accent text-accent' : 'border-transparent text-text-2 hover:text-black'}`}>
-            История
-          </NavLink>
-        </nav>
         <button
           onClick={() => { logout(); navigate('/login', { replace: true }); }}
           className="ml-auto text-[13px] text-text-2 hover:text-loss"
@@ -56,21 +46,21 @@ export default function Shell() {
       </header>
 
       {account && (
-        <div className="grid grid-cols-2 gap-x-8 gap-y-3 border-b border-hairline bg-grouped px-6 py-3 sm:grid-cols-3 md:grid-cols-6">
+        <div className="flex shrink-0 items-center gap-8 border-b border-hairline bg-grouped px-6 py-2.5">
           <Metric label="Баланс" value={`${money(account.balance)} ${account.currency}`} />
           <Metric label="Средства" value={money(account.equity)} />
           <Metric label="Маржа" value={money(account.margin)} />
           <Metric label="Свободная маржа" value={money(account.freeMargin)} />
           <Metric label="Уровень маржи" value={`${account.marginLevel.toFixed(2)} %`} />
           <Metric
-            label="Плавающий P/L"
+            label="Прибыль"
             value={money(account.floatingProfit)}
             tone={account.floatingProfit < 0 ? 'neg' : 'pos'}
           />
         </div>
       )}
 
-      <main className="flex-1 px-6 py-4">
+      <main className="min-h-0 flex-1">
         <Outlet />
       </main>
     </div>
