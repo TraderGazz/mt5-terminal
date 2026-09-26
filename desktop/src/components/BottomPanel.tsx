@@ -24,6 +24,13 @@ function TypeCell({ type }: { type: string }) {
   return <span className={type === 'buy' ? 'text-accent' : 'text-loss'}>{type}</span>;
 }
 
+/** Ячейка S/L или T/P — с цветной подложкой, как в оригинале, когда уровень выставлен. */
+function LevelCell({ value, kind }: { value: number; kind: 'sl' | 'tp' }) {
+  if (!value) return <td className={TD}>—</td>;
+  const bg = kind === 'sl' ? 'bg-[#FFEBEA] text-[#B3261E]' : 'bg-[#E8F8EC] text-[#1E7B34]';
+  return <td className={`${TD} ${bg}`}>{price(value)}</td>;
+}
+
 /** Вкладка «Торговля» — открытые позиции, 1-в-1 со скриншотом оригинала. */
 function TradeTab() {
   const [positions, setPositions] = useState<Position[]>([]);
@@ -65,8 +72,8 @@ function TradeTab() {
               <td className={`${TD} text-text-2`}>{dt(p.openTime)}</td>
               <td className={TD}><TypeCell type={p.type} /></td>
               <td className={TD}>{lots(p.volume)}</td>
-              <td className={TD}>{price(p.stopLoss)}</td>
-              <td className={TD}>{price(p.takeProfit)}</td>
+              <LevelCell value={p.stopLoss} kind="sl" />
+              <LevelCell value={p.takeProfit} kind="tp" />
               <td className={TD}>{p.openPrice}</td>
               <td className={TD}>{money(p.swap)}</td>
               <td className={`${TD} font-medium ${p.profit < 0 ? 'text-loss' : 'text-accent'}`}>
@@ -123,6 +130,7 @@ function HistoryTab() {
             <tr>
               <th className={TH}>Время</th>
               <th className={TH}>Символ</th>
+              <th className={TH}>Тикет</th>
               <th className={TH}>Тип</th>
               <th className={TH}>Объём</th>
               <th className={TH}>Цена</th>
@@ -137,7 +145,7 @@ function HistoryTab() {
           <tbody>
             {(!data || data.rows.length === 0) && (
               <tr>
-                <td className={`${TD} text-center text-text-2`} colSpan={11}>
+                <td className={`${TD} text-center text-text-2`} colSpan={12}>
                   {data ? 'Нет сделок за период' : 'Загрузка…'}
                 </td>
               </tr>
@@ -146,11 +154,12 @@ function HistoryTab() {
               <tr key={r.ticket} className="hover:bg-grouped/60">
                 <td className={`${TD} text-text-2`}>{dt(r.openTime)}</td>
                 <td className={`${TD} font-medium`}>{r.symbol}</td>
+                <td className={`${TD} text-text-2`}>{r.ticket}</td>
                 <td className={TD}><TypeCell type={r.dealType} /></td>
                 <td className={TD}>{lots(r.volume)}</td>
                 <td className={TD}>{r.openPrice}</td>
-                <td className={TD}>{price(r.stopLoss)}</td>
-                <td className={TD}>{price(r.takeProfit)}</td>
+                <LevelCell value={r.stopLoss} kind="sl" />
+                <LevelCell value={r.takeProfit} kind="tp" />
                 <td className={`${TD} text-text-2`}>{dt(r.closeTime)}</td>
                 <td className={TD}>{r.closePrice}</td>
                 <td className={`${TD} font-medium ${r.profit < 0 ? 'text-loss' : 'text-accent'}`}>
