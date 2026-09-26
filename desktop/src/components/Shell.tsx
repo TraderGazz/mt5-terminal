@@ -36,14 +36,15 @@ export default function Shell() {
 
   return (
     <div className="flex h-full flex-col bg-white">
-      <header className="flex shrink-0 items-center gap-6 border-b border-hairline px-6">
-        <span className="flex items-center gap-2 py-3 pr-2 font-semibold tracking-[-0.3px]">
-          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-accent text-[13px] font-bold text-white">MT</span>
-          MetaTrader 5
-        </span>
+      {/* Тёмная строка сверху — как заголовок окна в оригинале (нативные
+          кнопки свернуть/развернуть/закрыть не имитируем: это настоящая
+          вкладка браузера, а не окно ОС, фейковые кнопки были бы обманом). */}
+      <header className="flex h-8 shrink-0 items-center gap-3 bg-[#1b2733] px-3 text-[13px] text-[#d5dbe2]">
+        <span className="flex h-5 w-5 items-center justify-center rounded-[3px] bg-accent text-[10px] font-bold text-white">MT</span>
+        <span className="font-medium">MetaTrader 5 — Торговый терминал</span>
         <button
           onClick={() => { logout(); navigate('/login', { replace: true }); }}
-          className="ml-auto text-[13px] text-text-2 hover:text-loss"
+          className="ml-auto text-[12px] text-[#9aa7b5] hover:text-white"
         >
           Выйти
         </button>

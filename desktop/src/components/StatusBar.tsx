@@ -8,10 +8,9 @@ export default function StatusBar() {
         <span>Сигналы</span>
         <span>VPS</span>
         <span>Тестер</span>
-        <span className="flex items-center gap-1">
-          <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-          Default
-        </span>
+        <span className="tnum">0.0 / 0.0 Mb</span>
+        <span>Default</span>
+        <span className="h-2.5 w-2.5 rounded-[2px] bg-accent" title="Соединение установлено" />
       </span>
     </div>
   );

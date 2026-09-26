@@ -17,8 +17,8 @@ const TABS: { id: TabId; label: string; enabled: boolean }[] = [
   { id: 'journal', label: 'Журнал', enabled: false },
 ];
 
-const TH = 'px-3 py-1.5 text-left text-[12px] font-medium text-text-2 border-b border-hairline whitespace-nowrap';
-const TD = 'tnum px-3 py-1 text-[13px] whitespace-nowrap border-b border-hairline';
+const TH = 'px-2 py-1 text-left text-[12px] font-medium text-text-2 border-b border-hairline whitespace-nowrap bg-white';
+const TD = 'tnum px-2 py-0.5 text-[12px] leading-[18px] whitespace-nowrap border-b border-hairline';
 
 function TypeCell({ type }: { type: string }) {
   return <span className={type === 'buy' ? 'text-accent' : 'text-loss'}>{type}</span>;
@@ -43,7 +43,7 @@ function TradeTab() {
   return (
     <div className="overflow-auto">
       <table className="w-full border-collapse">
-        <thead className="sticky top-0 bg-grouped">
+        <thead className="sticky top-0 bg-white">
           <tr>
             <th className={TH}>Символ</th>
             <th className={TH}>Тикет</th>
@@ -112,7 +112,7 @@ function HistoryTab() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 border-b border-hairline bg-grouped px-3 py-1.5">
+      <div className="flex items-center gap-2 border-b border-hairline bg-white px-2 py-1">
         <span className="text-[12px] text-text-2">Период:</span>
         <select
           value={period}
@@ -126,9 +126,9 @@ function HistoryTab() {
       </div>
       <div className="flex-1 overflow-auto">
         <table className="w-full border-collapse">
-          <thead className="sticky top-0 bg-grouped">
+          <thead className="sticky top-0 bg-white">
             <tr>
-              <th className={TH}>Время</th>
+              <th className={TH}>Время ▾</th>
               <th className={TH}>Символ</th>
               <th className={TH}>Тикет</th>
               <th className={TH}>Тип</th>
@@ -172,12 +172,13 @@ function HistoryTab() {
         </table>
       </div>
       {t && (
-        <div className="flex items-center gap-6 border-t border-hairline bg-grouped px-3 py-1.5 text-[13px]">
+        <div className="flex items-center gap-6 border-t border-hairline bg-white px-2 py-1 text-[12px]">
           <span>Прибыль: <b className="tnum">{money(t.profit)}</b></span>
           <span>Кредит: <b className="tnum">0.00</b></span>
           <span>Пополнение: <b className="tnum">{money(t.deposit)}</b></span>
           <span>Снятие: <b className="tnum">{money(t.withdrawal)}</b></span>
           <span>Баланс: <b className="tnum">{money(t.balance)}</b></span>
+          <span className={`ml-auto tnum font-medium ${t.profit < 0 ? 'text-loss' : 'text-accent'}`}>{money(t.profit)}</span>
         </div>
       )}
     </div>

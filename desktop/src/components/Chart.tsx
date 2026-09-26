@@ -4,6 +4,7 @@ import {
   ColorType,
   createChart,
   createSeriesMarkers,
+  LineStyle,
   type CandlestickData,
   type IChartApi,
   type ISeriesApi,
@@ -55,19 +56,40 @@ export default function Chart({ timeframe }: { timeframe: string }) {
     const chart = createChart(el, {
       layout: { background: { type: ColorType.Solid, color: '#ffffff' }, textColor: '#1c1c1e', attributionLogo: false },
       grid: {
-        vertLines: { color: '#f0f0f3' },
-        horzLines: { color: '#f0f0f3' },
+        vertLines: { color: '#d6d6da', style: LineStyle.Dotted },
+        horzLines: { color: '#d6d6da', style: LineStyle.Dotted },
       },
-      rightPriceScale: { borderColor: '#e5e5e5' },
-      timeScale: { borderColor: '#e5e5e5', timeVisible: true, secondsVisible: false },
+      rightPriceScale: { borderColor: '#c8c8cc' },
+      timeScale: {
+        borderColor: '#c8c8cc',
+        timeVisible: true,
+        secondsVisible: false,
+        // оригинал MT5 показывает дату+время на каждой отметке оси, не
+        // только на смене суток (в отличие от "умного" форматтера по умолчанию).
+        tickMarkFormatter: (time: Time) => {
+          if (typeof time !== 'number') return '';
+          const d = new Date(time * 1000);
+          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          const pad2 = (n: number) => String(n).padStart(2, '0');
+          return `${d.getDate()} ${months[d.getMonth()]} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+        },
+      },
       crosshair: { mode: 0 },
     });
+    // Цветовая схема как на референсе заказчика: полые бело-чёрные тела
+    // (не закрашенные зелёный/красный, как в типичных веб-чартах) и
+    // одноцветные зелёные тени — конкретная настройка именно этого
+    // терминала, но раз заказчик прислал её как образец — воспроизвели точно.
     const series = chart.addSeries(CandlestickSeries, {
-      upColor: '#34C759',
-      downColor: '#FF3B30',
-      borderVisible: false,
-      wickUpColor: '#34C759',
-      wickDownColor: '#FF3B30',
+      upColor: '#ffffff',
+      downColor: '#000000',
+      borderVisible: true,
+      borderUpColor: '#000000',
+      borderDownColor: '#000000',
+      wickUpColor: '#00A651',
+      wickDownColor: '#00A651',
+      priceLineColor: '#787b86',
+      priceLineStyle: LineStyle.Dashed,
     });
     chartRef.current = chart;
     seriesRef.current = series;
