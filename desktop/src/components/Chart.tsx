@@ -34,7 +34,7 @@ export default function Chart() {
     if (!el) return;
 
     const chart = createChart(el, {
-      layout: { background: { type: ColorType.Solid, color: '#ffffff' }, textColor: '#1c1c1e' },
+      layout: { background: { type: ColorType.Solid, color: '#ffffff' }, textColor: '#1c1c1e', attributionLogo: false },
       grid: {
         vertLines: { color: '#f0f0f3' },
         horzLines: { color: '#f0f0f3' },
