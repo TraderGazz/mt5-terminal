@@ -269,14 +269,36 @@ export default function HistoryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter.symbol, range, dealsVersion, sort]);
 
-  // Депозит/снятие СТРОКАМИ в Истории — заявка заказчика: только те, что
-  // реально есть в выписке (ledgerBalanceRows), НЕ синхронизированные с EA
-  // demo-записи из БД (там мусор — заказчик отдельно попросил почистить
-  // саму таблицу в админке). symbol у баланса нет — при выбранном
+  // Депозиты/снятия, добавленные ВРУЧНУЮ через админку (заявка заказчика,
+  // 2026-09-29: "теперь они будут добавляться вручную, надо чтобы при
+  // создании пополнения всё учитывалось сразу и отображалось на сайте") —
+  // отличаем от мусорных EA-синхронизированных записей по тикету: ручные
+  // создаются с отрицательным синтетическим тикетом (см. admin
+  // TradesSection.tsx createTrade({ticket: -Date.now(), ...})), у EA-синка
+  // тикет всегда положительный. Старые пополнения/снятия (до этой даты) уже
+  // перенесены в ledgerBalanceRows построчно из официальной выписки — сюда
+  // их заново вносить не нужно, дублирования не будет, пока этот список не
+  // трогают руками.
+  const manualBalanceOps = useMemo(
+    () =>
+      getBalanceOps().filter(
+        (d) => d.ticket < 0 && d.closeTime >= range.from && d.closeTime <= range.to,
+      ),
+    [range, dealsVersion],
+  );
+
+  // Депозит/снятие СТРОКАМИ в Истории — из выписки (ledgerBalanceRows) +
+  // ручные записи из админки выше. symbol у баланса нет — при выбранном
   // конкретном символе строки скрываются целиком.
   const balanceRows = useMemo(
-    () => (filter.symbol == null ? ledgerBalanceRows(range.from, range.to) : []),
-    [filter.symbol, range],
+    () =>
+      filter.symbol == null
+        ? [
+            ...ledgerBalanceRows(range.from, range.to),
+            ...manualBalanceOps.map((d): LedgerBalanceRow => ({ ticket: d.ticket, profit: d.profit, closeTime: d.closeTime })),
+          ]
+        : [],
+    [filter.symbol, range, manualBalanceOps],
   );
 
   // Объединённый список для вкладки «Сделки»: сырые сделки + депозиты/
@@ -441,17 +463,23 @@ export default function HistoryPage() {
     return { profit, swap, commission, total: profit + swap + commission };
   }, [dealLegs]);
 
-  // Депозит/снятие — ТОЛЬКО из официальной выписки брокера (depositLedger.ts,
-  // заявка заказчика). Синхронизированные с EA balance-записи за всё время
-  // не совпадают с выпиской (68.7М против 25.3М по сумме депозитов) — раз
-  // выписка авторитетна, любая дата, которой в ней нет, должна показывать 0,
-  // а не подставлять несовпадающие цифры из EA. Отсюда и ожидаемое поведение:
-  // период «Месяц» (целиком после LEDGER_END, где в выписке пусто) должен
-  // показывать депозит 0 — так и просил заказчик.
+  // Депозит/снятие — из официальной выписки брокера (depositLedger.ts) +
+  // ручные записи из админки (manualBalanceOps выше, заявка заказчика от
+  // 2026-09-29). EA-синхронизированные balance-записи (тикет > 0) сюда
+  // по-прежнему НЕ входят — за всё время они не совпадают с выпиской
+  // (68.7М против 25.3М по сумме депозитов), это мусор терминала, а не
+  // реальные операции.
   const balTotals = useMemo(() => {
     const { deposit, withdrawal } = depositTotalsForRange(range.from, range.to);
-    return { deposit, withdrawal, net: deposit - withdrawal };
-  }, [range]);
+    let manualDeposit = 0;
+    let manualWithdrawal = 0;
+    for (const d of manualBalanceOps) {
+      if (d.profit >= 0) manualDeposit += d.profit;
+      else manualWithdrawal += -d.profit;
+    }
+    const total = { deposit: deposit + manualDeposit, withdrawal: withdrawal + manualWithdrawal };
+    return { ...total, net: total.deposit - total.withdrawal };
+  }, [range, manualBalanceOps]);
 
   const cfdTotal = useMemo(() => cfdOps.reduce((s, d) => s + d.profit, 0), [cfdOps]);
 
