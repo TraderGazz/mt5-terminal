@@ -596,7 +596,27 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
 
   const filtered = type === 'all' ? merged : merged.filter((r) => r.deal_type === type);
 
-  const periodTotals = { deposit: ledger.deposit, withdrawal: ledger.withdrawal, ...totals };
+  // Ручные депозиты/снятия из этой же таблицы (тикет < 0 — то же самое
+  // отличие от мусорных EA-записей, что и выше в nonLedgerRows) — заявка
+  // заказчика 2026-09-30: "тут не добавилась сумма к снятию 1411746, хотя
+  // в истории мобильного добавился" — сумма наверху считалась ТОЛЬКО по
+  // выписке, без сделанного ранее в client History.tsx учёта ручных
+  // записей. Тот же нюанс с лимитом 1000 строк, что и у списка ниже.
+  let manualDeposit = 0;
+  let manualWithdrawal = 0;
+  for (const r of nonLedgerRows) {
+    if (r.deal_type !== 'balance' && r.deal_type !== 'withdrawal') continue;
+    if (r.ticket >= 0) continue;
+    const profit = Number(r.profit) || 0;
+    if (profit >= 0) manualDeposit += profit;
+    else manualWithdrawal += -profit;
+  }
+
+  const periodTotals = {
+    deposit: ledger.deposit + manualDeposit,
+    withdrawal: ledger.withdrawal + manualWithdrawal,
+    ...totals,
+  };
   const periodBalance =
     periodTotals.deposit -
     periodTotals.withdrawal +
