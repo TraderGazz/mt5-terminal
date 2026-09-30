@@ -93,6 +93,19 @@ function RealBalanceSection({ showToast }: { showToast: (msg: string) => void })
   const set = (key: keyof BalanceForm) => (e: ChangeEvent<HTMLInputElement>) =>
     setForm((prev) => ({ ...(prev ?? emptyForm), [key]: e.target.value }));
 
+  // «Прибыль» — не отдельное поле счёта (моста нет такого понятия
+  // отдельно от Средств), а Средства минус Баланс, ровно как крупная
+  // цифра наверху страницы «Торговля» на сайте (заявка заказчика: "было
+  // бы неплохо, если сверху была прибыль, а не средства" — сверху в
+  // превью до этого дублировались "Средства", раз повыше, раз строкой
+  // ниже). Ввод целевой прибыли пересчитывает Средства сам (Средства =
+  // Баланс + введённая прибыль), отдельного состояния не заводим — так
+  // правка через "Средства" и через "Прибыль" не могут разойтись.
+  const setProfit = (e: ChangeEvent<HTMLInputElement>) => {
+    const profit = parse(e.target.value);
+    setForm((prev) => ({ ...(prev ?? emptyForm), equity: String(values.balance + profit) }));
+  };
+
   // Правка — это СМЕЩЕНИЕ от реального показания моста (как у позиции),
   // не замена навсегда: сервер сам считает разницу между введённым и
   // текущим эффективным значением. После сохранения подтягиваем свежие
@@ -136,10 +149,22 @@ function RealBalanceSection({ showToast }: { showToast: (msg: string) => void })
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <AdminInput label="Баланс" suffix="₽" inputMode="decimal" value={form.balance} onChange={set('balance')} />
               <AdminInput label="Средства" suffix="₽" inputMode="decimal" value={form.equity} onChange={set('equity')} />
+              <AdminInput
+                label="Прибыль"
+                suffix="₽"
+                inputMode="decimal"
+                value={String(values.equity - values.balance)}
+                onChange={setProfit}
+              />
               <AdminInput label="Маржа" suffix="₽" inputMode="decimal" value={form.margin} onChange={set('margin')} />
               <AdminInput label="Свободная маржа" suffix="₽" inputMode="decimal" value={form.freeMargin} onChange={set('freeMargin')} />
               <AdminInput label="Уровень маржи" suffix="%" inputMode="decimal" value={form.marginLevel} onChange={set('marginLevel')} />
             </div>
+            <p className="text-[12px] leading-[16px] text-text-secondary">
+              Прибыль — не отдельная цифра счёта, а Средства минус Баланс
+              (как наверху страницы «Торговля» на сайте): меняете любое из
+              двух полей — Прибыль и Средства пересчитываются друг через друга сами.
+            </p>
             <div className="mt-1 flex justify-end gap-2">
               <AdminButton variant="secondary" onClick={() => setResetOpen(true)} disabled={saving}>
                 Сбросить к реальным
@@ -154,8 +179,12 @@ function RealBalanceSection({ showToast }: { showToast: (msg: string) => void })
         <AdminCard title="Как увидит пользователь">
           <div className="p-5">
             <div className="rounded-[10px] bg-bg-secondary p-4">
-              <p className="tnum text-[28px] font-semibold tracking-[-0.5px] text-black">
-                {formatMoney(values.equity)}
+              <p
+                className={`tnum text-[28px] font-semibold tracking-[-0.5px] ${
+                  values.equity - values.balance < 0 ? 'text-loss' : 'text-accent'
+                }`}
+              >
+                {formatMoney(values.equity - values.balance)}
               </p>
               <div className="mt-3 divide-y divide-separator/70">
                 <PreviewRow label="Баланс" value={values.balance} />
