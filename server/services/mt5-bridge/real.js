@@ -22,7 +22,26 @@ const TF_MINUTES = { M1: 1, M5: 5, M15: 15, M30: 30, H1: 60, H4: 240, D1: 1440 }
 const BROKER_UTC_OFFSET_MS = 3 * 3600 * 1000;
 const brokerDate = (d) => new Date(d.getTime() + BROKER_UTC_OFFSET_MS);
 
-async function get(path, params, timeoutMs = TIMEOUT_MS) {
+// EA однопоточный (MQL5 — нет настоящей многопоточности): параллельные
+// запросы к его HTTP-серверу либо валятся в 500, либо (при большом числе
+// позиций — видели 341 на реальном счёте) рвут TCP-соединение целиком
+// ("other side closed" — баг-репорт после перезапуска сервера, до этого
+// не всплывало, видимо, при меньшем числе позиций однопоточный советник
+// успевал). Раньше так уже сериализовали только getQuotes() (см. её
+// комментарий); здесь — общая очередь на ВСЕ HTTP-запросы к мосту (get/
+// post), чтобы опрос счёта, фоновая синхронизация истории и прямые запросы
+// с сайта никогда не били по советнику одновременно.
+let chain = Promise.resolve();
+function enqueue(fn) {
+  const result = chain.then(fn, fn);
+  chain = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
+
+async function rawGet(path, params, timeoutMs) {
   const url = new URL(BASE + path);
   for (const [k, v] of Object.entries(params || {})) if (v != null) url.searchParams.set(k, String(v));
   // EA's HTTP-параметры парсятся наивным StringSplit без URL-decode — %3A
@@ -36,7 +55,11 @@ async function get(path, params, timeoutMs = TIMEOUT_MS) {
   return res.json();
 }
 
-async function post(path, body, timeoutMs = TIMEOUT_MS) {
+function get(path, params, timeoutMs = TIMEOUT_MS) {
+  return enqueue(() => rawGet(path, params, timeoutMs));
+}
+
+async function rawPost(path, body, timeoutMs) {
   const ctl = AbortSignal.timeout(timeoutMs);
   const res = await fetch(BASE + path, {
     method: 'POST',
@@ -47,6 +70,10 @@ async function post(path, body, timeoutMs = TIMEOUT_MS) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.details || `bridge ${path} → HTTP ${res.status}`);
   return data;
+}
+
+function post(path, body, timeoutMs = TIMEOUT_MS) {
+  return enqueue(() => rawPost(path, body, timeoutMs));
 }
 
 export class RealBridge extends EventEmitter {
