@@ -135,19 +135,50 @@ class Bridge extends EventEmitter {
   // она считается от объёма/плеча, не от прибыли, реальному брокеру
   // косметика не передаётся, поэтому это число остаётся настоящим.
   async account() {
-    const acc = N.normalizeAccount(await this.impl.getAccount());
-    if (this.overrides.size === 0) return acc;
-    // Один поход к брокеру (rawPositions), не два — positions() внутри себя
-    // тоже вызывает rawPositions(), дублировать запрос незачем.
-    const raw = await this.rawPositions();
-    const delta = raw.reduce((s, p) => s + (this.#applyOverride(p).profit - p.profit), 0);
-    if (delta === 0) return acc;
-    return {
-      ...acc,
-      floatingProfit: acc.floatingProfit + delta,
-      equity: acc.equity + delta,
-      freeMargin: acc.freeMargin + delta,
-    };
+    let acc = N.normalizeAccount(await this.impl.getAccount());
+
+    if (this.overrides.size > 0) {
+      // Один поход к брокеру (rawPositions), не два — positions() внутри себя
+      // тоже вызывает rawPositions(), дублировать запрос незачем.
+      const raw = await this.rawPositions();
+      const delta = raw.reduce((s, p) => s + (this.#applyOverride(p).profit - p.profit), 0);
+      if (delta !== 0) {
+        acc = { ...acc, floatingProfit: acc.floatingProfit + delta, equity: acc.equity + delta, freeMargin: acc.freeMargin + delta };
+      }
+    }
+
+    // Заявка заказчика (2026-09-29): ручные депозиты/снятия из админки
+    // (см. History.tsx на клиенте — тот же признак: тикет < 0, EA-синк
+    // всегда положительный) должны сразу двигать "Баланс" везде на сайте,
+    // не только сумму в Истории — баг-репорт: "внёс снятие, в истории
+    // заминусовался баланс, а в торговле — нет" (там Баланс = это самое
+    // acc.balance от моста, снятие его не трогало). В отличие от правки
+    // позиции (только floatingProfit/equity/freeMargin — реализованный
+    // баланс не меняется), депозит/снятие — это реальное движение денег,
+    // двигает balance/equity/freeMargin разом на одну и ту же сумму.
+    const manualDelta = await this.#manualBalanceDelta();
+    if (manualDelta !== 0) {
+      acc = {
+        ...acc,
+        balance: acc.balance + manualDelta,
+        equity: acc.equity + manualDelta,
+        freeMargin: acc.freeMargin + manualDelta,
+      };
+    }
+
+    return acc;
+  }
+
+  async #manualBalanceDelta() {
+    try {
+      const { rows } = await query(
+        `SELECT COALESCE(SUM(profit), 0) AS delta FROM trades WHERE ticket < 0 AND deal_type IN ('balance', 'withdrawal')`,
+      );
+      return Number(rows[0]?.delta) || 0;
+    } catch (err) {
+      console.error('[mt5-bridge] manualBalanceDelta error:', err.message);
+      return 0;
+    }
   }
 
   async positions() {
