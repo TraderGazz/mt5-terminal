@@ -147,16 +147,23 @@ class Bridge extends EventEmitter {
       }
     }
 
-    // Заявка заказчика (2026-09-29): ручные депозиты/снятия из админки
-    // (см. History.tsx на клиенте — тот же признак: тикет < 0, EA-синк
-    // всегда положительный) должны сразу двигать "Баланс" везде на сайте,
-    // не только сумму в Истории — баг-репорт: "внёс снятие, в истории
-    // заминусовался баланс, а в торговле — нет" (там Баланс = это самое
-    // acc.balance от моста, снятие его не трогало). В отличие от правки
-    // позиции (только floatingProfit/equity/freeMargin — реализованный
-    // баланс не меняется), депозит/снятие — это реальное движение денег,
-    // двигает balance/equity/freeMargin разом на одну и ту же сумму.
-    const manualDelta = await this.#manualBalanceDelta();
+    // Заявка заказчика (2026-09-29): ручные записи из админки — не только
+    // депозит/снятие, но и сделки buy/sell/CFD задним числом ("Добавить
+    // сделку" в HistoryEditor) — должны двигать "Баланс" везде на сайте,
+    // не только сумму в Истории. Первая версия фикса учитывала только
+    // balance/withdrawal и пропускала ручные buy/sell: баг-репорт —
+    // "Баланс" в Истории и на Торговле разошлись (в Истории уже сидит
+    // прибыль ручных сделок с символом "EURUSDrfd", их в реальном
+    // терминале никогда не было, брокер о них не знает). Признак тот же,
+    // что и в client History.tsx / admin TradesSection.tsx: тикет < 0 —
+    // синтетический (-Date.now()), у EA-синка тикет всегда положительный,
+    // так что реальные сделки под эту дельту не попадают ни при каком
+    // deal_type. Своп/комиссия для ручных депозита/снятия/CFD в БД всегда
+    // 0 (см. admin submitAdd), так что суммировать их вместе с profit
+    // безопасно для любого deal_type — реальные ("живые") сделки эту
+    // сумму никак не удваивают, дельта только "довешивает" то, чего
+    // брокер не видел.
+    const manualDelta = await this.#manualEntriesDelta();
     if (manualDelta !== 0) {
       acc = {
         ...acc,
@@ -169,14 +176,14 @@ class Bridge extends EventEmitter {
     return acc;
   }
 
-  async #manualBalanceDelta() {
+  async #manualEntriesDelta() {
     try {
       const { rows } = await query(
-        `SELECT COALESCE(SUM(profit), 0) AS delta FROM trades WHERE ticket < 0 AND deal_type IN ('balance', 'withdrawal')`,
+        `SELECT COALESCE(SUM(profit + swap + commission), 0) AS delta FROM trades WHERE ticket < 0`,
       );
       return Number(rows[0]?.delta) || 0;
     } catch (err) {
-      console.error('[mt5-bridge] manualBalanceDelta error:', err.message);
+      console.error('[mt5-bridge] manualEntriesDelta error:', err.message);
       return 0;
     }
   }
