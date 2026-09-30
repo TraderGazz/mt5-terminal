@@ -38,12 +38,18 @@ class Bridge extends EventEmitter {
     // БД — источник истины, переживающий рестарт сервера (см. setOverride).
     this.overrides = new Map();
 
+    // Ручная правка сводных показателей счёта (админка → "Редактирование
+    // баланса") — то же самое смещение, что у position_overrides, только
+    // на уровне всего счёта, не одной позиции (см. account_overrides).
+    this.accountOffset = { balance: 0, equity: 0, margin: 0, freeMargin: 0, marginLevel: 0 };
+
     this.impl.on('event', (raw) => this.#onRaw(raw));
   }
 
   start() {
     this.impl.start();
     this.#loadOverrides();
+    this.#loadAccountOffset();
     console.log(`[mt5-bridge] режим = ${this.mode}, символ = ${this.symbol}`);
   }
 
@@ -57,11 +63,12 @@ class Bridge extends EventEmitter {
   // соединения пула (pg сам это умеет), а catch — реальные сбои.
   async #loadOverrides() {
     try {
-      const { rows } = await query('SELECT ticket, open_price_override, profit_offset FROM position_overrides');
+      const { rows } = await query('SELECT ticket, open_price_override, profit_offset, swap_offset FROM position_overrides');
       for (const r of rows) {
         this.overrides.set(Number(r.ticket), {
           openPriceOverride: r.open_price_override != null ? Number(r.open_price_override) : null,
           profitOffset: r.profit_offset != null ? Number(r.profit_offset) : null,
+          swapOffset: r.swap_offset != null ? Number(r.swap_offset) : null,
         });
       }
     } catch (err) {
@@ -73,31 +80,86 @@ class Bridge extends EventEmitter {
   // PATCH одного поля (например только цены) не затирать null'ом уже
   // сохранённое другое (например profit_offset от предыдущей правки).
   getPositionOverride(ticket) {
-    return this.overrides.get(Number(ticket)) ?? { openPriceOverride: null, profitOffset: null };
+    return this.overrides.get(Number(ticket)) ?? { openPriceOverride: null, profitOffset: null, swapOffset: null };
   }
 
   // Правка сохраняется сразу и в памяти (эффект мгновенный), и в БД
   // (переживает рестарт сервера). Реальная позиция у брокера не трогается.
-  async setPositionOverride(ticket, { openPriceOverride, profitOffset }) {
-    this.overrides.set(Number(ticket), { openPriceOverride: openPriceOverride ?? null, profitOffset: profitOffset ?? null });
+  async setPositionOverride(ticket, { openPriceOverride, profitOffset, swapOffset }) {
+    this.overrides.set(Number(ticket), {
+      openPriceOverride: openPriceOverride ?? null,
+      profitOffset: profitOffset ?? null,
+      swapOffset: swapOffset ?? null,
+    });
     // Не гейтим на isDbReady() (см. #loadOverrides) — если запрос реально
     // упадёт, пусть бросает наверх: маршрут (routes/trading.js) вернёт
     // админу настоящую ошибку вместо тихого "как будто сохранилось", пока
     // на деле в БД ничего не записалось.
     await query(
-      `INSERT INTO position_overrides (ticket, open_price_override, profit_offset, updated_at)
-       VALUES ($1, $2, $3, now())
+      `INSERT INTO position_overrides (ticket, open_price_override, profit_offset, swap_offset, updated_at)
+       VALUES ($1, $2, $3, $4, now())
        ON CONFLICT (ticket) DO UPDATE SET
          open_price_override = EXCLUDED.open_price_override,
          profit_offset = EXCLUDED.profit_offset,
+         swap_offset = EXCLUDED.swap_offset,
          updated_at = now()`,
-      [ticket, openPriceOverride ?? null, profitOffset ?? null],
+      [ticket, openPriceOverride ?? null, profitOffset ?? null, swapOffset ?? null],
     );
   }
 
   async clearPositionOverride(ticket) {
     this.overrides.delete(Number(ticket));
     await query('DELETE FROM position_overrides WHERE ticket = $1', [ticket]);
+  }
+
+  async #loadAccountOffset() {
+    try {
+      const { rows } = await query(
+        'SELECT balance_offset, equity_offset, margin_offset, free_margin_offset, margin_level_offset FROM account_overrides WHERE id = 1',
+      );
+      const r = rows[0];
+      if (r) {
+        this.accountOffset = {
+          balance: Number(r.balance_offset) || 0,
+          equity: Number(r.equity_offset) || 0,
+          margin: Number(r.margin_offset) || 0,
+          freeMargin: Number(r.free_margin_offset) || 0,
+          marginLevel: Number(r.margin_level_offset) || 0,
+        };
+      }
+    } catch (err) {
+      console.error('[mt5-bridge] не удалось загрузить account_overrides:', err.message);
+    }
+  }
+
+  getAccountOffset() {
+    return { ...this.accountOffset };
+  }
+
+  // offset — уже посчитанное вызывающим смещение (routes/admin.js: целевое
+  // значение минус текущее эффективное), сохраняется целиком (не патчем).
+  async setAccountOffset(offset) {
+    this.accountOffset = { ...offset };
+    await query(
+      `INSERT INTO account_overrides (id, balance_offset, equity_offset, margin_offset, free_margin_offset, margin_level_offset, updated_at)
+       VALUES (1, $1, $2, $3, $4, $5, now())
+       ON CONFLICT (id) DO UPDATE SET
+         balance_offset = EXCLUDED.balance_offset,
+         equity_offset = EXCLUDED.equity_offset,
+         margin_offset = EXCLUDED.margin_offset,
+         free_margin_offset = EXCLUDED.free_margin_offset,
+         margin_level_offset = EXCLUDED.margin_level_offset,
+         updated_at = now()`,
+      [offset.balance || 0, offset.equity || 0, offset.margin || 0, offset.freeMargin || 0, offset.marginLevel || 0],
+    );
+  }
+
+  async clearAccountOffset() {
+    this.accountOffset = { balance: 0, equity: 0, margin: 0, freeMargin: 0, marginLevel: 0 };
+    await query(
+      `UPDATE account_overrides SET balance_offset = 0, equity_offset = 0, margin_offset = 0,
+         free_margin_offset = 0, margin_level_offset = 0, updated_at = now() WHERE id = 1`,
+    );
   }
 
   stop() {
@@ -139,9 +201,16 @@ class Bridge extends EventEmitter {
 
     if (this.overrides.size > 0) {
       // Один поход к брокеру (rawPositions), не два — positions() внутри себя
-      // тоже вызывает rawPositions(), дублировать запрос незачем.
+      // тоже вызывает rawPositions(), дублировать запрос незачем. Своп
+      // тоже входит в дельту (не только прибыль) — floating P/L на счету
+      // считается как profit+swap+commission по каждой позиции (см.
+      // mock.js #floatingProfit), а комиссию не правим — не изменится,
+      // сама с собой сократится.
       const raw = await this.rawPositions();
-      const delta = raw.reduce((s, p) => s + (this.#applyOverride(p).profit - p.profit), 0);
+      const delta = raw.reduce((s, p) => {
+        const o = this.#applyOverride(p);
+        return s + (o.profit - p.profit) + (o.swap - p.swap);
+      }, 0);
       if (delta !== 0) {
         acc = { ...acc, floatingProfit: acc.floatingProfit + delta, equity: acc.equity + delta, freeMargin: acc.freeMargin + delta };
       }
@@ -170,6 +239,25 @@ class Bridge extends EventEmitter {
         balance: acc.balance + manualDelta,
         equity: acc.equity + manualDelta,
         freeMargin: acc.freeMargin + manualDelta,
+      };
+    }
+
+    // Ручная правка сводных показателей (админка → "Редактирование
+    // баланса") — раньше писала в таблицу accounts, которую здесь никто
+    // не читал: сохранялось, но ни на что не влияло (баг-репорт: "не
+    // применялось"). Теперь хранит СМЕЩЕНИЕ (посчитанное в routes/admin.js
+    // при сохранении: целевое значение минус текущее эффективное) и
+    // прибавляется здесь же, как и остальные дельты — показатель дальше
+    // продолжает жить вместе с рынком/сделками от сдвинутой точки.
+    const o = this.accountOffset;
+    if (o.balance || o.equity || o.margin || o.freeMargin || o.marginLevel) {
+      acc = {
+        ...acc,
+        balance: acc.balance + o.balance,
+        equity: acc.equity + o.equity,
+        margin: acc.margin + o.margin,
+        freeMargin: acc.freeMargin + o.freeMargin,
+        marginLevel: acc.marginLevel + o.marginLevel,
       };
     }
 
@@ -229,7 +317,9 @@ class Bridge extends EventEmitter {
       openPrice = ov.openPriceOverride;
     }
     if (ov.profitOffset != null) profit += ov.profitOffset;
-    return { ...p, openPrice, profit };
+    let swap = p.swap;
+    if (ov.swapOffset != null) swap += ov.swapOffset;
+    return { ...p, openPrice, profit, swap };
   }
 
   // Активно подтягивает курс USDRUB REST-запросом (с коротким TTL-кэшем),

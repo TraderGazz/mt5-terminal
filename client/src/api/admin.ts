@@ -61,24 +61,29 @@ export async function uploadMt5Report(
   return data;
 }
 
-// ---------- Balance (accounts snapshot override) ----------
+// ---------- Balance (смещение от реальных показаний моста) ----------
+// GET отдаёт текущие ЭФФЕКТИВНЫЕ показатели (мост + уже сохранённое ручное
+// смещение, см. server/routes/admin.js), не сырой ряд из БД — раньше это
+// была отдельная таблица `accounts`, которую никто не читал.
 
 export interface ApiAdminAccount {
-  id: number;
   balance: number;
   equity: number;
   margin: number;
   free_margin: number;
   margin_level: number;
-  updated_at: string;
 }
 
 export const getAdminBalance = () =>
-  api<{ account: ApiAdminAccount | null }>('/admin/balance').then((r) => r.account);
+  api<{ account: ApiAdminAccount }>('/admin/balance').then((r) => r.account);
 
 export const updateAdminBalance = (
   body: Partial<Pick<ApiAdminAccount, 'balance' | 'equity' | 'margin' | 'free_margin' | 'margin_level'>>,
 ) => api<{ account: ApiAdminAccount }>('/admin/balance', { method: 'PATCH', body }).then((r) => r.account);
+
+/** Сброс ручной правки счёта к настоящим показаниям моста. */
+export const resetAdminBalance = () =>
+  api<{ account: ApiAdminAccount }>('/admin/balance', { method: 'DELETE' }).then((r) => r.account);
 
 // ---------- Sync settings (автообмен) ----------
 

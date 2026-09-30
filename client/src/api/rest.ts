@@ -246,7 +246,7 @@ export const modifyPosition = (ticket: number, body: { stopLoss?: number; takePr
 // Косметическая правка ОТКРЫТОЙ позиции (не запись в БД — позиция живая):
 // заявка заказчика, цена открытия и/или прибыль/убыток "как будто". Реальная
 // позиция у брокера не трогается.
-export const updatePositionOverride = (ticket: number, body: { openPrice?: number; profit?: number }) =>
+export const updatePositionOverride = (ticket: number, body: { openPrice?: number; profit?: number; swap?: number }) =>
   api<{ ticket: number }>(`/trading/position/${ticket}`, { method: 'PATCH', body });
 
 export const clearPositionOverride = (ticket: number) =>

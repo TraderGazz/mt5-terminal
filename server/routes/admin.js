@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { query, requireDb } from '../db.js';
 import { authRequired, requireRole, hashPassword } from './auth.js';
+import { getBridge } from '../services/mt5-bridge/index.js';
+import { ledgerReportRows } from '../services/deposit-ledger.js';
 
 const router = Router();
 
@@ -128,31 +130,61 @@ router.get('/imports', wrap(async (req, res) => {
 }));
 
 // ---------- Manual balance edit ----------
+// Раньше PATCH писал абсолютные значения в таблицу `accounts`, которую
+// bridge.account() никогда не читал — сохранение выглядело успешным, но
+// ни на что не влияло (баг-репорт заказчика: "не применялось"). Теперь
+// GET отдаёт текущие ЭФФЕКТИВНЫЕ показатели (с моста + уже сохранённое
+// смещение), а PATCH считает НОВОЕ смещение как разницу между введённым
+// значением и этими эффективными — так же, как правка позиции: показатель
+// продолжает жить вместе с рынком/сделками от сдвинутой точки, а не
+// замирает на введённом числе.
+const toAccountResponse = (acc) => ({
+  balance: acc.balance,
+  equity: acc.equity,
+  margin: acc.margin,
+  free_margin: acc.freeMargin,
+  margin_level: acc.marginLevel,
+});
 
-const BALANCE_FIELDS = ['balance', 'equity', 'margin', 'free_margin', 'margin_level'];
+const BALANCE_FIELD_MAP = {
+  balance: 'balance',
+  equity: 'equity',
+  margin: 'margin',
+  free_margin: 'freeMargin',
+  margin_level: 'marginLevel',
+};
 
 router.get('/balance', wrap(async (req, res) => {
-  const { rows } = await query('SELECT * FROM accounts ORDER BY id LIMIT 1');
-  res.json({ account: rows[0] || null });
+  const acc = await getBridge().account();
+  res.json({ account: toAccountResponse(acc) });
 }));
 
 router.patch('/balance', wrap(async (req, res) => {
-  const updates = [];
-  const params = [];
-  for (const field of BALANCE_FIELDS) {
-    if (req.body[field] !== undefined) {
-      params.push(Number(req.body[field]));
-      updates.push(`${field} = $${params.length}`);
-    }
+  const bridge = getBridge();
+  const acc = await bridge.account();
+  const existing = bridge.getAccountOffset();
+  const newOffset = { ...existing };
+  let touched = false;
+  for (const [bodyKey, accKey] of Object.entries(BALANCE_FIELD_MAP)) {
+    if (req.body[bodyKey] === undefined) continue;
+    const target = Number(req.body[bodyKey]);
+    if (!Number.isFinite(target)) continue;
+    newOffset[accKey] = existing[accKey] + (target - acc[accKey]);
+    touched = true;
   }
-  if (!updates.length) return res.status(400).json({ error: 'Nothing to update' });
-  const { rows } = await query(
-    `UPDATE accounts SET ${updates.join(', ')}, updated_at = now()
-     WHERE id = (SELECT id FROM accounts ORDER BY id LIMIT 1) RETURNING *`,
-    params
-  );
-  if (!rows[0]) return res.status(404).json({ error: 'Account not found (run init.sql)' });
-  res.json({ account: rows[0] });
+  if (!touched) return res.status(400).json({ error: 'Nothing to update' });
+  await bridge.setAccountOffset(newOffset);
+  const updated = await bridge.account();
+  res.json({ account: toAccountResponse(updated) });
+}));
+
+// Сброс ручной правки счёта к настоящим показаниям моста (как "Сбросить
+// к реальным" у позиции).
+router.delete('/balance', wrap(async (req, res) => {
+  const bridge = getBridge();
+  await bridge.clearAccountOffset();
+  const acc = await bridge.account();
+  res.json({ account: toAccountResponse(acc) });
 }));
 
 // ---------- Sync settings (auto-exchange) ----------
@@ -265,7 +297,14 @@ ${trs}
 // GET /api/admin/report?format=html|csv&from=&to=&symbol=
 router.get('/report', wrap(async (req, res) => {
   const { format = 'html', from, to, symbol } = req.query;
-  const where = [];
+  const where = [
+    // EA-синхронизированные balance/withdrawal (тикет > 0) — известный
+    // мусор терминала (напр. "demo deposit"), в отчёт не идут; вместо них
+    // ниже подмешивается официальная выписка + ручные записи из админки
+    // (тикет < 0), см. ledgerReportRows и заявку заказчика в
+    // deposit-ledger.js. Сами сделки/CFD этот фильтр не трогает.
+    `NOT (deal_type IN ('balance', 'withdrawal') AND ticket > 0)`,
+  ];
   const params = [];
   if (symbol && symbol !== 'all') {
     params.push(symbol);
@@ -279,10 +318,20 @@ router.get('/report', wrap(async (req, res) => {
     params.push(new Date(to));
     where.push(`close_time <= $${params.length}`);
   }
-  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-  const { rows } = await query(
+  const whereSql = `WHERE ${where.join(' AND ')}`;
+  const { rows: tradeRows } = await query(
     `SELECT * FROM trades ${whereSql} ORDER BY close_time ASC NULLS LAST`,
     params
+  );
+
+  // Строки из выписки — только когда не выбран конкретный символ (у
+  // депозита/снятия символа нет, как и в Истории на сайте/в админке).
+  const fromMs = from ? new Date(from).getTime() : -Infinity;
+  const toMs = to ? new Date(to).getTime() : Infinity;
+  const ledgerRows = symbol && symbol !== 'all' ? [] : ledgerReportRows(fromMs, toMs);
+
+  const rows = [...tradeRows, ...ledgerRows].sort(
+    (a, b) => new Date(a.close_time ?? 0).getTime() - new Date(b.close_time ?? 0).getTime(),
   );
 
   if (format === 'csv') {

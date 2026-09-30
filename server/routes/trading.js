@@ -115,11 +115,15 @@ router.patch('/position/:ticket', async (req, res) => {
     const existing = bridge.getPositionOverride(ticket);
     const openPriceOverride = req.body?.openPrice != null ? Number(req.body.openPrice) : existing.openPriceOverride;
     const targetProfit = req.body?.profit != null ? Number(req.body.profit) : null;
+    const targetSwap = req.body?.swap != null ? Number(req.body.swap) : null;
     if (req.body?.openPrice != null && !Number.isFinite(openPriceOverride)) {
       return res.status(400).json({ error: 'Некорректная цена открытия' });
     }
     if (req.body?.profit != null && !Number.isFinite(targetProfit)) {
       return res.status(400).json({ error: 'Некорректная прибыль' });
+    }
+    if (req.body?.swap != null && !Number.isFinite(targetSwap)) {
+      return res.status(400).json({ error: 'Некорректный своп' });
     }
 
     // Прибыль/убыток задаётся ЦЕЛЕВЫМ числом "здесь и сейчас" (заявка:
@@ -135,9 +139,16 @@ router.patch('/position/:ticket', async (req, res) => {
       profitOffset = targetProfit - baseProfit;
     }
 
-    await bridge.setPositionOverride(ticket, { openPriceOverride, profitOffset });
+    // Своп не зависит от цены открытия — целевое число минус настоящий
+    // текущий своп, тот же принцип "плывущей" фиксированной поправки.
+    let swapOffset = existing.swapOffset;
+    if (targetSwap != null) {
+      swapOffset = targetSwap - p.swap;
+    }
+
+    await bridge.setPositionOverride(ticket, { openPriceOverride, profitOffset, swapOffset });
     console.log(`[trading] ${req.user.login} изменил витрину позиции #${ticket}`);
-    res.json({ ticket, openPriceOverride, profitOffset });
+    res.json({ ticket, openPriceOverride, profitOffset, swapOffset });
   } catch (err) {
     console.error('[trading] position override error:', err.message);
     res.status(500).json({ error: err.message || 'Не удалось сохранить' });

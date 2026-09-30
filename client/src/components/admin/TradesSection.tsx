@@ -157,10 +157,10 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
   // открытия и/или прибыль "как будто", реальная позиция у брокера не
   // трогается (см. server/routes/trading.js PATCH /position/:ticket).
   const [editTarget, setEditTarget] = useState<ApiPosition | null>(null);
-  const [editForm, setEditForm] = useState({ openPrice: '', profit: '' });
+  const [editForm, setEditForm] = useState({ openPrice: '', profit: '', swap: '' });
   // Исходные значения на момент открытия формы — нужны для dirty-check в
   // submitEdit (см. комментарий там): нельзя слать оба поля всегда.
-  const [editInitial, setEditInitial] = useState({ openPrice: '', profit: '' });
+  const [editInitial, setEditInitial] = useState({ openPrice: '', profit: '', swap: '' });
   const [savingEdit, setSavingEdit] = useState(false);
 
   const load = () => {
@@ -173,7 +173,7 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
 
   const openEdit = (p: ApiPosition) => {
     setEditTarget(p);
-    const initial = { openPrice: String(p.openPrice), profit: String(p.profit) };
+    const initial = { openPrice: String(p.openPrice), profit: String(p.profit), swap: String(p.swap) };
     setEditForm(initial);
     setEditInitial(initial);
   };
@@ -185,7 +185,7 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
     // profit всегда, сервер пересчитывает profit_offset так, что он ровно
     // гасит пересчёт от новой цены открытия, и прибыль визуально "не
     // меняется" при правке одной только цены (баг-репорт заказчика).
-    const patch: { openPrice?: number; profit?: number } = {};
+    const patch: { openPrice?: number; profit?: number; swap?: number } = {};
     if (editForm.openPrice !== editInitial.openPrice) {
       const openPrice = Number(editForm.openPrice.replace(',', '.'));
       if (!Number.isFinite(openPrice)) { showToast('Введите корректную цену открытия'); return; }
@@ -196,7 +196,12 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
       if (!Number.isFinite(profit)) { showToast('Введите корректную прибыль'); return; }
       patch.profit = profit;
     }
-    if (patch.openPrice == null && patch.profit == null) {
+    if (editForm.swap !== editInitial.swap) {
+      const swap = Number(editForm.swap.replace(',', '.'));
+      if (!Number.isFinite(swap)) { showToast('Введите корректный своп'); return; }
+      patch.swap = swap;
+    }
+    if (patch.openPrice == null && patch.profit == null && patch.swap == null) {
       setEditTarget(null);
       return;
     }
@@ -354,6 +359,12 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
             inputMode="decimal"
             value={editForm.profit}
             onChange={(e) => setEditForm((f) => ({ ...f, profit: e.target.value }))}
+          />
+          <AdminInput
+            label="Своп"
+            inputMode="decimal"
+            value={editForm.swap}
+            onChange={(e) => setEditForm((f) => ({ ...f, swap: e.target.value }))}
           />
           <p className="text-[13px] leading-[18px] text-text-secondary">
             Это витрина (что видят сайт и админка) — реальная позиция у

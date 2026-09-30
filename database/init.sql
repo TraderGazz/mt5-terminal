@@ -225,8 +225,26 @@ CREATE TABLE IF NOT EXISTS position_overrides (
     ticket              BIGINT PRIMARY KEY,
     open_price_override DECIMAL(18, 5),
     profit_offset       DECIMAL(18, 2),
+    swap_offset         DECIMAL(18, 2),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- ============================================================================
+-- account_overrides — ручная правка сводных показателей счёта, один ряд
+-- id = 1, хранит СМЕЩЕНИЕ от реального показания моста, не абсолютное
+-- значение (см. database/migrations/007_account_overrides.sql).
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS account_overrides (
+    id                   INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    balance_offset       DECIMAL(15,2) NOT NULL DEFAULT 0,
+    equity_offset        DECIMAL(15,2) NOT NULL DEFAULT 0,
+    margin_offset        DECIMAL(15,2) NOT NULL DEFAULT 0,
+    free_margin_offset   DECIMAL(15,2) NOT NULL DEFAULT 0,
+    margin_level_offset  DECIMAL(15,2) NOT NULL DEFAULT 0,
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+INSERT INTO account_overrides (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 
 COMMIT;
 

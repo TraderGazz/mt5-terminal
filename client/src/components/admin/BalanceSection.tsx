@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { ACCOUNT, ADMIN_USERS, type ImportLogEntry } from '@/mocks';
 import { formatMoney } from '@/lib/format';
 import { IS_API } from '@/config';
-import { getAdminBalance, updateAdminBalance } from '@/api/admin';
+import { getAdminBalance, updateAdminBalance, resetAdminBalance, type ApiAdminAccount } from '@/api/admin';
 import { AdminButton, AdminCard, AdminInput, AdminModal } from './bits';
 
 interface BalanceForm {
@@ -56,25 +56,28 @@ export default function BalanceSection(props: {
 
 const emptyForm: BalanceForm = { balance: '0', equity: '0', margin: '0', freeMargin: '0', marginLevel: '0' };
 
+const toForm2 = (acc: ApiAdminAccount): BalanceForm => ({
+  balance: String(acc.balance),
+  equity: String(acc.equity),
+  margin: String(acc.margin),
+  freeMargin: String(acc.free_margin),
+  marginLevel: String(acc.margin_level),
+});
+
 function RealBalanceSection({ showToast }: { showToast: (msg: string) => void }) {
   const [form, setForm] = useState<BalanceForm | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
+  const load = () => {
     getAdminBalance()
-      .then((acc) => {
-        if (!acc) { setError('Счёт не найден (запустите database/init.sql)'); return; }
-        setForm({
-          balance: String(acc.balance),
-          equity: String(acc.equity),
-          margin: String(acc.margin),
-          freeMargin: String(acc.free_margin),
-          marginLevel: String(acc.margin_level),
-        });
-      })
+      .then((acc) => setForm(toForm2(acc)))
       .catch((err: Error) => setError(err.message || 'Не удалось загрузить счёт'));
-  }, []);
+  };
+
+  useEffect(load, []);
 
   const values = useMemo(() => {
     const f = form ?? emptyForm;
@@ -90,8 +93,13 @@ function RealBalanceSection({ showToast }: { showToast: (msg: string) => void })
   const set = (key: keyof BalanceForm) => (e: ChangeEvent<HTMLInputElement>) =>
     setForm((prev) => ({ ...(prev ?? emptyForm), [key]: e.target.value }));
 
+  // Правка — это СМЕЩЕНИЕ от реального показания моста (как у позиции),
+  // не замена навсегда: сервер сам считает разницу между введённым и
+  // текущим эффективным значением. После сохранения подтягиваем свежие
+  // эффективные цифры обратно в форму.
   const save = () => {
     setConfirmOpen(false);
+    setSaving(true);
     updateAdminBalance({
       balance: values.balance,
       equity: values.equity,
@@ -99,8 +107,18 @@ function RealBalanceSection({ showToast }: { showToast: (msg: string) => void })
       free_margin: values.freeMargin,
       margin_level: values.marginLevel,
     })
-      .then(() => showToast('Баланс обновлён'))
-      .catch((err: Error) => showToast(err.message || 'Не удалось сохранить'));
+      .then((acc) => { setForm(toForm2(acc)); showToast('Баланс обновлён'); })
+      .catch((err: Error) => showToast(err.message || 'Не удалось сохранить'))
+      .finally(() => setSaving(false));
+  };
+
+  const reset = () => {
+    setResetOpen(false);
+    setSaving(true);
+    resetAdminBalance()
+      .then((acc) => { setForm(toForm2(acc)); showToast('Правка сброшена — показания настоящие'); })
+      .catch((err: Error) => showToast(err.message || 'Не удалось сбросить'))
+      .finally(() => setSaving(false));
   };
 
   if (error) return <AdminCard className="p-6 text-center text-[14px] text-loss">{error}</AdminCard>;
@@ -122,9 +140,14 @@ function RealBalanceSection({ showToast }: { showToast: (msg: string) => void })
               <AdminInput label="Свободная маржа" suffix="₽" inputMode="decimal" value={form.freeMargin} onChange={set('freeMargin')} />
               <AdminInput label="Уровень маржи" suffix="%" inputMode="decimal" value={form.marginLevel} onChange={set('marginLevel')} />
             </div>
-            <AdminButton onClick={() => setConfirmOpen(true)} className="mt-1 self-end">
-              Сохранить
-            </AdminButton>
+            <div className="mt-1 flex justify-end gap-2">
+              <AdminButton variant="secondary" onClick={() => setResetOpen(true)} disabled={saving}>
+                Сбросить к реальным
+              </AdminButton>
+              <AdminButton onClick={() => setConfirmOpen(true)} disabled={saving}>
+                Сохранить
+              </AdminButton>
+            </div>
           </div>
         </AdminCard>
 
@@ -148,9 +171,11 @@ function RealBalanceSection({ showToast }: { showToast: (msg: string) => void })
               </div>
             </div>
             <p className="mt-3 text-[12px] leading-[16px] text-text-secondary">
-              Это ручной снимок счёта (страницы «Торговля»/«Настройки») —
-              обычно перезаписывается синхронизацией с MT5. Правьте, только
-              если нужно временно переопределить показания.
+              Правка — это смещение от настоящих показаний моста (как и
+              правка отдельной позиции): вводите желаемое число, сервер сам
+              считает разницу и запоминает её, дальше показатель продолжает
+              жить вместе с рынком/сделками от этой сдвинутой точки, а не
+              замирает навсегда. Реальный счёт у брокера не меняется.
             </p>
           </div>
         </AdminCard>
@@ -170,6 +195,24 @@ function RealBalanceSection({ showToast }: { showToast: (msg: string) => void })
         }
       >
         <p className="text-[14px] leading-[20px] text-black">Сохранить изменения баланса?</p>
+      </AdminModal>
+
+      <AdminModal
+        open={resetOpen}
+        onClose={() => setResetOpen(false)}
+        title="Сбросить правку?"
+        footer={
+          <>
+            <AdminButton variant="secondary" onClick={() => setResetOpen(false)}>
+              Отмена
+            </AdminButton>
+            <AdminButton variant="destructive" onClick={reset}>Сбросить</AdminButton>
+          </>
+        }
+      >
+        <p className="text-[14px] leading-[20px] text-black">
+          Показатели вернутся к настоящим показаниям моста, ручная правка удалится.
+        </p>
       </AdminModal>
     </div>
   );
