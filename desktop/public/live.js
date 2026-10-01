@@ -199,7 +199,12 @@
     terminalAPI.setDemoRunning(false);
     mountLogout();
     loadAccount();
-    ws.on('account', (d) => { accountInfo = d; patchCaption(); patchNavigator(); });
+    // WS-пуш 'account' — это сырой bridge.account() (только живые цифры:
+    // баланс/маржа/...), холдер/компания там нет — их добавляет только
+    // REST /api/account (добор из БД). Мёржим поверх уже загруженных
+    // реквизитов, а не заменяем целиком — иначе после первого WS-тика
+    // ФИО/компания превращались бы в undefined.
+    ws.on('account', (d) => { accountInfo = { ...accountInfo, ...d }; patchCaption(); patchNavigator(); });
     loadPositions();
     ws.on('positions', (d) => terminalAPI.setPositions((d || []).map(mapPosition)));
     loadHistory();
