@@ -289,7 +289,7 @@ function RealUsersSection({ showToast }: { showToast: (msg: string) => void }) {
         <div>
           <p className="text-[14px] font-medium text-black">Заглушка на Торговле</p>
           <p className="text-[12px] text-text-secondary">
-            При проблемах на сервере — показывать «Нет соединения с сервером» вместо (возможно неверных) данных.
+            При проблемах на сервере — показывать «Нет соединения с сервером».
           </p>
         </div>
         <IosToggle
