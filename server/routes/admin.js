@@ -274,34 +274,163 @@ function toCsv(rows) {
   return [header, ...lines].join('\n');
 }
 
-function toHtml(rows) {
+// Храним отметки времени как "брокерские цифры в UTC-полях" (см.
+// client/src/lib/format.ts toBroker()) — чтобы время в отчёте совпадало с
+// тем, что пользователь уже видит в Истории/Торговле, повторяем тот же
+// сдвиг +3ч и читаем через getUTC*, а не локальные геттеры/toLocaleString.
+const BROKER_OFFSET_MS = 3 * 3600 * 1000;
+const pad2 = (n) => String(n).padStart(2, '0');
+function fmtDateTime(d) {
+  if (!d) return '';
+  const dt = new Date(new Date(d).getTime() + BROKER_OFFSET_MS);
+  if (Number.isNaN(dt.getTime())) return '';
+  return `${dt.getUTCFullYear()}.${pad2(dt.getUTCMonth() + 1)}.${pad2(dt.getUTCDate())} ${pad2(dt.getUTCHours())}:${pad2(dt.getUTCMinutes())}:${pad2(dt.getUTCSeconds())}`;
+}
+
+// Числа как в настоящем MT5-отчёте: пробел между тройками разрядов,
+// две цифры после точки (точка, не запятая — см. reference-отчёт заказчика).
+function fmtNum(n) {
+  if (n == null || n === '' || Number.isNaN(Number(n))) return '';
+  const num = Number(n);
+  const neg = num < 0;
+  const [intPart, dec] = Math.abs(num).toFixed(2).split('.');
+  const spaced = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return `${neg ? '-' : ''}${spaced}.${dec}`;
+}
+
+// Цены FX — 5 знаков после точки, без разделителя тысяч.
+function fmtPrice(n) {
+  if (n == null || n === '' || Number.isNaN(Number(n))) return '';
+  return Number(n).toFixed(5);
+}
+
+const LEDGER_LABELS = { balance: 'Пополнение', withdrawal: 'Снятие', cfd: 'CFD' };
+
+/**
+ * meta: { holder, login, currency, company, server, account: { balance,
+ * equity, margin, freeMargin, marginLevel, floatingProfit } } — см. GET
+ * /api/account для источника этих же полей.
+ */
+function toHtml(rows, meta = {}) {
   const esc = (v) =>
     String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const trs = rows
-    .map(
-      (t) => `<tr>
-<td>${esc(t.ticket)}</td><td>${esc(t.symbol)}</td><td>${esc(t.type)}</td>
-<td>${esc(t.volume)}</td><td>${esc(t.open_price)}</td><td>${esc(t.close_price)}</td>
-<td>${esc(t.profit)}</td><td>${esc(t.swap)}</td><td>${esc(t.commission)}</td>
-<td>${t.open_time ? esc(new Date(t.open_time).toISOString()) : ''}</td>
-<td>${t.close_time ? esc(new Date(t.close_time).toISOString()) : ''}</td>
-<td>${esc(t.comment)}</td></tr>`
-    )
+  const acc = meta.account || {};
+
+  const tradeRows = rows.filter((t) => t.deal_type === 'buy' || t.deal_type === 'sell');
+  const ledgerRows = rows.filter((t) => t.deal_type !== 'buy' && t.deal_type !== 'sell');
+
+  let swapSum = 0;
+  let profitSum = 0;
+  const positionTrs = tradeRows
+    .map((t, i) => {
+      swapSum += Number(t.swap) || 0;
+      profitSum += Number(t.profit) || 0;
+      const bg = i % 2 === 0 ? '#FFFFFF' : '#F7F7F7';
+      return `<tr bgcolor="${bg}" align="right"><td>${fmtDateTime(t.open_time)}</td><td>${esc(t.ticket)}</td><td>${esc(t.symbol)}</td><td>${esc(t.type)}</td><td>${fmtNum(t.volume)}</td><td>${fmtPrice(t.open_price)}</td><td></td><td></td><td>${fmtDateTime(t.close_time)}</td><td>${fmtPrice(t.close_price)}</td><td>${fmtNum(t.commission)}</td><td>${fmtNum(t.swap)}</td><td colspan="2"><b>${fmtNum(t.profit)}</b></td></tr>`;
+    })
     .join('\n');
-  return `<!DOCTYPE html>
-<html lang="ru"><head><meta charset="utf-8"><title>Торговый отчёт</title>
-<style>body{font-family:Tahoma,sans-serif}table{border-collapse:collapse;width:100%}
-td,th{border:1px solid #ccc;padding:4px 8px;font-size:13px}th{background:#f5f5f5}</style>
-</head><body>
-<h2>Торговый отчёт</h2>
-<table><thead><tr>
-<th>Тикет</th><th>Символ</th><th>Тип</th><th>Объём</th><th>Цена открытия</th>
-<th>Цена закрытия</th><th>Прибыль</th><th>Своп</th><th>Комиссия</th>
-<th>Время открытия</th><th>Время закрытия</th><th>Комментарий</th>
-</tr></thead><tbody>
-${trs}
-</tbody></table>
-</body></html>`;
+
+  const ledgerTrs = ledgerRows
+    .map((t, i) => {
+      const bg = i % 2 === 0 ? '#FFFFFF' : '#F7F7F7';
+      const label = LEDGER_LABELS[t.deal_type] || t.deal_type;
+      return `<tr bgcolor="${bg}" align="right"><td>${fmtDateTime(t.close_time)}</td><td>${esc(t.ticket)}</td><td colspan="2">${esc(label)}</td><td colspan="8"></td><td colspan="2"><b>${fmtNum(t.profit)}</b></td></tr>`;
+    })
+    .join('\n');
+
+  const profits = tradeRows.map((t) => Number(t.profit) || 0);
+  const wins = profits.filter((p) => p > 0);
+  const losses = profits.filter((p) => p < 0);
+  const grossProfit = wins.reduce((a, b) => a + b, 0);
+  const grossLoss = losses.reduce((a, b) => a + b, 0);
+  const netProfit = grossProfit + grossLoss;
+  const profitFactor = grossLoss !== 0 ? Math.abs(grossProfit / grossLoss) : 0;
+  const expectedPayoff = profits.length ? netProfit / profits.length : 0;
+  const winRate = profits.length ? (wins.length / profits.length) * 100 : 0;
+  const lossRate = profits.length ? (losses.length / profits.length) * 100 : 0;
+  const bestTrade = profits.length ? Math.max(...profits) : 0;
+  const worstTrade = profits.length ? Math.min(...profits) : 0;
+  const avgWin = wins.length ? grossProfit / wins.length : 0;
+  const avgLoss = losses.length ? grossLoss / losses.length : 0;
+
+  return `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta charset="utf-8">
+<title>${esc(meta.login)}: ${esc(meta.holder)} - Торговый отчет</title>
+<style type="text/css">
+<!--
+@media screen { td { font: 8pt Tahoma,Arial; } th { font: 10pt Tahoma,Arial; } }
+@media print { td { font: 7pt Tahoma,Arial; } th { font: 9pt Tahoma,Arial; } }
+body { margin: 1px; }
+//-->
+</style>
+</head>
+<body>
+<div align="center">
+<table cellspacing="1" cellpadding="3" border="0">
+<tr align="center"><td colspan="13"><div style="font: 14pt Tahoma"><b>Торговый отчет</b></div></td></tr>
+<tr align="left"><th colspan="3" nowrap align="right">Имя:</th><th colspan="10" nowrap align="left"><b>${esc(meta.holder)}</b></th></tr>
+<tr align="left"><th colspan="3" nowrap align="right">Торговый счет:</th><th colspan="10" nowrap align="left"><b>${esc(meta.login)}&nbsp;(${esc(meta.currency)},&nbsp;${esc(meta.server)})</b></th></tr>
+<tr align="left"><th colspan="3" nowrap align="right">Компания:</th><th colspan="10" nowrap align="left"><b>${esc(meta.company)}</b></th></tr>
+<tr align="left"><th colspan="3" nowrap align="right">Дата:</th><th colspan="10" nowrap align="left"><b>${fmtDateTime(new Date())}</b></th></tr>
+<tr align="center"><th colspan="13" style="height: 25px"><div style="font: 10pt Tahoma"><b>Позиции</b></div></th></tr>
+<tr align="right" bgcolor="#E5F0FC">
+<td nowrap><b>Время</b></td><td nowrap><b>Позиция</b></td><td nowrap><b>Символ</b></td><td nowrap><b>Тип</b></td>
+<td nowrap><b>Объем</b></td><td nowrap><b>Цена</b></td><td nowrap><b>S / L</b></td><td nowrap><b>T / P</b></td>
+<td nowrap><b>Время закрытия</b></td><td nowrap><b>Цена закрытия</b></td><td nowrap><b>Комиссия</b></td>
+<td nowrap><b>Своп</b></td><td nowrap colspan="2"><b>Прибыль</b></td>
+</tr>
+${positionTrs}
+<tr align="right"><td colspan="11" style="height: 30px"></td><td nowrap><b>${fmtNum(swapSum)}</b></td><td nowrap colspan="2"><b>${fmtNum(profitSum)}</b></td></tr>
+${ledgerTrs ? `<tr><td colspan="13" style="height: 10px"></td></tr>
+<tr align="center"><th colspan="13" style="height: 25px"><div style="font: 10pt Tahoma"><b>Балансовые операции</b></div></th></tr>
+${ledgerTrs}` : ''}
+<tr align="right"><td colspan="13" style="height: 10px"></td></tr>
+<tr align="right">
+<td colspan="3" style="height: 20px">Баланс:</td><td colspan="2"><b>${fmtNum(acc.balance)}</b></td><td></td>
+<td colspan="3">Свободная маржа:</td><td colspan="2"><b>${fmtNum(acc.freeMargin)}</b></td>
+</tr>
+<tr align="right">
+<td colspan="3" style="height: 20px">Плавающая прибыль/убыток:</td><td colspan="2"><b>${fmtNum(acc.floatingProfit)}</b></td><td></td>
+<td colspan="3">Маржа:</td><td colspan="2"><b>${fmtNum(acc.margin)}</b></td>
+</tr>
+<tr align="right">
+<td colspan="3" style="height: 20px">Средства:</td><td colspan="2"><b>${fmtNum(acc.equity)}</b></td><td></td>
+<td colspan="3">Уровень маржи:</td><td colspan="2"><b>${acc.marginLevel != null ? `${fmtNum(acc.marginLevel)}%` : ''}</b></td>
+</tr>
+</table>
+<table cellspacing="1" cellpadding="3" border="0">
+<tr><td colspan="13" align="center" style="height:30px"><div style="font: 10pt Tahoma"><b>Результаты</b></div></td></tr>
+<tr align="right">
+<td nowrap colspan="3">Чистая прибыль:</td><td nowrap><b>${fmtNum(netProfit)}</b></td>
+<td nowrap colspan="3">Общая прибыль:</td><td nowrap><b>${fmtNum(grossProfit)}</b></td>
+<td nowrap colspan="3">Общий убыток:</td><td nowrap colspan="2"><b>${fmtNum(grossLoss)}</b></td>
+</tr>
+<tr align="right">
+<td nowrap colspan="3">Прибыльность:</td><td nowrap><b>${profitFactor.toFixed(2)}</b></td>
+<td nowrap colspan="3">Матожидание выигрыша:</td><td nowrap><b>${fmtNum(expectedPayoff)}</b></td>
+</tr>
+<tr><td nowrap style="height: 10px"></td></tr>
+<tr align="right">
+<td nowrap colspan="3">Всего трейдов:</td><td nowrap><b>${profits.length}</b></td>
+<td nowrap colspan="3">Прибыльные трейды (% от всех):</td><td nowrap><b>${wins.length} (${winRate.toFixed(2)}%)</b></td>
+<td nowrap colspan="3">Убыточные трейды (% от всех):</td><td nowrap colspan="2"><b>${losses.length} (${lossRate.toFixed(2)}%)</b></td>
+</tr>
+<tr align="right">
+<td nowrap colspan="4"></td>
+<td nowrap colspan="3">Самый большой прибыльный трейд:</td><td nowrap><b>${fmtNum(bestTrade)}</b></td>
+<td nowrap colspan="3">Самый большой убыточный трейд:</td><td nowrap colspan="2"><b>${fmtNum(worstTrade)}</b></td>
+</tr>
+<tr align="right">
+<td nowrap colspan="4"></td>
+<td nowrap colspan="3">Средний прибыльный трейд:</td><td nowrap><b>${fmtNum(avgWin)}</b></td>
+<td nowrap colspan="3">Средний убыточный трейд:</td><td nowrap colspan="2"><b>${fmtNum(avgLoss)}</b></td>
+</tr>
+</table>
+</div>
+</body>
+</html>`;
 }
 
 // GET /api/admin/report?format=html|csv&from=&to=&symbol=
@@ -349,9 +478,34 @@ router.get('/report', wrap(async (req, res) => {
     res.setHeader('Content-Disposition', 'attachment; filename="report.csv"');
     return res.send(toCsv(rows));
   }
+
+  // Шапка/подвал отчёта — те же реквизиты и живой снимок счёта, что и в
+  // GET /api/account (заявка заказчика: отчёт должен выглядеть как
+  // оригинальный MT5-экспорт, с "Имя/Торговый счёт/Компания/Дата" наверху
+  // и "Баланс/Средства/Маржа/Уровень маржи" внизу).
+  let meta = { holder: '', login: '', currency: 'RUB', company: 'ООО «Альфа-Форекс»', server: '', account: {} };
+  try {
+    const { rows: accRows } = await query(
+      'SELECT account_number, holder, company, server, currency FROM accounts ORDER BY id LIMIT 1'
+    );
+    const stored = accRows[0] || null;
+    const bridge = getBridge();
+    const acc = await bridge.account();
+    meta = {
+      holder: stored?.holder || acc.name || '',
+      login: acc.login || stored?.account_number || '',
+      currency: acc.currency || stored?.currency || 'RUB',
+      company: stored?.company || 'ООО «Альфа-Форекс»',
+      server: acc.server || stored?.server || '',
+      account: acc,
+    };
+  } catch (err) {
+    console.error('[report] account snapshot unavailable:', err.message);
+  }
+
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="report.html"');
-  res.send(toHtml(rows));
+  res.send(toHtml(rows, meta));
 }));
 
 export default router;
