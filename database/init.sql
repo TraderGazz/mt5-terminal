@@ -212,6 +212,7 @@ INSERT INTO sync_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 CREATE TABLE IF NOT EXISTS app_settings (
     id                        INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
     history_visible_to_viewer BOOLEAN NOT NULL DEFAULT TRUE,
+    trade_maintenance_mode    BOOLEAN NOT NULL DEFAULT FALSE,
     updated_at                TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

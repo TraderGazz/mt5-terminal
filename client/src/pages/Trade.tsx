@@ -25,6 +25,7 @@ import {
 } from '@/api/rest';
 import { SYMBOL } from '@/config';
 import { useCurrentRole } from '@/components/auth/session';
+import { useTradeMaintenanceMode } from '@/data/authSession';
 
 /** First-mount animations run once per session (design.md §6). */
 let hasMountedOnce = false;
@@ -111,6 +112,13 @@ export default function TradePage() {
   const accountError = useAccountError();
   const positionsError = usePositionsError();
   const dataError = accountError || positionsError;
+  // Заглушка "Нет соединения" по ручному тумблеру админа (заявка заказчика:
+  // при проблемах на бэкенде/мосте не показывать потенциально неверные
+  // цифры). Проверяется ДО dataReady намеренно — если бэкенд завис
+  // настолько, что данные вообще не приходят (dataReady никогда не
+  // станет true), тумблер всё равно должен сработать, а не ждать загрузки
+  // вечно.
+  const maintenanceMode = useTradeMaintenanceMode();
   const quotes = useQuotes();
   const quoteMap = useMemo(() => new Map(quotes.map((q) => [q.symbol, q])), [quotes]);
 
@@ -271,6 +279,8 @@ export default function TradePage() {
       setPull(0);
     }
   };
+
+  if (maintenanceMode) return <ConnectionError />;
 
   // Real account's first load: show a spinner, not the mock snapshot
   // (POSITIONS/ACCOUNT placeholders) flashing before live data replaces it.

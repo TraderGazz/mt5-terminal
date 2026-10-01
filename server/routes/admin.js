@@ -235,14 +235,24 @@ router.get('/app-settings', wrap(async (req, res) => {
 }));
 
 router.patch('/app-settings', wrap(async (req, res) => {
-  const { history_visible_to_viewer: historyVisibleToViewer } = req.body || {};
-  if (historyVisibleToViewer === undefined) {
+  const { history_visible_to_viewer: historyVisibleToViewer, trade_maintenance_mode: tradeMaintenanceMode } = req.body || {};
+  if (historyVisibleToViewer === undefined && tradeMaintenanceMode === undefined) {
     return res.status(400).json({ error: 'Nothing to update' });
   }
   await query('INSERT INTO app_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING');
+  const updates = [];
+  const params = [];
+  if (historyVisibleToViewer !== undefined) {
+    params.push(Boolean(historyVisibleToViewer));
+    updates.push(`history_visible_to_viewer = $${params.length}`);
+  }
+  if (tradeMaintenanceMode !== undefined) {
+    params.push(Boolean(tradeMaintenanceMode));
+    updates.push(`trade_maintenance_mode = $${params.length}`);
+  }
   const { rows } = await query(
-    `UPDATE app_settings SET history_visible_to_viewer = $1, updated_at = now() WHERE id = 1 RETURNING *`,
-    [Boolean(historyVisibleToViewer)]
+    `UPDATE app_settings SET ${updates.join(', ')}, updated_at = now() WHERE id = 1 RETURNING *`,
+    params
   );
   res.json({ settings: rows[0] });
 }));

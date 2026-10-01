@@ -107,14 +107,16 @@ export const updateSyncSettings = (
 export interface ApiAppSettings {
   id: number;
   history_visible_to_viewer: boolean;
+  trade_maintenance_mode: boolean;
   updated_at: string;
 }
 
 export const getAppSettings = () =>
   api<{ settings: ApiAppSettings | null }>('/admin/app-settings').then((r) => r.settings);
 
-export const updateAppSettings = (body: Partial<Pick<ApiAppSettings, 'history_visible_to_viewer'>>) =>
-  api<{ settings: ApiAppSettings }>('/admin/app-settings', { method: 'PATCH', body }).then((r) => r.settings);
+export const updateAppSettings = (
+  body: Partial<Pick<ApiAppSettings, 'history_visible_to_viewer' | 'trade_maintenance_mode'>>,
+) => api<{ settings: ApiAppSettings }>('/admin/app-settings', { method: 'PATCH', body }).then((r) => r.settings);
 
 export interface ApiSyncLogEntry {
   id: number;

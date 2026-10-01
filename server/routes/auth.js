@@ -148,11 +148,20 @@ export function requireRole(...roles) {
 // умолчанию true (не прячем Историю из-за случайного сбоя запроса).
 router.get('/me', authRequired, async (req, res) => {
   let historyVisibleToViewer = true;
+  // Режим "техобслуживания" Торговли (заявка заказчика 2026-09-30): при
+  // проблемах на бэкенде/мосте (как сегодняшний баг с советником) админ
+  // включает тумблер — сайт показывает штатный экран "Нет соединения"
+  // вместо потенциально неверных данных. По умолчанию false — не прячем
+  // реальные данные из-за случайного сбоя ЭТОГО запроса.
+  let tradeMaintenanceMode = false;
   try {
-    const { rows } = await query('SELECT history_visible_to_viewer FROM app_settings WHERE id = 1');
-    if (rows[0]) historyVisibleToViewer = !!rows[0].history_visible_to_viewer;
-  } catch { /* оставить дефолт true */ }
-  res.json({ user: req.user, historyVisibleToViewer });
+    const { rows } = await query('SELECT history_visible_to_viewer, trade_maintenance_mode FROM app_settings WHERE id = 1');
+    if (rows[0]) {
+      historyVisibleToViewer = !!rows[0].history_visible_to_viewer;
+      tradeMaintenanceMode = !!rows[0].trade_maintenance_mode;
+    }
+  } catch { /* оставить дефолты */ }
+  res.json({ user: req.user, historyVisibleToViewer, tradeMaintenanceMode });
 });
 
 export default router;

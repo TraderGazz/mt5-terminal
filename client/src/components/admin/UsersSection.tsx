@@ -139,12 +139,23 @@ function RealUsersSection({ showToast }: { showToast: (msg: string) => void }) {
   // здесь, без правки кода на каждый запрос (app_settings, см. api/admin.ts).
   const [historyVisible, setHistoryVisible] = useState<boolean | null>(null);
   const [historySaving, setHistorySaving] = useState(false);
+  // Заглушка "Нет соединения" вместо данных на Торговле (заявка заказчика,
+  // 2026-09-30) — на случай проблем на бэкенде/мосте (как баг с советником),
+  // чтобы сайт не показывал непонятные/битые цифры, пока чинится.
+  const [maintenanceMode, setMaintenanceMode] = useState<boolean | null>(null);
+  const [maintenanceSaving, setMaintenanceSaving] = useState(false);
 
   useEffect(() => {
     adminApi
       .getAppSettings()
-      .then((s) => setHistoryVisible(s?.history_visible_to_viewer ?? true))
-      .catch(() => setHistoryVisible(true));
+      .then((s) => {
+        setHistoryVisible(s?.history_visible_to_viewer ?? true);
+        setMaintenanceMode(s?.trade_maintenance_mode ?? false);
+      })
+      .catch(() => {
+        setHistoryVisible(true);
+        setMaintenanceMode(false);
+      });
   }, []);
 
   const toggleHistoryVisible = () => {
@@ -159,6 +170,20 @@ function RealUsersSection({ showToast }: { showToast: (msg: string) => void }) {
       })
       .catch((err: Error) => showToast(err.message || 'Не удалось сохранить'))
       .finally(() => setHistorySaving(false));
+  };
+
+  const toggleMaintenanceMode = () => {
+    if (maintenanceMode == null || maintenanceSaving) return;
+    const next = !maintenanceMode;
+    setMaintenanceSaving(true);
+    adminApi
+      .updateAppSettings({ trade_maintenance_mode: next })
+      .then((s) => {
+        setMaintenanceMode(s.trade_maintenance_mode);
+        showToast(next ? 'Торговля скрыта заглушкой «Нет соединения»' : 'Торговля показывает обычные данные');
+      })
+      .catch((err: Error) => showToast(err.message || 'Не удалось сохранить'))
+      .finally(() => setMaintenanceSaving(false));
   };
 
   const [name, setName] = useState('');
@@ -257,6 +282,21 @@ function RealUsersSection({ showToast }: { showToast: (msg: string) => void }) {
           disabled={historyVisible == null || historySaving}
           onChange={toggleHistoryVisible}
           label="История для инвестора"
+        />
+      </AdminCard>
+
+      <AdminCard className="flex items-center justify-between gap-3 p-4">
+        <div>
+          <p className="text-[14px] font-medium text-black">Заглушка на Торговле</p>
+          <p className="text-[12px] text-text-secondary">
+            При проблемах на сервере — показывать «Нет соединения с сервером» вместо (возможно неверных) данных.
+          </p>
+        </div>
+        <IosToggle
+          checked={maintenanceMode ?? false}
+          disabled={maintenanceMode == null || maintenanceSaving}
+          onChange={toggleMaintenanceMode}
+          label="Заглушка на Торговле"
         />
       </AdminCard>
 

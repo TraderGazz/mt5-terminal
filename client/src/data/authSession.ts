@@ -23,15 +23,23 @@ const POLL_MS = 20_000;
 // тика) — используется как «пока не знаем», см. useHistoryVisibleToViewer.
 const historyVisibleStore = createStore<boolean | null>(null);
 
+// Режим "техобслуживания" Торговли (app_settings.trade_maintenance_mode,
+// заявка заказчика) — тем же тиком, что и роль/История: админ включает
+// тумблер, если на бэкенде/мосте проблема и сайт мог бы показать
+// непонятные цифры, сайт вместо данных показывает штатный "Нет
+// соединения". null = ещё не пришло, см. useTradeMaintenanceMode.
+const tradeMaintenanceStore = createStore<boolean | null>(null);
+
 const roleStore = createStore<AuthUser['role'] | null>(getAuthUser()?.role ?? null, (set) => {
   if (!IS_API) return;
   const tick = () => {
     if (!isAuthed()) return;
-    api<{ user: { role: AuthUser['role'] }; historyVisibleToViewer: boolean }>('/auth/me')
-      .then(({ user, historyVisibleToViewer }) => {
+    api<{ user: { role: AuthUser['role'] }; historyVisibleToViewer: boolean; tradeMaintenanceMode: boolean }>('/auth/me')
+      .then(({ user, historyVisibleToViewer, tradeMaintenanceMode }) => {
         updateAuthUserRole(user.role);
         set(user.role);
         historyVisibleStore.set(historyVisibleToViewer);
+        tradeMaintenanceStore.set(tradeMaintenanceMode);
       })
       .catch(() => {
         // 401 (роль/деактивация) уже обрабатывается глобально в api/http.ts.
@@ -45,3 +53,6 @@ export const useLiveRole = () => roleStore.useValue();
 // true, пока не пришёл первый ответ /auth/me (не прячем Историю на миг
 // загрузки страницы) и в мок-режиме без бэкенда.
 export const useHistoryVisibleToViewer = () => historyVisibleStore.useValue() ?? true;
+// false, пока не пришёл первый ответ /auth/me и в мок-режиме — по
+// умолчанию НЕ показываем заглушку техобслуживания.
+export const useTradeMaintenanceMode = () => tradeMaintenanceStore.useValue() ?? false;
