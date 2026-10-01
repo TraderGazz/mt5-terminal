@@ -1,0 +1,67 @@
+/* Typography roles compared with the installed Windows MT5 client. */
+:root{--mt-ui:'Segoe UI',Tahoma,sans-serif;--mt-data:Arial,Tahoma,sans-serif;--mt-regular:400;--mt-bold:700}
+.terminal-emblem{display:inline-block!important;width:20px!important;height:20px!important;flex:0 0 20px;font-size:0!important;border:0!important;box-shadow:none!important;background:transparent url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2220%22%20height%3D%2220%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22g%22%20x2%3D%220.8%22%20y2%3D%221%22%3E%3Cstop%20stop-color%3D%22%23d9e8d3%22%2F%3E%3Cstop%20offset%3D%22.5%22%20stop-color%3D%22%2383a999%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23487d7e%22%2F%3E%3C%2FlinearGradient%3E%3ClinearGradient%20id%3D%22y%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20stop-color%3D%22%23fff3a3%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23b9a952%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Cpath%20d%3D%22M4%2016C-1%2012%203%205%208%203c4-2%209%200%2010%204%203%207-5%2013-11%2011%22%20fill%3D%22url(%23g)%22%20stroke%3D%22%23a6b49b%22%20stroke-width%3D%22.7%22%2F%3E%3Cpath%20d%3D%22M3%2014C1%2010%207%203%2012%203M5%2017c5%202%2012-2%2013-7%22%20fill%3D%22none%22%20stroke%3D%22url(%23y)%22%20stroke-width%3D%222%22%2F%3E%3Cpath%20d%3D%22M13.8%205.1H8.5L6.9%2010h3.8c2.8%200%201.4%204.3-1%204.3-1.3%200-2.1-.4-2.7-1.1l-1.1%201.6c1%20.8%202.1%201.2%203.5%201.2%205.1%200%207-8%201.8-8H9.8l.4-1.1h3z%22%20fill%3D%22%23fff%22%2F%3E%3C%2Fsvg%3E') center/20px 20px no-repeat!important}
+header,nav#menu button,#toolbar .native-button span,.panel-heading,.panel-tabs button,.tree-root,.tree-branch summary,footer button,#status,#popup button,dialog,.dialog-title,.terminal-grid-head,.terminal-grid-row{font-family:var(--mt-ui);font-weight:var(--mt-regular);font-style:normal;letter-spacing:normal}
+#toolbar .native-button span{font-family:Tahoma,Arial,sans-serif;font-size:12px;font-weight:400;color:#111}
+#toolbar{height:32px;min-height:32px}
+#toolbar .native-button svg{width:20px;height:20px;stroke-width:1.15;filter:none}
+#toolbar .native-button{height:27px;padding:1px 2px}
+#toolbar>button[data-action^="tf:"]{font-size:11px;text-shadow:none}
+@media(max-width:1350px){#toolbar .native-button svg{width:18px;height:18px}#toolbar .native-button span{font-size:11px}#toolbar .native-button{padding:1px}#toolbar>button[data-action^="tf:"]{font-size:10px}}
+#tableScroll table,#tableScroll th,#tableScroll td,.market-row,#chartTitle,#chartTabs [data-native-symbol],.mini-title>span{font-family:var(--mt-data);font-size:12px;font-weight:400;font-style:normal;letter-spacing:normal}
+#tableScroll #totals,#tableScroll #totals span,.assets-summary{font-family:var(--mt-data);font-size:12px;font-weight:700;line-height:15px;color:#080808}
+#tableScroll th,.market-head>span,.panel-heading,.terminal-grid-head>span{font-weight:400}
+.tree-branch .tree-branch>summary,.tree-account{font-family:var(--mt-ui);font-weight:700;font-size:12px}
+.tree-branch>summary,.tree-root{font-size:12px}
+.tree-account{max-width:100%;min-width:0;white-space:nowrap}
+.tree-account>span{overflow:hidden;text-overflow:ellipsis}
+.tree-account .side-icon circle,.tree-account .side-icon path{fill:#e3f6e6;stroke:#46a65e;stroke-width:1}
+#toolbar .native-button[data-action="messages"]{flex:0 0 30px;padding:1px 4px}
+#toolbar .native-button[data-action="integration:community"]{flex:0 0 23px;padding:1px}
+#toolbar .native-button[data-action="connection"]{flex:0 0 47px;padding:1px}
+#toolbar .native-button[data-action="connection"] svg{width:45px;height:21px}
+#toolbar .native-button[data-action="messages"] svg{width:23px;height:21px;filter:none}
+#toolbar .native-button[data-action="integration:community"] svg{width:20px;height:21px}
+#toolbar [data-action^="tf:"],#toolbar [data-action="periods"]{font-family:var(--mt-data);font-weight:400;color:#236087}
+.quote-label,.quote-label input,.quotes button{font-family:var(--mt-data);font-weight:400}
+.quote-label>span{font-size:11px;font-weight:400}
+.quotes strong{font-family:var(--mt-data);font-size:28px;font-weight:400;line-height:32px}
+.quotes span,.quotes sup{font-family:var(--mt-data);font-size:12px;font-weight:700}
+#ohlc{display:none!important;font-family:var(--mt-data);font-size:10px;font-weight:400}
+.order-price{font-family:var(--mt-data);font-size:26px;font-weight:400}
+.order-fields label,.order-fields label input,.order-fields label select{font-family:var(--mt-ui);font-weight:400}
+.mini-quote,.mini-quote strong{font-family:var(--mt-data);font-weight:400}
+#barInfo,.demo-status,.profile-status{font-family:var(--mt-ui);font-weight:400}
+.row-glyph{display:inline-block;width:12px;height:12px;font-size:0;margin-right:5px;vertical-align:-2px;background:center/12px 12px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='3' y='2' width='10' height='12' fill='%23f7fcff' stroke='%23548099'/%3E%3Cpath d='M5 5h6M5 8h6M5 11h4' stroke='%236b94aa'/%3E%3C/svg%3E")}
+#chartTitle:before,.mini-title>span:before{content:'';display:inline-block;width:14px;height:14px;margin-right:4px;vertical-align:-2px;background:center/14px 14px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cg fill='%23e5f7e7' stroke='%234b9f65' stroke-width='1'%3E%3Cpath d='M5 1v14M11 1v14'/%3E%3Crect x='3' y='4' width='4' height='7'/%3E%3Crect x='9' y='5' width='4' height='7'/%3E%3C/g%3E%3C/svg%3E")}
+.window-controls svg,.chart-controls svg{width:10px;height:10px;fill:none;stroke:currentColor;stroke-width:1;display:block;margin:auto}
+
+/* In-chart caption and MT5 one-click trading panel. */
+.chart-title{display:none!important}
+#quick{transform:scale(.8);transform-origin:top left}
+#chart[data-dark="true"] #chartHud{color:#fff;text-shadow:none}
+#quick.down{background:linear-gradient(#ff4444 0%,#ff4444 37%,#df2020 40%,#c00000 100%)!important}
+#quick:not(.down){background:linear-gradient(#4444ff 0%,#4444ff 37%,#2020df 40%,#0000c0 100%)!important}
+#quick:not(.down) .quick-head{border-bottom-color:#000080}
+#quick:not(.down) .volume-control{border-color:#000080}
+#chartHud{position:absolute;z-index:4;top:3px;left:5px;height:18px;display:flex;align-items:center;gap:3px;color:#111;font-family:var(--mt-data);font-size:11px;font-weight:400;line-height:16px;pointer-events:none;text-shadow:0 1px 0 #fff;white-space:nowrap}
+#chartHud svg{width:16px;height:16px;flex:0 0 16px;shape-rendering:crispEdges}
+#quick{top:24px;left:5px;width:250px;height:75px;border:1px solid #7d0000;background:#d6161c;color:white;box-shadow:none;overflow:hidden}
+#quick.down{background:#d6161c}
+#quick:not(.down){background:#1018c4;border-color:#04086f}
+.quick-head{display:grid;grid-template-columns:62px 126px 62px;height:29px;border-bottom:1px solid #850006}
+.quick-head>button{height:29px;border:0;border-radius:0;color:white;background:transparent;font-family:var(--mt-data);font-size:14px;font-weight:400;padding:0}
+.volume-control{height:29px;display:grid;grid-template-columns:26px 74px 26px;background:white;color:#111;border-left:1px solid #780006;border-right:1px solid #780006}
+.volume-control button{height:28px;border:0;border-radius:0;background:linear-gradient(#fff,#ececec);color:#111;font:9px Arial;padding:0}
+.volume-control button:first-child{border-right:1px solid #aaa}
+.volume-control button:last-child{border-left:1px solid #aaa}
+.volume-control button:hover{background:#dcecf8;border-color:#779fba}
+.volume-control input{appearance:textfield;width:74px;height:28px;border:0!important;margin:0!important;padding:0 2px!important;text-align:center;background:white;color:#111;font-family:var(--mt-data);font-size:14px;font-weight:400;outline:0}
+.volume-control input::-webkit-inner-spin-button,.volume-control input::-webkit-outer-spin-button{appearance:none;margin:0}
+#quick .quotes{display:grid;grid-template-columns:1fr 1fr;height:45px}
+#quick .quotes button{display:flex;align-items:baseline;justify-content:center;gap:1px;width:auto;height:45px;border:0;border-radius:0;background:transparent;color:white;padding:0 4px;font-family:var(--mt-data)}
+#quick .quotes button+button{border-left:1px solid #720005}
+#quick:not(.down) .quotes button+button{border-left-color:#050779}
+#quick .price-prefix{font-size:15px;font-weight:700;line-height:1}
+#quick .quotes strong{font-size:34px;font-weight:400;line-height:40px;letter-spacing:-1px}
+#quick .quotes sup{font-size:16px;font-weight:700;line-height:1;position:relative;top:-10px}
