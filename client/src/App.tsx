@@ -1,5 +1,7 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router';
 import Layout from '@/components/Layout';
+import PageLoading from '@/components/PageLoading';
 import { IS_API } from '@/config';
 import { isAuthed } from '@/api/auth';
 import QuotesPage from '@/pages/Quotes';
@@ -12,9 +14,19 @@ import HistoryPeriodPage from '@/pages/HistoryPeriod';
 import SettingsPage from '@/pages/Settings';
 import LoginPage from '@/pages/Login';
 import AccountPage from '@/pages/Account';
-import AdminPage from '@/pages/Admin';
-import EmbedTradePage from '@/pages/EmbedTrade';
-import EmbedHistoryPage from '@/pages/EmbedHistory';
+
+// Вынесены из основного бандла в отдельные чанки (заявка заказчика:
+// "приложение еле грузится"): админку и embed-страницы открывают только
+// Иван/заказчик через noVNC/бэкофис соответственно — обычный клиент сайта
+// (мобильный терминал) их код вообще никогда не выполняет, но раньше всё
+// равно скачивал его при первой загрузке, т.к. все страницы были в одном
+// файле. Полная оптимизация (code-splitting остального, виртуализация
+// длинных списков и т.д.) запланирована отдельным проходом позже — это
+// только самый дешёвый и безопасный шаг прямо сейчас, без риска что-то
+// сломать в основном мобильном UI.
+const AdminPage = lazy(() => import('@/pages/Admin'));
+const EmbedTradePage = lazy(() => import('@/pages/EmbedTrade'));
+const EmbedHistoryPage = lazy(() => import('@/pages/EmbedHistory'));
 
 /** В режиме api закрывает маршруты без JWT. В режиме mock — прозрачна (no-op). */
 function RequireAuth() {
@@ -46,9 +58,30 @@ export default function App() {
 
         {/* Chrome-less pages: no NavBar / TabBar */}
         <Route path="login" element={<LoginPage />} />
-        <Route path="admin" element={<AdminPage />} />
-        <Route path="embed/trade" element={<EmbedTradePage />} />
-        <Route path="embed/history" element={<EmbedHistoryPage />} />
+        <Route
+          path="admin"
+          element={
+            <Suspense fallback={<PageLoading />}>
+              <AdminPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="embed/trade"
+          element={
+            <Suspense fallback={<PageLoading />}>
+              <EmbedTradePage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="embed/history"
+          element={
+            <Suspense fallback={<PageLoading />}>
+              <EmbedHistoryPage />
+            </Suspense>
+          }
+        />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
