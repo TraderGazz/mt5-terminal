@@ -560,6 +560,32 @@ export default function HistoryPage() {
     }
   };
 
+  // Порциями: в таблице ~17 000 строк на большом счёте — рисовать их разом
+  // на телефоне = заметные тормоза. Итоги ниже считаются по полным данным.
+  const PAGE_SIZE = 200;
+  const [shown, setShown] = useState(PAGE_SIZE);
+  useEffect(() => {
+    setShown(PAGE_SIZE);
+  }, [tab, filter.period, filter.symbol, sort]);
+  const dealsPage = dealsTabRows.slice(0, shown);
+  const positionsPage = positionsTabRows.slice(0, shown);
+  const ordersPage = orders.slice(0, shown);
+  const pageTotal =
+    tab === 'deals' ? dealsTabRows.length : tab === 'positions' ? positionsTabRows.length : orders.length;
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || shown >= pageTotal) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) setShown((s) => s + PAGE_SIZE);
+      },
+      { rootMargin: '400px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [shown, pageTotal]);
+
   const stagger = (i: number) => (rowsAnimate ? Math.min(i * 0.025, 0.4) : 0);
 
   // Real account's first load: show a spinner instead of the empty-list
@@ -700,12 +726,12 @@ export default function HistoryPage() {
                 <HistoryEmpty title="Нет сделок" />
               ) : (
                 <div className="bg-white">
-                  {dealsTabRows.map((row, i) =>
+                  {dealsPage.map((row, i) =>
                     row.kind === 'balance' ? (
                       <BalanceRow
                         key={`bal-${row.op.ticket}`}
                         op={row.op}
-                        last={i === dealsTabRows.length - 1}
+                        last={i === dealsPage.length - 1}
                         staggerDelay={stagger(i)}
                       />
                     ) : (
@@ -713,7 +739,7 @@ export default function HistoryPage() {
                         key={row.leg.ticket}
                         leg={row.leg}
                         digits={digitsOf(row.leg.symbol)}
-                        last={i === dealsTabRows.length - 1}
+                        last={i === dealsPage.length - 1}
                         staggerDelay={stagger(i)}
                         onTap={
                           row.leg.entry === 'out' || row.leg.entry === 'inout'
@@ -731,12 +757,12 @@ export default function HistoryPage() {
                 <HistoryEmpty title="Нет закрытых позиций" />
               ) : (
                 <div className="bg-white">
-                  {positionsTabRows.map((row, i) =>
+                  {positionsPage.map((row, i) =>
                     row.kind === 'balance' ? (
                       <BalanceRow
                         key={`bal-${row.op.ticket}`}
                         op={row.op}
-                        last={i === positionsTabRows.length - 1}
+                        last={i === positionsPage.length - 1}
                         staggerDelay={stagger(i)}
                       />
                     ) : (
@@ -744,7 +770,7 @@ export default function HistoryPage() {
                         key={row.position.ticket}
                         position={row.position}
                         digits={digitsOf(row.position.symbol)}
-                        last={i === positionsTabRows.length - 1}
+                        last={i === positionsPage.length - 1}
                         staggerDelay={stagger(i)}
                         onTap={() => navigate(`/trade/${row.position.ticket}`)}
                         onLongPress={() => setRowSheet(row.position)}
@@ -760,18 +786,19 @@ export default function HistoryPage() {
                 <HistoryEmpty title="Нет ордеров" />
               ) : (
                 <div className="bg-white">
-                  {orders.map((o, i) => (
+                  {ordersPage.map((o, i) => (
                     <OrderRow
                       key={o.ticket}
                       order={o}
                       digits={digitsOf(o.symbol)}
-                      last={i === orders.length - 1}
+                      last={i === ordersPage.length - 1}
                       staggerDelay={stagger(i)}
                     />
                   ))}
                 </div>
               ))}
 
+            <div ref={sentinelRef} className="h-px" />
           </motion.div>
         </AnimatePresence>
 

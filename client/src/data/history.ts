@@ -147,7 +147,7 @@ function ensureStarted() {
   // Аварийный поллинг: у EA не работает push события 'trade' по WS, поэтому
   // без него новые закрытые сделки не появлялись бы до перезагрузки страницы.
   setInterval(() => {
-    if (listeners.size) void refresh();
+    if (listeners.size && document.visibilityState === 'visible') void refresh();
   }, POLL_MS);
 }
 
