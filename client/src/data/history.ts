@@ -140,9 +140,6 @@ function ensureStarted() {
   if (started) return;
   started = true;
   void refresh();
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && listeners.size) void refresh();
-  });
   wsClient.on('trade', () => {
     // событие сделки — подтянуть свежую историю (с задержкой, дать backend записать)
     setTimeout(refresh, 800);
