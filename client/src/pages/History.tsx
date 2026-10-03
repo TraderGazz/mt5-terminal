@@ -33,7 +33,6 @@ import { DAY, periodRange, useHistoryFilter } from '@/components/history/history
 import { canEditTrades, useCurrentRole } from '@/components/auth/session';
 
 /** First-mount stagger happens only once per session (design.md §6). */
-let hasMountedOnce = false;
 
 const PULL_THRESHOLD = 70;
 
@@ -202,15 +201,10 @@ export default function HistoryPage() {
 
   const [tab, setTab] = useState<TabKey>('positions');
   const [tabDir, setTabDir] = useState(1);
-  const [rowsAnimate, setRowsAnimate] = useState(() => !hasMountedOnce);
   const [sort, setSort] = useState<SortKey>('default');
   const [sortOpen, setSortOpen] = useState(false);
   const [rowSheet, setRowSheet] = useState<{ symbol: string; ticket: number } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-
-  useEffect(() => {
-    hasMountedOnce = true;
-  }, []);
 
   // Pull-to-refresh state
   const [pull, setPull] = useState(0);
@@ -517,7 +511,6 @@ export default function HistoryPage() {
     const newIdx = TABS.findIndex((t) => t.value === next);
     setTabDir(newIdx > oldIdx ? 1 : -1);
     setTab(next);
-    setRowsAnimate(true);
   };
 
   // --- pull to refresh ---
@@ -586,7 +579,8 @@ export default function HistoryPage() {
     return () => io.disconnect();
   }, [shown, pageTotal]);
 
-  const stagger = (i: number) => (rowsAnimate ? Math.min(i * 0.025, 0.4) : 0);
+  // Строки появляются сразу, без каскадной задержки: при порционной подгрузке каскад проигрывался бы на каждой порции.
+  const stagger = (_i: number) => 0;
 
   // Real account's first load: show a spinner instead of the empty-list
   // ("Нет сделок") state — /history/raw on a big account can take a few
