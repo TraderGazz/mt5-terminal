@@ -1,11 +1,11 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, ChevronRight } from 'lucide-react';
 import NavBar, { BackButton } from '@/components/NavBar';
 import ActionSheet from '@/components/ActionSheet';
 import Toast from '@/components/Toast';
-import { getAllRows } from '@/data/history';
+import { getAllRows, setHistoryFrom } from '@/data/history';
 import { formatDate } from '@/lib/format';
 import { RowSeparator } from '@/components/history/Section';
 import {
@@ -95,6 +95,10 @@ function RadioRow({ label, selected, last, disabled, onSelect }: RadioRowProps) 
 
 export default function HistoryPeriodPage() {
   const navigate = useNavigate();
+  // Экран работает с произвольными диапазонами — держим полный набор данных.
+  useEffect(() => {
+    setHistoryFrom(null);
+  }, []);
   // Заявка заказчика: инвестору (viewer) создание торгового отчёта
   // недоступно — пункт остаётся на месте, но не нажимается.
   const reportDisabled = useCurrentRole() === 'viewer';

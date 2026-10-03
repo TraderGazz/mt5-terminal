@@ -59,8 +59,16 @@ const dbRowToDeal = (r) => ({
 
 async function loadDeals(range) {
   // Источник правды — БД (с правками). Если пусто/недоступна — берём из моста.
+  // При фильтре по периоду пустой результат — законный ответ, мост не трогаем.
   if (isDbReady()) {
     try {
+      if (range.from) {
+        const { rows } = await query(
+          'SELECT * FROM trades WHERE COALESCE(close_time, open_time) >= $1 ORDER BY close_time DESC NULLS LAST, id DESC',
+          [range.from],
+        );
+        return { deals: rows.map(dbRowToDeal), from: 'db' };
+      }
       const { rows } = await query('SELECT * FROM trades ORDER BY close_time DESC NULLS LAST, id DESC');
       if (rows.length) return { deals: rows.map(dbRowToDeal), from: 'db' };
     } catch { /* fall through */ }
@@ -93,25 +101,30 @@ const dbRowToLeg = (r) => ({
   isEdited: !!r.is_edited,
 });
 
-async function loadDealLegs() {
+async function loadDealLegs(from = null) {
   if (!isDbReady()) return [];
   try {
-    const { rows } = await query('SELECT * FROM deal_legs ORDER BY time DESC NULLS LAST, id DESC');
+    const { rows } = from
+      ? await query('SELECT * FROM deal_legs WHERE time >= $1 ORDER BY time DESC NULLS LAST, id DESC', [from])
+      : await query('SELECT * FROM deal_legs ORDER BY time DESC NULLS LAST, id DESC');
     return rows.map(dbRowToLeg);
   } catch {
     return [];
   }
 }
 
-// GET /api/history/raw — все строки за всё время, разбитые по категориям.
-// Мобильный фронт фильтрует/агрегирует/считает итоги на клиенте (дизайн заморожен).
+// GET /api/history/raw[?from=ISO] — строки, разбитые по категориям. ?from
+// отдаёт только строки начиная с даты; клиент сам отфильтровывает по своему
+// периоду, поэтому на экране результат тот же.
 router.get('/raw', authRequired, async (req, res) => {
+  const fromDate = req.query.from ? new Date(req.query.from) : null;
+  const from = fromDate && !Number.isNaN(fromDate.getTime()) ? fromDate.toISOString() : null;
   try {
-    const { deals } = await loadDeals({ from: null, to: null });
+    const { deals } = await loadDeals({ from, to: null });
     const trade = deals.filter((d) => d.dealType === 'buy' || d.dealType === 'sell');
     const balanceOps = deals.filter((d) => d.dealType === 'balance' || d.dealType === 'withdrawal');
     const cfdOps = deals.filter((d) => d.dealType === 'cfd');
-    const dealLegs = await loadDealLegs();
+    const dealLegs = await loadDealLegs(from);
     res.json({ deals: trade, balanceOps, cfdOps, dealLegs, source: getBridge().status() });
   } catch (err) {
     console.error('[history/raw] error:', err.message);

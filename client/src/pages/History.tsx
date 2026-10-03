@@ -14,6 +14,7 @@ import {
   useDealsVersion,
   useHistoryLoaded,
   useHistoryError,
+  setHistoryFrom,
   type DealLeg,
 } from '@/data/history';
 import { depositTotalsForRange, ledgerBalanceRows, type LedgerBalanceRow } from '@/data/depositLedger';
@@ -219,6 +220,10 @@ export default function HistoryPage() {
   const pullRef = useRef<{ startY: number; pulling: boolean }>({ startY: 0, pulling: false });
 
   const range = useMemo(() => periodRange(filter), [filter]);
+
+  useEffect(() => {
+    setHistoryFrom(range.from);
+  }, [range.from]);
 
   // Reads through editStore so edits from TradeEdit («(изм.)», changed
   // profit/swap/commission) are reflected here immediately.

@@ -110,9 +110,18 @@ function notify() {
   listeners.forEach((l) => l());
 }
 
+let fromIso: string | null = null;
+
+export function setHistoryFrom(from: number | null) {
+  const next = from != null && Number.isFinite(from) ? new Date(from).toISOString() : null;
+  if (next === fromIso) return;
+  fromIso = next;
+  if (IS_API && started) void refresh();
+}
+
 async function refresh() {
   try {
-    const raw = await getHistoryRaw();
+    const raw = await getHistoryRaw(fromIso);
     deals = raw.deals.map(toDeal);
     balanceOps = raw.balanceOps.map(toDeal);
     cfdOps = raw.cfdOps.map(toDeal);

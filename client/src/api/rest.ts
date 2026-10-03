@@ -150,7 +150,8 @@ export interface ApiHistoryRaw {
   dealLegs: ApiDealLeg[];
 }
 
-export const getHistoryRaw = () => api<ApiHistoryRaw>('/history/raw');
+export const getHistoryRaw = (from?: string | null) =>
+  api<ApiHistoryRaw>('/history/raw', { query: { from: from ?? undefined } });
 
 export const patchTrade = (id: number, body: Record<string, unknown>) =>
   api<{ trade: unknown }>(`/trades/${id}`, { method: 'PATCH', body });
