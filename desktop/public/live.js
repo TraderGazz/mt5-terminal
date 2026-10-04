@@ -211,7 +211,14 @@
     loadPositions();
     ws.on('positions', (d) => terminalAPI.setPositions((d || []).map(mapPosition)));
     loadHistory();
-    ws.on('quote', (q) => { if (q && typeof q.bid === 'number' && typeof q.ask === 'number') terminalAPI.setQuote(q.bid, q.ask); });
+    // Мост шлёт котировки по ВСЕМ инструментам в один канал 'quote' — без
+    // фильтра по символу сюда прилетала, например, цена золота или рубля и
+    // ломала график активного EURUSD (ровно так и было до этой правки).
+    ws.on('quote', (q) => {
+      if (q && q.symbol === state.symbol && typeof q.bid === 'number' && typeof q.ask === 'number') {
+        terminalAPI.setQuote(q.bid, q.ask);
+      }
+    });
     loadCandles(typeof state !== 'undefined' && SUPPORTED_TF.includes(state.tf) ? state.tf : 'H4');
   }
 
