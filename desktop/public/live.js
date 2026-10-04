@@ -135,6 +135,9 @@
   }
 
   // --- Позиции -------------------------------------------------------------
+  // Торговля: новые позиции сверху, самые старые внизу.
+  const sortNewestFirst = (arr) => arr.sort((a, b) => (b.time ?? 0) - (a.time ?? 0));
+
   function mapPosition(p) {
     return {
       id: p.id,
@@ -151,7 +154,7 @@
   }
   function loadPositions() {
     api('/positions')
-      .then((r) => terminalAPI.setPositions((r.positions || []).map(mapPosition)))
+      .then((r) => terminalAPI.setPositions(sortNewestFirst((r.positions || []).map(mapPosition))))
       .catch(() => {});
   }
 
@@ -219,7 +222,7 @@
       patchTotals();
       const sc = document.getElementById('tableScroll');
       const rowCount = document.querySelectorAll('#tableScroll tbody tr').length;
-      if (sc && (state.tab !== lastTab || (lastRowCount === 0 && rowCount > 0))) sc.scrollTop = sc.scrollHeight;
+      if (sc && (state.tab !== lastTab || (lastRowCount === 0 && rowCount > 0))) sc.scrollTop = state.tab === "trade" ? 0 : sc.scrollHeight;
       lastTab = state.tab;
       lastRowCount = rowCount;
     };
@@ -253,7 +256,7 @@
     // ФИО/компания превращались бы в undefined.
     ws.on('account', (d) => { accountInfo = { ...accountInfo, ...d }; patchCaption(); patchNavigator(); patchTotals(); });
     loadPositions();
-    ws.on('positions', (d) => terminalAPI.setPositions((d || []).map(mapPosition)));
+    ws.on("positions", (d) => terminalAPI.setPositions(sortNewestFirst((d || []).map(mapPosition))));
     loadHistory();
     loadHistoryTotals();
     // Мост шлёт котировки по ВСЕМ инструментам в один канал 'quote' — без
