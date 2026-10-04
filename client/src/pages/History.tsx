@@ -574,11 +574,24 @@ export default function HistoryPage() {
   useEffect(() => {
     setShown(PAGE_SIZE);
   }, [tab, filter.period, filter.symbol, sort]);
-  const dealsPage = dealsTabRows.slice(0, shown);
-  const positionsPage = positionsTabRows.slice(0, shown);
-  const ordersPage = orders.slice(0, shown);
+  const dealsPage = dealsTabRows.slice(Math.max(0, dealsTabRows.length - shown));
+  const positionsPage = positionsTabRows.slice(Math.max(0, positionsTabRows.length - shown));
+  const ordersPage = orders.slice(Math.max(0, orders.length - shown));
   const pageTotal =
     tab === 'deals' ? dealsTabRows.length : tab === 'positions' ? positionsTabRows.length : orders.length;
+  // При входе на вкладку показываем самые новые строки (список идёт сверху
+  // вниз от старых к новым), поэтому прокручиваем общий контейнер к низу —
+  // один раз на каждую комбинацию вкладка/период/символ/сортировка.
+  const scrolledKey = useRef('');
+  useEffect(() => {
+    const key = `${tab}|${filter.period}|${filter.symbol ?? ''}|${sort}`;
+    if (pageTotal === 0 || scrolledKey.current === key) return;
+    scrolledKey.current = key;
+    requestAnimationFrame(() => {
+      const scroller = document.getElementById('app-scroll');
+      if (scroller) scroller.scrollTop = scroller.scrollHeight;
+    });
+  }, [tab, filter.period, filter.symbol, sort, pageTotal]);
   const sentinelRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = sentinelRef.current;
@@ -587,7 +600,7 @@ export default function HistoryPage() {
       (entries) => {
         if (entries[0].isIntersecting) setShown((s) => s + PAGE_SIZE);
       },
-      { rootMargin: '600px' },
+      { rootMargin: '600px 0px 0px 0px' },
     );
     io.observe(el);
     return () => io.disconnect();
@@ -726,6 +739,8 @@ export default function HistoryPage() {
             exit={{ opacity: 0, x: -24 * tabDir }}
             transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
           >
+            {shown < pageTotal && <div ref={sentinelRef} className="h-px" />}
+
             {tab === 'deals' &&
               (dealsTabRows.length === 0 ? (
                 <HistoryEmpty title="Нет сделок" />
@@ -803,7 +818,7 @@ export default function HistoryPage() {
                 </div>
               ))}
 
-            {shown < pageTotal && <div ref={sentinelRef} className="h-px" />}
+
           </motion.div>
         </AnimatePresence>
 
