@@ -175,9 +175,16 @@
   function loadHistory() {
     // period:'all' тянет ВСЮ историю (на реальном счёте — тысячи сделок) —
     // та же причина, из-за которой тормозила История в мобильной версии.
-    // 'year' — тот же компромисс по умолчанию, что и там.
+    // Показываем только последние 2000 закрытых сделок (как и в мобильной) —
+    // таблица прототипа рисует весь список разом, без подгрузки порциями.
     api('/history', { query: { tab: 'deals', period: 'year', sort: 'default' } })
-      .then((r) => terminalAPI.setHistory((r.rows || []).map(mapHistoryRow)))
+      .then((r) => {
+        const rows = (r.rows || [])
+          .map(mapHistoryRow)
+          .sort((a, b) => (a.time ?? 0) - (b.time ?? 0))
+          .slice(-2000);
+        terminalAPI.setHistory(rows);
+      })
       .catch(() => {});
   }
 
