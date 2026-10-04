@@ -208,9 +208,21 @@
       el.innerHTML = `•　Баланс: ${fmt(accountInfo.balance)} ${currency}　Средства: ${fmt(accountInfo.equity)}　Свободная маржа: ${fmt(accountInfo.freeMargin)}<span>${fmt(accountInfo.floatingProfit ?? 0)}</span>`;
     }
   }
+  // Новые позиции — внизу списка: при входе на вкладку и при первой загрузке
+  // строк прокручиваем таблицу к низу, чтобы сразу были видны самые свежие.
+  let lastTab = null;
+  let lastRowCount = 0;
   if (typeof table === 'function') {
     const prevTable = table;
-    table = function (...args) { prevTable(...args); patchTotals(); };
+    table = function (...args) {
+      prevTable(...args);
+      patchTotals();
+      const sc = document.getElementById('tableScroll');
+      const rowCount = document.querySelectorAll('#tableScroll tbody tr').length;
+      if (sc && (state.tab !== lastTab || (lastRowCount === 0 && rowCount > 0))) sc.scrollTop = sc.scrollHeight;
+      lastTab = state.tab;
+      lastRowCount = rowCount;
+    };
   }
 
   // --- Свечи -----------------------------------------------------------------
