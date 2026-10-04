@@ -130,7 +130,7 @@
 
   function loadAccount() {
     api('/account')
-      .then((r) => { accountInfo = r.account; patchCaption(); patchNavigator(); })
+      .then((r) => { accountInfo = r.account; patchCaption(); patchNavigator(); patchTotals(); })
       .catch(() => {});
   }
 
@@ -188,6 +188,31 @@
       .catch(() => {});
   }
 
+  // --- Итоговая строка под таблицей (Торговля/История) — у прототипа она
+  // декоративная (локальный sim.balance/"Пополнение: 100 000.00"), подменяем
+  // на реальные цифры: те же, что заказчик видит на сайте (мобильная
+  // версия) — официальная выписка + ручные записи, без мусора от EA.
+  let historyTotals = null;
+  function loadHistoryTotals() {
+    api('/history/totals', { query: { period: 'year' } })
+      .then((r) => { historyTotals = r.totals; patchTotals(); })
+      .catch(() => {});
+  }
+  function patchTotals() {
+    const el = document.getElementById('totals');
+    if (!el) return;
+    if (state.tab === 'history' && historyTotals) {
+      el.innerHTML = `•　Прибыль: ${fmt(historyTotals.profit)}　Кредит: 0.00　Пополнение: ${fmt(historyTotals.deposit)}　Снятие: ${fmt(historyTotals.withdrawal)}　Баланс: ${fmt(historyTotals.balance)}<span>${fmt(historyTotals.profit)}</span>`;
+    } else if (state.tab !== 'history' && accountInfo && typeof accountInfo.balance === 'number') {
+      const currency = accountInfo.currency || 'EUR';
+      el.innerHTML = `•　Баланс: ${fmt(accountInfo.balance)} ${currency}　Средства: ${fmt(accountInfo.equity)}　Свободная маржа: ${fmt(accountInfo.freeMargin)}<span>${fmt(accountInfo.floatingProfit ?? 0)}</span>`;
+    }
+  }
+  if (typeof table === 'function') {
+    const prevTable = table;
+    table = function (...args) { prevTable(...args); patchTotals(); };
+  }
+
   // --- Свечи -----------------------------------------------------------------
   let candleUnsub = null;
   function loadCandles(tf) {
@@ -214,10 +239,11 @@
     // REST /api/account (добор из БД). Мёржим поверх уже загруженных
     // реквизитов, а не заменяем целиком — иначе после первого WS-тика
     // ФИО/компания превращались бы в undefined.
-    ws.on('account', (d) => { accountInfo = { ...accountInfo, ...d }; patchCaption(); patchNavigator(); });
+    ws.on('account', (d) => { accountInfo = { ...accountInfo, ...d }; patchCaption(); patchNavigator(); patchTotals(); });
     loadPositions();
     ws.on('positions', (d) => terminalAPI.setPositions((d || []).map(mapPosition)));
     loadHistory();
+    loadHistoryTotals();
     // Мост шлёт котировки по ВСЕМ инструментам в один канал 'quote' — без
     // фильтра по символу сюда прилетала, например, цена золота или рубля и
     // ломала график активного EURUSD (ровно так и было до этой правки).

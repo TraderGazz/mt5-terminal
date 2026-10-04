@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authRequired } from './auth.js';
 import { getBridge } from '../services/mt5-bridge/index.js';
 import { buildHistory, SORT_KEYS } from '../services/history.js';
+import { ledgerReportRows } from '../services/deposit-ledger.js';
 import { query, isDbReady } from '../db.js';
 
 const router = Router();
@@ -151,6 +152,63 @@ router.get('/', authRequired, async (req, res) => {
   } catch (err) {
     console.error('[history] error:', err.message);
     res.status(502).json({ error: 'Не удалось получить историю', detail: err.message });
+  }
+});
+
+// GET /api/history/totals?period=|from=&to= — тот же набор итогов (Депозит/
+// Снятие/Прибыль/CFD/Своп/Комиссия/Баланс), что заказчик видит на сайте:
+// официальная выписка брокера + ручные записи из админки вместо мусорных
+// EA-синхронизированных balance/withdrawal (см. server/routes/admin.js
+// toHtml() — тот же фильтр и тот же источник, см. deposit-ledger.js).
+router.get('/totals', authRequired, async (req, res) => {
+  const range = resolveRange({ period: req.query.period, from: req.query.from, to: req.query.to });
+  const where = [`NOT (deal_type IN ('balance', 'withdrawal') AND ticket > 0)`];
+  const params = [];
+  if (range.from) {
+    params.push(range.from);
+    where.push(`COALESCE(close_time, open_time) >= $${params.length}`);
+  }
+  try {
+    const { rows } = await query(
+      `SELECT deal_type, ticket, profit, swap, commission FROM trades WHERE ${where.join(' AND ')}`,
+      params,
+    );
+    const fromMs = range.from ? new Date(range.from).getTime() : -Infinity;
+    const ledgerRows = ledgerReportRows(fromMs, Infinity);
+
+    const sum = (arr, pred, pick) => arr.reduce((s, x) => (pred(x) ? s + (Number(pick(x)) || 0) : s), 0);
+    const tradeRows = rows.filter((r) => r.deal_type === 'buy' || r.deal_type === 'sell');
+    const cfdRows = rows.filter((r) => r.deal_type === 'cfd');
+    const manualBalanceRows = rows.filter((r) => r.deal_type === 'balance' || r.deal_type === 'withdrawal');
+
+    const deposit =
+      sum(manualBalanceRows, (r) => Number(r.profit) > 0, (r) => r.profit) +
+      sum(ledgerRows, (r) => r.deal_type === 'balance', (r) => r.profit);
+    const withdrawal =
+      sum(manualBalanceRows, (r) => Number(r.profit) < 0, (r) => r.profit) +
+      sum(ledgerRows, (r) => r.deal_type === 'withdrawal', (r) => r.profit);
+    const profit = sum(tradeRows, () => true, (r) => r.profit);
+    const swap = sum(tradeRows, () => true, (r) => r.swap);
+    const commission = sum(tradeRows, () => true, (r) => r.commission);
+    const cfd = sum(cfdRows, () => true, (r) => r.profit);
+    const balance = deposit + withdrawal + profit + swap + commission + cfd;
+    const round2 = (n) => Math.round(n * 100) / 100;
+
+    res.json({
+      totals: {
+        deposit: round2(deposit),
+        withdrawal: round2(withdrawal),
+        profit: round2(profit),
+        swap: round2(swap),
+        commission: round2(commission),
+        cfd: round2(cfd),
+        balance: round2(balance),
+      },
+      range: { from: range.from, to: range.to, period: range.period },
+    });
+  } catch (err) {
+    console.error('[history/totals] error:', err.message);
+    res.status(502).json({ error: 'Не удалось посчитать итоги', detail: err.message });
   }
 });
 
