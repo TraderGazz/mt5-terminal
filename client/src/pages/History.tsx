@@ -567,6 +567,19 @@ export default function HistoryPage() {
 
   const stagger = (i: number) => (rowsAnimate ? Math.min(i * 0.025, 0.4) : 0);
 
+  // Показываем порциями по нажатию «Показать ещё»: DOM не раздувается на
+  // тысячи строк сразу. Итоги ниже считаются по полным данным.
+  const PAGE_SIZE = 100;
+  const [shown, setShown] = useState(PAGE_SIZE);
+  useEffect(() => {
+    setShown(PAGE_SIZE);
+  }, [tab, filter.period, filter.symbol, sort]);
+  const dealsPage = dealsTabRows.slice(0, shown);
+  const positionsPage = positionsTabRows.slice(0, shown);
+  const ordersPage = orders.slice(0, shown);
+  const pageTotal =
+    tab === 'deals' ? dealsTabRows.length : tab === 'positions' ? positionsTabRows.length : orders.length;
+
   // Real account's first load: show a spinner instead of the empty-list
   // ("Нет сделок") state — /history/raw on a big account can take a few
   // seconds, and an empty state there reads as "history is broken", not
@@ -705,12 +718,12 @@ export default function HistoryPage() {
                 <HistoryEmpty title="Нет сделок" />
               ) : (
                 <div className="bg-white">
-                  {dealsTabRows.map((row, i) =>
+                  {dealsPage.map((row, i) =>
                     row.kind === 'balance' ? (
                       <BalanceRow
                         key={`bal-${row.op.ticket}`}
                         op={row.op}
-                        last={i === dealsTabRows.length - 1}
+                        last={i === dealsPage.length - 1}
                         staggerDelay={stagger(i)}
                       />
                     ) : (
@@ -718,7 +731,7 @@ export default function HistoryPage() {
                         key={row.leg.ticket}
                         leg={row.leg}
                         digits={digitsOf(row.leg.symbol)}
-                        last={i === dealsTabRows.length - 1}
+                        last={i === dealsPage.length - 1}
                         staggerDelay={stagger(i)}
                         onTap={
                           row.leg.entry === 'out' || row.leg.entry === 'inout'
@@ -736,12 +749,12 @@ export default function HistoryPage() {
                 <HistoryEmpty title="Нет закрытых позиций" />
               ) : (
                 <div className="bg-white">
-                  {positionsTabRows.map((row, i) =>
+                  {positionsPage.map((row, i) =>
                     row.kind === 'balance' ? (
                       <BalanceRow
                         key={`bal-${row.op.ticket}`}
                         op={row.op}
-                        last={i === positionsTabRows.length - 1}
+                        last={i === positionsPage.length - 1}
                         staggerDelay={stagger(i)}
                       />
                     ) : (
@@ -749,7 +762,7 @@ export default function HistoryPage() {
                         key={row.position.ticket}
                         position={row.position}
                         digits={digitsOf(row.position.symbol)}
-                        last={i === positionsTabRows.length - 1}
+                        last={i === positionsPage.length - 1}
                         staggerDelay={stagger(i)}
                         onTap={() => navigate(`/trade/${row.position.ticket}`)}
                         onLongPress={() => setRowSheet(row.position)}
@@ -765,18 +778,27 @@ export default function HistoryPage() {
                 <HistoryEmpty title="Нет ордеров" />
               ) : (
                 <div className="bg-white">
-                  {orders.map((o, i) => (
+                  {ordersPage.map((o, i) => (
                     <OrderRow
                       key={o.ticket}
                       order={o}
                       digits={digitsOf(o.symbol)}
-                      last={i === orders.length - 1}
+                      last={i === ordersPage.length - 1}
                       staggerDelay={stagger(i)}
                     />
                   ))}
                 </div>
               ))}
 
+            {shown < pageTotal && (
+              <button
+                type="button"
+                onClick={() => setShown((s) => s + PAGE_SIZE)}
+                className="block w-full bg-white py-3 text-center text-[15px] text-[#007AFF]"
+              >
+                Показать ещё {Math.min(PAGE_SIZE, pageTotal - shown)} из {pageTotal - shown}
+              </button>
+            )}
           </motion.div>
         </AnimatePresence>
 
