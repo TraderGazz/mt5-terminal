@@ -567,9 +567,9 @@ export default function HistoryPage() {
 
   const stagger = (i: number) => (rowsAnimate ? Math.min(i * 0.025, 0.4) : 0);
 
-  // Показываем порциями по нажатию «Показать ещё»: DOM не раздувается на
-  // тысячи строк сразу. Итоги ниже считаются по полным данным.
-  const PAGE_SIZE = 100;
+  // Сначала 2000 последних строк, остальные догружаются при прокрутке к концу
+  // списка. Итоги ниже считаются по полным данным.
+  const PAGE_SIZE = 2000;
   const [shown, setShown] = useState(PAGE_SIZE);
   useEffect(() => {
     setShown(PAGE_SIZE);
@@ -579,6 +579,19 @@ export default function HistoryPage() {
   const ordersPage = orders.slice(0, shown);
   const pageTotal =
     tab === 'deals' ? dealsTabRows.length : tab === 'positions' ? positionsTabRows.length : orders.length;
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || shown >= pageTotal) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) setShown((s) => s + PAGE_SIZE);
+      },
+      { rootMargin: '600px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [shown, pageTotal]);
 
   // Real account's first load: show a spinner instead of the empty-list
   // ("Нет сделок") state — /history/raw on a big account can take a few
@@ -790,15 +803,7 @@ export default function HistoryPage() {
                 </div>
               ))}
 
-            {shown < pageTotal && (
-              <button
-                type="button"
-                onClick={() => setShown((s) => s + PAGE_SIZE)}
-                className="block w-full bg-white py-3 text-center text-[15px] text-[#007AFF]"
-              >
-                Показать ещё {Math.min(PAGE_SIZE, pageTotal - shown)} из {pageTotal - shown}
-              </button>
-            )}
+            {shown < pageTotal && <div ref={sentinelRef} className="h-px" />}
           </motion.div>
         </AnimatePresence>
 
