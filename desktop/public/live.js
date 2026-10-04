@@ -222,7 +222,7 @@
       patchTotals();
       const sc = document.getElementById('tableScroll');
       const rowCount = document.querySelectorAll('#tableScroll tbody tr').length;
-      if (sc && (state.tab !== lastTab || (lastRowCount === 0 && rowCount > 0))) sc.scrollTop = state.tab === "trade" ? 0 : sc.scrollHeight;
+      if (sc && (state.tab !== lastTab || (lastRowCount === 0 && rowCount > 0))) sc.scrollTop = sc.scrollHeight;
       lastTab = state.tab;
       lastRowCount = rowCount;
     };
