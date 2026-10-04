@@ -173,7 +173,10 @@
     };
   }
   function loadHistory() {
-    api('/history', { query: { tab: 'deals', period: 'all', sort: 'default' } })
+    // period:'all' тянет ВСЮ историю (на реальном счёте — тысячи сделок) —
+    // та же причина, из-за которой тормозила История в мобильной версии.
+    // 'year' — тот же компромисс по умолчанию, что и там.
+    api('/history', { query: { tab: 'deals', period: 'year', sort: 'default' } })
       .then((r) => terminalAPI.setHistory((r.rows || []).map(mapHistoryRow)))
       .catch(() => {});
   }
