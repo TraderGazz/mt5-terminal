@@ -232,7 +232,7 @@
   let candleUnsub = null;
   function loadCandles(tf) {
     if (candleUnsub) { candleUnsub(); candleUnsub = null; }
-    api('/candles', { query: { timeframe: tf, count: 300 } })
+    api('/candles', { query: { timeframe: tf, count: tf === 'M1' ? 1000 : 300 } })
       .then((r) => {
         terminalAPI.setBars((r.bars || []).map((c) => ({ t: c.time * 1000, o: c.open, h: c.high, l: c.low, c: c.close })));
       })

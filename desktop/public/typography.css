@@ -32,7 +32,7 @@ header,nav#menu button,#toolbar .native-button span,.panel-heading,.panel-tabs b
 .order-fields label,.order-fields label input,.order-fields label select{font-family:var(--mt-ui);font-weight:400}
 .mini-quote,.mini-quote strong{font-family:var(--mt-data);font-weight:400}
 #barInfo,.demo-status,.profile-status{font-family:var(--mt-ui);font-weight:400}
-.row-glyph{display:inline-block;width:12px;height:12px;font-size:0;margin-right:5px;vertical-align:-2px;background:center/12px 12px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='3' y='2' width='10' height='12' fill='%23f7fcff' stroke='%23548099'/%3E%3Cpath d='M5 5h6M5 8h6M5 11h4' stroke='%236b94aa'/%3E%3C/svg%3E")}
+.row-glyph{display:inline-block;width:12px;height:12px;font-size:0;margin-right:5px;vertical-align:middle;background:center/12px 12px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='3' y='2' width='10' height='12' fill='%23f7fcff' stroke='%23548099'/%3E%3Cpath d='M5 5h6M5 8h6M5 11h4' stroke='%236b94aa'/%3E%3C/svg%3E")}
 #chartTitle:before,.mini-title>span:before{content:'';display:inline-block;width:14px;height:14px;margin-right:4px;vertical-align:-2px;background:center/14px 14px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cg fill='%23e5f7e7' stroke='%234b9f65' stroke-width='1'%3E%3Cpath d='M5 1v14M11 1v14'/%3E%3Crect x='3' y='4' width='4' height='7'/%3E%3Crect x='9' y='5' width='4' height='7'/%3E%3C/g%3E%3C/svg%3E")}
 .window-controls svg,.chart-controls svg{width:10px;height:10px;fill:none;stroke:currentColor;stroke-width:1;display:block;margin:auto}
 
