@@ -244,8 +244,32 @@
     });
   }
 
+  // Линии на графике (координаты — время и цена, переживут смену ТФ и
+  // перезагрузку) — сохраняем в localStorage по символу, как объекты в MT5.
+  const linesKey = () => `mt5-lines-${state.symbol}`;
+  function saveLines() {
+    try { localStorage.setItem(linesKey(), JSON.stringify(state.lines)); } catch { /* */ }
+  }
+  function loadLines() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(linesKey()) || '[]');
+      if (Array.isArray(saved)) state.lines.splice(0, state.lines.length, ...saved);
+    } catch { /* */ }
+  }
+  let saveTimer = null;
+  if (typeof draw === 'function') {
+    const prevDraw = draw;
+    draw = function (...args) {
+      prevDraw(...args);
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(saveLines, 300);
+    };
+  }
+
   function init() {
     if (!getToken()) { location.replace('login.html'); return; }
+    loadLines();
+    draw();
     terminalAPI.setDemoRunning(false);
     mountLogout();
     loadAccount();
