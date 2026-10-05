@@ -228,7 +228,12 @@
       patchTotals();
       const sc = document.getElementById('tableScroll');
       const rowCount = document.querySelectorAll('#tableScroll tbody tr').length;
-      if (sc && (state.tab !== lastTab || (lastRowCount === 0 && rowCount > 0))) sc.scrollTop = sc.scrollHeight;
+      if (sc && (state.tab !== lastTab || (lastRowCount === 0 && rowCount > 0))) {
+        const toBottom = () => { sc.scrollTop = sc.scrollHeight; };
+        toBottom();
+        setTimeout(toBottom, 300);
+        setTimeout(toBottom, 1000);
+      }
       lastTab = state.tab;
       lastRowCount = rowCount;
     };
