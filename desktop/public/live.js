@@ -180,11 +180,11 @@
     // та же причина, из-за которой тормозила История в мобильной версии.
     // Показываем только последние 2000 закрытых сделок (как и в мобильной) —
     // таблица прототипа рисует весь список разом, без подгрузки порциями.
-    api('/history', { query: { tab: 'deals', period: 'year', sort: 'default' } })
+    api('/history', { query: { tab: 'positions', period: 'year', sort: 'default' } })
       .then((r) => {
         const rows = (r.rows || [])
           .map(mapHistoryRow)
-          .sort((a, b) => (a.time ?? 0) - (b.time ?? 0))
+          .sort((a, b) => (a.closed ?? a.time ?? 0) - (b.closed ?? b.time ?? 0))
           .slice(-2000);
         terminalAPI.setHistory(rows);
       })
