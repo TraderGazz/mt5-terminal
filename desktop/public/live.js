@@ -184,7 +184,7 @@
       .then((r) => {
         const rows = (r.rows || [])
           .map(mapHistoryRow)
-          .sort((a, b) => (a.closed ?? a.time ?? 0) - (b.closed ?? b.time ?? 0))
+          .sort((a, b) => (a.time ?? 0) - (b.time ?? 0))
           .slice(-2000);
         terminalAPI.setHistory(rows);
       })
