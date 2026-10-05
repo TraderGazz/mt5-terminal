@@ -94,7 +94,7 @@
   let accountInfo = null;
   function patchCaption() {
     if (!accountInfo) return;
-    const caption = `${accountInfo.login} — ${accountInfo.server}: ${accountInfo.company}`;
+    const caption = `${accountInfo.login} — ${accountInfo.server}: Hedge — ${accountInfo.company}`;
     document.title = caption;
     const el = document.getElementById('windowCaption');
     if (el) el.textContent = caption;
