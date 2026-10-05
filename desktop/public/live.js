@@ -215,9 +215,15 @@
   // строк прокручиваем таблицу к низу, чтобы сразу были видны самые свежие.
   let lastTab = null;
   let lastRowCount = 0;
+  let historySortSet = false;
   if (typeof table === 'function') {
     const prevTable = table;
     table = function (...args) {
+      // По умолчанию история отсортирована по времени (колонка «Время», по возрастанию), как в оригинале.
+      if (!historySortSet && state.tab === 'history') {
+        historySortSet = true;
+        if (!state.sort) state.sort = { index: 0, dir: 1 };
+      }
       prevTable(...args);
       patchTotals();
       const sc = document.getElementById('tableScroll');
