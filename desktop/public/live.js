@@ -14,10 +14,10 @@
   const SUPPORTED_TF = ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1'];
 
   const getToken = () => { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } };
-  const logout = () => {
+  const clearToken = () => {
     try { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem('mt5pc-user'); } catch { /* */ }
-    location.replace('login.html');
   };
+  const logout = () => { clearToken(); location.reload(); };
 
   async function api(path, opts = {}) {
     const url = new URL(`${API_URL}${path}`, location.origin);
@@ -26,7 +26,7 @@
     const token = getToken();
     if (token) headers.Authorization = `Bearer ${token}`;
     const res = await fetch(url, { method: opts.method || 'GET', headers });
-    if (res.status === 401) { logout(); throw new Error('Не авторизован'); }
+    if (res.status === 401) { clearToken(); throw new Error('Не авторизован'); }
     const text = await res.text();
     const data = text ? JSON.parse(text) : null;
     if (!res.ok) throw new Error((data && data.error) || `Ошибка ${res.status}`);
@@ -346,9 +346,40 @@
     };
   }
 
-  // Окно «Счёт» по клику на счёт в Навигаторе: только показ реквизитов и
-  // статуса подключения, без ввода пароля (вход в счёт — отдельное решение).
+  // Окно счёта по клику на счёт в Навигаторе: без входа — форма логина
+  // (сервер подставлен), после входа — реквизиты и статус подключения.
+  function showLoginForm() {
+    modal('Вход в торговый счёт', `
+      <p><b>Сервер:</b> ${accountInfo?.server || 'AlfaForexRU-Real'}</p>
+      <p><label>Логин <input id="mt5Login" autocomplete="username"></label></p>
+      <p><label>Пароль <input id="mt5Pass" type="password" autocomplete="current-password"></label></p>
+      <p id="mt5LoginErr" style="color:#c00"></p>
+      <p><button type="button" id="mt5LoginBtn">Войти</button></p>`);
+  }
+  async function doLogin() {
+    const login = document.getElementById('mt5Login')?.value.trim() || '';
+    const password = document.getElementById('mt5Pass')?.value || '';
+    const err = document.getElementById('mt5LoginErr');
+    if (err) err.textContent = '';
+    try {
+      const res = await fetch(`${API_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ login, password }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.token) throw new Error(data?.error || 'Неверный логин или пароль');
+      localStorage.setItem(TOKEN_KEY, data.token);
+      localStorage.setItem('mt5pc-user', JSON.stringify(data.user));
+      location.reload();
+    } catch (e) {
+      if (err) err.textContent = e.message || 'Нет связи с сервером';
+    }
+  }
+  document.addEventListener('click', (e) => { if (e.target.id === 'mt5LoginBtn') doLogin(); });
+
   function openAccountDialog() {
+    if (!getToken()) { showLoginForm(); return; }
     const a = accountInfo;
     if (!a) { modal('Торговый счёт', '<p>Данные счёта ещё загружаются…</p>'); return; }
     const row = (k, v) => `<p><b>${k}:</b> ${v}</p>`;
@@ -367,7 +398,6 @@
   }
 
   function init() {
-    if (!getToken()) { location.replace('login.html'); return; }
     loadLines();
     draw();
     terminalAPI.setDemoRunning(false);
@@ -378,6 +408,13 @@
       openAccountDialog();
     });
     document.querySelectorAll('.terminal-emblem').forEach((e) => e.style.setProperty('background', 'transparent url(mt5-logo.png) center/20px 20px no-repeat', 'important'));
+    startData();
+  }
+
+  let dataStarted = false;
+  function startData() {
+    if (dataStarted || !getToken()) return;
+    dataStarted = true;
     loadAccount();
     // WS-пуш 'account' — это сырой bridge.account() (только живые цифры:
     // баланс/маржа/...), холдер/компания там нет — их добавляет только
@@ -398,6 +435,7 @@
       }
     });
     loadCandles(typeof state !== 'undefined' && SUPPORTED_TF.includes(state.tf) ? state.tf : 'H4');
+    ws.connect();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
