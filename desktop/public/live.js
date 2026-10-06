@@ -223,7 +223,7 @@
     } else if (state.tab !== 'history' && accountInfo && typeof accountInfo.balance === 'number') {
       const currency = accountInfo.currency || 'EUR';
       // Прибыль внизу — сумма по строкам таблицы (как у заказчика в MT5), а не общий показатель моста.
-      const floating = positions.reduce((a, p) => a + (Number(p.profit) || 0), 0);
+      const floating = accountInfo.equity - accountInfo.balance;
       const level = typeof accountInfo.marginLevel === 'number' ? `${fmt(accountInfo.marginLevel)}%` : '—';
       el.innerHTML = `•　Баланс: ${fmt(accountInfo.balance)} ${currency}　Средства: ${fmt(accountInfo.equity)}　Свободная маржа: ${fmt(accountInfo.freeMargin)}　Маржа: ${fmt(accountInfo.margin)}　Уровень маржи: ${level}<span>${fmt(floating)}</span>`;
     }
@@ -291,7 +291,27 @@
     } catch { /* */ }
   }
   // Фракталы Вильямса и Ишимоку — всегда на графике, как в оригинальном MT5.
-  function drawIndicators() {
+  const INDICATORS_KEY = 'mt5-indicators';
+  const indFlags = () => {
+    try { return { fractals: true, ichimoku: true, ...JSON.parse(localStorage.getItem(INDICATORS_KEY) || '{}') }; }
+    catch { return { fractals: true, ichimoku: true }; }
+  };
+  function openIndicatorsDialog() {
+    const f = indFlags();
+    modal('Индикаторы', `
+      <div style="font:12px Tahoma,Arial,sans-serif;color:#000;min-width:260px">
+        <p><label><input type="checkbox" data-ind="fractals" ${f.fractals ? 'checked' : ''}> Фракталы Вильямса</label></p>
+        <p><label><input type="checkbox" data-ind="ichimoku" ${f.ichimoku ? 'checked' : ''}> Ишимоку Кинко Хёо</label></p>
+      </div>`);
+  }
+  document.addEventListener('change', (e) => {
+    const key = e.target.dataset && e.target.dataset.ind;
+    if (!key) return;
+    localStorage.setItem(INDICATORS_KEY, JSON.stringify({ ...indFlags(), [key]: e.target.checked }));
+    draw();
+  });
+
+  function drawIndicators(f) {
     if (!view || bars.length < 60) return;
     const { begin, end, pw, ph } = view;
     const X = (g) => view.x(g - begin);
@@ -308,6 +328,7 @@
     ctx.rect(0, 0, pw, ph);
     ctx.clip();
 
+    if (f.fractals) {
     // Фракталы: 5 свечей, максимум (или минимум) выше/ниже двух соседей с каждой стороны.
     ctx.fillStyle = '#2b6cb0';
     for (let k = Math.max(2, begin); k < Math.min(n - 2, end); k++) {
@@ -318,6 +339,8 @@
       if (dn) { ctx.beginPath(); ctx.moveTo(X(k), Y(b.l) + 3); ctx.lineTo(X(k) - 4, Y(b.l) + 9); ctx.lineTo(X(k) + 4, Y(b.l) + 9); ctx.fill(); }
     }
 
+    }
+    if (f.ichimoku) {
     // Ишимоку: Тенкан (9), Кийджун (26), Senkou A/B (52, сдвиг +26), Чикоу (сдвиг −26).
     const from = Math.max(begin, 52), to = Math.min(end, n);
     const line = (color, fn) => {
@@ -352,6 +375,7 @@
     ctx.fill();
     line('#f9a825', (g) => sA(g));
     line('#8e24aa', (g) => sB(g));
+    }
     ctx.restore();
   }
 
@@ -360,7 +384,7 @@
     const prevDraw = draw;
     draw = function (...args) {
       prevDraw(...args);
-      try { drawIndicators(); } catch { /* индикатор не должен ломать график */ }
+      try { const f = indFlags(); if (f.fractals || f.ichimoku) drawIndicators(f); } catch { /* индикатор не должен ломать график */ }
       clearTimeout(saveTimer);
       saveTimer = setTimeout(saveLines, 300);
     };
@@ -426,6 +450,7 @@
       if (e.target.closest('.tree-account')) { openAccountDialog(); return; }
       const summary = e.target.closest('summary');
       if (summary && summary.textContent.trim() === 'Счета' && !getToken()) openAccountDialog();
+      if (summary && summary.textContent.trim() === 'Индикаторы') openIndicatorsDialog();
     });
     if (!getToken()) {
       const cap = document.getElementById('windowCaption');
