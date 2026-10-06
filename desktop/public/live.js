@@ -424,6 +424,7 @@
   function init() {
     loadLines();
     draw();
+    table();
     terminalAPI.setDemoRunning(false);
     mountLogout();
     document.querySelectorAll('.demo-status').forEach((e) => e.remove());
