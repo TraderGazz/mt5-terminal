@@ -287,6 +287,7 @@
     terminalAPI.setDemoRunning(false);
     mountLogout();
     document.querySelectorAll('.demo-status').forEach((e) => e.remove());
+    document.querySelectorAll('.terminal-emblem').forEach((e) => e.style.setProperty('background', 'transparent url(mt5-logo.png) center/20px 20px no-repeat', 'important'));
     loadAccount();
     // WS-пуш 'account' — это сырой bridge.account() (только живые цифры:
     // баланс/маржа/...), холдер/компания там нет — их добавляет только
