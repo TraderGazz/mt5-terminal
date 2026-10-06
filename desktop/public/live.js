@@ -94,7 +94,7 @@
   let accountInfo = null;
   function patchCaption() {
     if (!accountInfo) return;
-    const caption = `${accountInfo.login} — ${accountInfo.server}: Hedge — ${accountInfo.company}`;
+    const caption = `${accountInfo.login} - ${accountInfo.server} - Hedge - ${accountInfo.company}`;
     document.title = caption;
     const el = document.getElementById('windowCaption');
     if (el) el.textContent = caption;
@@ -208,7 +208,10 @@
       el.innerHTML = `•　Прибыль: ${fmt(historyTotals.profit)}　Кредит: 0.00　Пополнение: ${fmt(historyTotals.deposit)}　Снятие: ${fmt(historyTotals.withdrawal)}　Баланс: ${fmt(historyTotals.balance)}<span>${fmt(historyTotals.profit)}</span>`;
     } else if (state.tab !== 'history' && accountInfo && typeof accountInfo.balance === 'number') {
       const currency = accountInfo.currency || 'EUR';
-      el.innerHTML = `•　Баланс: ${fmt(accountInfo.balance)} ${currency}　Средства: ${fmt(accountInfo.equity)}　Свободная маржа: ${fmt(accountInfo.freeMargin)}<span>${fmt(accountInfo.floatingProfit ?? 0)}</span>`;
+      // Прибыль внизу — сумма по строкам таблицы (как у заказчика в MT5), а не общий показатель моста.
+      const floating = positions.reduce((a, p) => a + (Number(p.profit) || 0), 0);
+      const level = typeof accountInfo.marginLevel === 'number' ? `${fmt(accountInfo.marginLevel)}%` : '—';
+      el.innerHTML = `•　Баланс: ${fmt(accountInfo.balance)} ${currency}　Средства: ${fmt(accountInfo.equity)}　Свободная маржа: ${fmt(accountInfo.freeMargin)}　Маржа: ${fmt(accountInfo.margin)}　Уровень маржи: ${level}<span>${fmt(floating)}</span>`;
     }
   }
   // Новые позиции — внизу списка: при входе на вкладку и при первой загрузке
@@ -283,6 +286,7 @@
     draw();
     terminalAPI.setDemoRunning(false);
     mountLogout();
+    document.querySelectorAll('.demo-status').forEach((e) => e.remove());
     loadAccount();
     // WS-пуш 'account' — это сырой bridge.account() (только живые цифры:
     // баланс/маржа/...), холдер/компания там нет — их добавляет только
