@@ -411,22 +411,7 @@
   document.addEventListener('click', (e) => { if (e.target.id === 'mt5LoginBtn') doLogin(); });
 
   function openAccountDialog() {
-    if (!getToken()) { showLoginForm(); return; }
-    const a = accountInfo;
-    if (!a) { modal('Торговый счёт', '<p>Данные счёта ещё загружаются…</p>'); return; }
-    const row = (k, v) => `<p><b>${k}:</b> ${v}</p>`;
-    const cur = a.currency || '';
-    modal('Торговый счёт', [
-      row('Счёт', a.login),
-      row('Владелец', a.holder),
-      row('Сервер', a.server),
-      row('Компания', a.company),
-      row('Валюта', cur),
-      row('Баланс', `${fmt(a.balance)} ${cur}`),
-      row('Средства', fmt(a.equity)),
-      row('Свободная маржа', fmt(a.freeMargin)),
-      row('Статус', a.balance != null ? 'Подключён' : 'Нет связи с сервером'),
-    ].join(''));
+    showLoginForm();
   }
 
   function init() {
