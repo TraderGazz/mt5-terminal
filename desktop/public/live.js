@@ -258,6 +258,12 @@
     });
   }
 
+  // Служебная строка прототипа «Пополнение 100 000» (deposit) — не реальные данные, убираем.
+  if (typeof visibleRows === 'function') {
+    const prevVisibleRows = visibleRows;
+    visibleRows = function (...args) { return prevVisibleRows(...args).filter((p) => p !== deposit); };
+  }
+
   // Линии на графике (координаты — время и цена, переживут смену ТФ и
   // перезагрузку) — сохраняем в localStorage по символу, как объекты в MT5.
   const linesKey = () => `mt5-lines-${state.symbol}`;
@@ -349,12 +355,24 @@
   // Окно счёта по клику на счёт в Навигаторе: без входа — форма логина
   // (сервер подставлен), после входа — реквизиты и статус подключения.
   function showLoginForm() {
-    modal('Вход в торговый счёт', `
-      <p><b>Сервер:</b> ${accountInfo?.server || 'AlfaForexRU-Real'}</p>
-      <p><label>Логин <input id="mt5Login" autocomplete="username"></label></p>
-      <p><label>Пароль <input id="mt5Pass" type="password" autocomplete="current-password"></label></p>
-      <p id="mt5LoginErr" style="color:#c00"></p>
-      <p><button type="button" id="mt5LoginBtn">Войти</button></p>`);
+    modal('Подключение', `
+      <div style="font:12px Tahoma,Arial,sans-serif;width:380px;color:#000">
+        <div style="display:flex;gap:12px;align-items:center;margin-bottom:14px">
+          <img src="mt5-logo.png" alt="" style="width:40px;height:40px">
+          <div>Авторизация позволяет получить доступ к торговому счету.</div>
+        </div>
+        <table style="width:100%;font:12px Tahoma,Arial,sans-serif;border-collapse:collapse">
+          <tr><td style="width:70px;padding:3px 0">Логин:</td><td><input id="mt5Login" autocomplete="username" style="width:100%;box-sizing:border-box;height:22px"></td></tr>
+          <tr><td style="padding:3px 0">Пароль:</td><td><input id="mt5Pass" type="password" autocomplete="current-password" style="width:100%;box-sizing:border-box;height:22px"></td></tr>
+          <tr><td></td><td style="padding:4px 0"><label><input type="checkbox"> Сохранить пароль</label></td></tr>
+          <tr><td style="padding:3px 0">Сервер:</td><td><input value="AlfaForexRU-Real" disabled style="width:100%;box-sizing:border-box;height:22px"></td></tr>
+        </table>
+        <p id="mt5LoginErr" style="color:#c00;min-height:16px;margin:6px 0"></p>
+        <div style="text-align:right;margin-top:8px">
+          <button type="button" id="mt5LoginBtn" style="min-width:80px;height:24px">ОК</button>
+          <button value="cancel" style="min-width:80px;height:24px;margin-left:6px">Отмена</button>
+        </div>
+      </div>`);
   }
   async function doLogin() {
     const login = document.getElementById('mt5Login')?.value.trim() || '';
