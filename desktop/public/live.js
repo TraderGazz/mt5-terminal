@@ -79,14 +79,18 @@
   // разметку window-controls, просто вставляем перед ней) ------------------
   function mountLogout() {
     const controls = document.querySelector('.window-controls');
-    if (!controls || controls.querySelector('.live-logout')) return;
-    const btn = document.createElement('button');
-    btn.className = 'live-logout';
-    btn.textContent = 'Выйти';
-    btn.title = 'Выйти из терминала';
-    btn.style.cssText = 'font-size:12px;padding:0 10px;';
-    btn.onclick = logout;
-    controls.prepend(btn);
+    if (!controls) return;
+    let btn = controls.querySelector('.live-logout');
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.className = 'live-logout';
+      btn.style.cssText = 'font-size:12px;padding:0 10px;';
+      controls.prepend(btn);
+    }
+    const logged = !!getToken();
+    btn.textContent = logged ? 'Выйти' : 'Войти';
+    btn.title = logged ? 'Выйти из терминала' : 'Войти в торговый счёт';
+    btn.onclick = logged ? logout : openAccountDialog;
   }
 
   // --- Реквизиты счёта: патчим заголовок окна и Навигатор после того, как
@@ -100,6 +104,10 @@
     if (el) el.textContent = caption;
   }
   function patchNavigator() {
+    if (!getToken()) {
+      document.querySelectorAll('.tree-account').forEach((b) => b.closest('.tree-branch')?.remove());
+      return;
+    }
     if (!accountInfo) return;
     const btn = document.querySelector('.tree-account');
     if (!btn) return;
@@ -429,9 +437,17 @@
     mountLogout();
     document.querySelectorAll('.demo-status').forEach((e) => e.remove());
     document.addEventListener('click', (e) => {
-      if (!e.target.closest || !e.target.closest('.tree-account')) return;
-      openAccountDialog();
+      if (!e.target.closest) return;
+      if (e.target.closest('.tree-account')) { openAccountDialog(); return; }
+      const summary = e.target.closest('summary');
+      if (summary && summary.textContent.trim() === 'Счета' && !getToken()) openAccountDialog();
     });
+    if (!getToken()) {
+      const cap = document.getElementById('windowCaption');
+      if (cap) cap.textContent = 'MetaTrader 5 — Торговый терминал';
+      document.title = 'MetaTrader 5';
+      patchNavigator();
+    }
     document.querySelectorAll('.terminal-emblem').forEach((e) => e.style.setProperty('background', 'transparent url(mt5-logo.png) center/20px 20px no-repeat', 'important'));
     startData();
   }
