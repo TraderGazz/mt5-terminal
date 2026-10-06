@@ -184,7 +184,7 @@
       .then((r) => {
         const rows = (r.rows || [])
           .map(mapHistoryRow)
-          .sort((a, b) => (a.time ?? 0) - (b.time ?? 0))
+          .sort((a, b) => (a.closed ?? a.time ?? 0) - (b.closed ?? b.time ?? 0))
           .slice(-2000);
         terminalAPI.setHistory(rows);
       })
@@ -225,7 +225,7 @@
       // По умолчанию история отсортирована по времени (колонка «Время», по возрастанию), как в оригинале.
       if (!historySortSet && state.tab === 'history') {
         historySortSet = true;
-        if (!state.sort) state.sort = { index: 0, dir: 1 };
+        if (!state.sort) state.sort = { index: 7, dir: 1 };
       }
       prevTable(...args);
       patchTotals();
