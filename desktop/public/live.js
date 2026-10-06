@@ -204,6 +204,12 @@
   function patchTotals() {
     const el = document.getElementById('totals');
     if (!el) return;
+    if (!getToken()) {
+      el.innerHTML = state.tab === 'history'
+        ? '•　Прибыль: 0.00　Кредит: 0.00　Пополнение: 0.00　Снятие: 0.00　Баланс: 0.00<span>0.00</span>'
+        : '•　Баланс: 0.00　Средства: 0.00　Свободная маржа: 0.00　Маржа: 0.00　Уровень маржи: —<span>0.00</span>';
+      return;
+    }
     if (state.tab === 'history' && historyTotals) {
       el.innerHTML = `•　Прибыль: ${fmt(historyTotals.profit)}　Кредит: 0.00　Пополнение: ${fmt(historyTotals.deposit)}　Снятие: ${fmt(historyTotals.withdrawal)}　Баланс: ${fmt(historyTotals.balance)}<span>${fmt(historyTotals.profit)}</span>`;
     } else if (state.tab !== 'history' && accountInfo && typeof accountInfo.balance === 'number') {
