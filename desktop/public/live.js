@@ -270,11 +270,77 @@
       if (Array.isArray(saved)) state.lines.splice(0, state.lines.length, ...saved);
     } catch { /* */ }
   }
+  // Фракталы Вильямса и Ишимоку — всегда на графике, как в оригинальном MT5.
+  function drawIndicators() {
+    if (!view || bars.length < 60) return;
+    const { begin, end, pw, ph } = view;
+    const X = (g) => view.x(g - begin);
+    const Y = (p) => view.y(p);
+    const hiR = (a, b) => { let m = -Infinity; for (let i = a; i <= b; i++) m = Math.max(m, bars[i].h); return m; };
+    const loR = (a, b) => { let m = Infinity; for (let i = a; i <= b; i++) m = Math.min(m, bars[i].l); return m; };
+    const n = bars.length;
+    const tenkan = (p) => (hiR(p - 8, p) + loR(p - 8, p)) / 2;
+    const kijun = (p) => (hiR(p - 25, p) + loR(p - 25, p)) / 2;
+    const spanB = (p) => (hiR(p - 51, p) + loR(p - 51, p)) / 2;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, pw, ph);
+    ctx.clip();
+
+    // Фракталы: 5 свечей, максимум (или минимум) выше/ниже двух соседей с каждой стороны.
+    ctx.fillStyle = '#2b6cb0';
+    for (let k = Math.max(2, begin); k < Math.min(n - 2, end); k++) {
+      const b = bars[k];
+      const up = bars[k - 2].h < b.h && bars[k - 1].h < b.h && bars[k + 1].h < b.h && bars[k + 2].h < b.h;
+      const dn = bars[k - 2].l > b.l && bars[k - 1].l > b.l && bars[k + 1].l > b.l && bars[k + 2].l > b.l;
+      if (up) { ctx.beginPath(); ctx.moveTo(X(k), Y(b.h) - 3); ctx.lineTo(X(k) - 4, Y(b.h) - 9); ctx.lineTo(X(k) + 4, Y(b.h) - 9); ctx.fill(); }
+      if (dn) { ctx.beginPath(); ctx.moveTo(X(k), Y(b.l) + 3); ctx.lineTo(X(k) - 4, Y(b.l) + 9); ctx.lineTo(X(k) + 4, Y(b.l) + 9); ctx.fill(); }
+    }
+
+    // Ишимоку: Тенкан (9), Кийджун (26), Senkou A/B (52, сдвиг +26), Чикоу (сдвиг −26).
+    const from = Math.max(begin, 52), to = Math.min(end, n);
+    const line = (color, fn) => {
+      ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.beginPath();
+      let started = false;
+      for (let g = from; g < to; g++) {
+        const v = fn(g);
+        if (v == null) { started = false; continue; }
+        if (!started) { ctx.moveTo(X(g), Y(v)); started = true; } else ctx.lineTo(X(g), Y(v));
+      }
+      ctx.stroke();
+    };
+    line('#e53935', (g) => tenkan(g));
+    line('#1e88e5', (g) => kijun(g));
+    line('#43a047', (g) => (g + 26 < n ? bars[g + 26].c : null));
+    // Облако: между Senkou A (тенкан+кийджун)/2 и Senkou B, сдвинутыми на +26 вперёд.
+    const sA = (g) => (g - 26 >= 52 ? (tenkan(g - 26) + kijun(g - 26)) / 2 : null);
+    const sB = (g) => (g - 26 >= 52 ? spanB(g - 26) : null);
+    ctx.fillStyle = 'rgba(67,160,71,0.12)';
+    ctx.beginPath();
+    let open = false;
+    for (let g = from; g < to + 26; g++) {
+      const a = sA(g), bb = sB(g);
+      if (a == null || bb == null) { open = false; continue; }
+      if (!open) { ctx.moveTo(X(g), Y(a)); open = true; } else ctx.lineTo(X(g), Y(a));
+    }
+    for (let g = Math.min(to + 26, end + 26) - 1; g >= from; g--) {
+      const bb = sB(g);
+      if (bb != null) ctx.lineTo(X(g), Y(bb));
+    }
+    ctx.closePath();
+    ctx.fill();
+    line('#f9a825', (g) => sA(g));
+    line('#8e24aa', (g) => sB(g));
+    ctx.restore();
+  }
+
   let saveTimer = null;
   if (typeof draw === 'function') {
     const prevDraw = draw;
     draw = function (...args) {
       prevDraw(...args);
+      try { drawIndicators(); } catch { /* индикатор не должен ломать график */ }
       clearTimeout(saveTimer);
       saveTimer = setTimeout(saveLines, 300);
     };
