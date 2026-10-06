@@ -346,6 +346,26 @@
     };
   }
 
+  // Окно «Счёт» по клику на счёт в Навигаторе: только показ реквизитов и
+  // статуса подключения, без ввода пароля (вход в счёт — отдельное решение).
+  function openAccountDialog() {
+    const a = accountInfo;
+    if (!a) { modal('Торговый счёт', '<p>Данные счёта ещё загружаются…</p>'); return; }
+    const row = (k, v) => `<p><b>${k}:</b> ${v}</p>`;
+    const cur = a.currency || '';
+    modal('Торговый счёт', [
+      row('Счёт', a.login),
+      row('Владелец', a.holder),
+      row('Сервер', a.server),
+      row('Компания', a.company),
+      row('Валюта', cur),
+      row('Баланс', `${fmt(a.balance)} ${cur}`),
+      row('Средства', fmt(a.equity)),
+      row('Свободная маржа', fmt(a.freeMargin)),
+      row('Статус', a.balance != null ? 'Подключён' : 'Нет связи с сервером'),
+    ].join(''));
+  }
+
   function init() {
     if (!getToken()) { location.replace('login.html'); return; }
     loadLines();
@@ -353,6 +373,10 @@
     terminalAPI.setDemoRunning(false);
     mountLogout();
     document.querySelectorAll('.demo-status').forEach((e) => e.remove());
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest || !e.target.closest('.tree-account')) return;
+      openAccountDialog();
+    });
     document.querySelectorAll('.terminal-emblem').forEach((e) => e.style.setProperty('background', 'transparent url(mt5-logo.png) center/20px 20px no-repeat', 'important'));
     loadAccount();
     // WS-пуш 'account' — это сырой bridge.account() (только живые цифры:
