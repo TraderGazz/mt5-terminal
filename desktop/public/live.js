@@ -335,8 +335,8 @@
       const b = bars[k];
       const up = bars[k - 2].h < b.h && bars[k - 1].h < b.h && bars[k + 1].h < b.h && bars[k + 2].h < b.h;
       const dn = bars[k - 2].l > b.l && bars[k - 1].l > b.l && bars[k + 1].l > b.l && bars[k + 2].l > b.l;
-      if (up) { ctx.beginPath(); ctx.moveTo(X(k) - 6, Y(b.h) - 6); ctx.lineTo(X(k) + 3, Y(b.h) - 10); ctx.lineTo(X(k) + 3, Y(b.h) - 2); ctx.fill(); }
-      if (dn) { ctx.beginPath(); ctx.moveTo(X(k) + 6, Y(b.l) + 6); ctx.lineTo(X(k) - 3, Y(b.l) + 2); ctx.lineTo(X(k) - 3, Y(b.l) + 10); ctx.fill(); }
+      if (up) { ctx.beginPath(); ctx.moveTo(X(k), Y(b.h) - 9); ctx.lineTo(X(k) - 4, Y(b.h) - 3); ctx.lineTo(X(k) + 4, Y(b.h) - 3); ctx.fill(); }
+      if (dn) { ctx.beginPath(); ctx.moveTo(X(k), Y(b.l) + 9); ctx.lineTo(X(k) - 4, Y(b.l) + 3); ctx.lineTo(X(k) + 4, Y(b.l) + 3); ctx.fill(); }
     }
 
     }
