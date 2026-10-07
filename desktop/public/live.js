@@ -302,8 +302,8 @@
     const f = indFlags();
     modal('Индикаторы', `
       <div style="font:12px Tahoma,Arial,sans-serif;color:#000;min-width:260px">
-        <p><label><input type="checkbox" data-ind="fractals" ${f.fractals ? 'checked' : ''}> Фракталы Вильямса</label></p>
-        <p><label><input type="checkbox" data-ind="ichimoku" ${f.ichimoku ? 'checked' : ''}> Ишимоку Кинко Хёо</label></p>
+        <p><label><input type="checkbox" data-ind="fractals" ${f.fractals ? 'checked' : ''}> Fractals</label></p>
+        <p><label><input type="checkbox" data-ind="ichimoku" ${f.ichimoku ? 'checked' : ''}> Ichimoku Kinko Hyo</label></p>
       </div>`);
   }
   document.addEventListener('change', (e) => {
