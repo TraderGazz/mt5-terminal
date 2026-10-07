@@ -12,6 +12,11 @@
   const API_URL = '/api';
   const TOKEN_KEY = 'mt5pc-token';
   const SUPPORTED_TF = ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1'];
+  // Та же фиксированная дата, что и период «Год» в мобильной версии
+  // (historyFilter.ts YEAR_PERIOD_START) — не «365 дней назад», а начало
+  // счёта; серверное понятие periodов=year считает иначе (скользящий год),
+  // поэтому передаём дату явно, а не слово 'year'.
+  const YEAR_PERIOD_START = new Date(2025, 1, 1).toISOString();
 
   const getToken = () => { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } };
   const clearToken = () => {
@@ -188,7 +193,7 @@
     // та же причина, из-за которой тормозила История в мобильной версии.
     // Показываем только последние 2000 закрытых сделок (как и в мобильной) —
     // таблица прототипа рисует весь список разом, без подгрузки порциями.
-    api('/history', { query: { tab: 'positions', period: 'year', sort: 'default' } })
+    api('/history', { query: { tab: 'positions', from: YEAR_PERIOD_START, sort: 'default' } })
       .then((r) => {
         const rows = (r.rows || [])
           .map(mapHistoryRow)
@@ -205,7 +210,7 @@
   // версия) — официальная выписка + ручные записи, без мусора от EA.
   let historyTotals = null;
   function loadHistoryTotals() {
-    api('/history/totals', { query: { period: 'year' } })
+    api('/history/totals', { query: { from: YEAR_PERIOD_START } })
       .then((r) => { historyTotals = r.totals; patchTotals(); })
       .catch(() => {});
   }
