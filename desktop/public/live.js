@@ -260,7 +260,9 @@
   let candleUnsub = null;
   function loadCandles(tf) {
     if (candleUnsub) { candleUnsub(); candleUnsub = null; }
-    api('/candles', { query: { timeframe: tf, count: tf === 'M1' ? 1000 : 300 } })
+    // +60 баров запаса слева — Ишимоку/фракталам нужна история ДО начала
+    // окна для расчёта (9–52 бара), иначе у левого края виден обрыв.
+    api('/candles', { query: { timeframe: tf, count: tf === 'M1' ? 1000 : 360 } })
       .then((r) => {
         terminalAPI.setBars((r.bars || []).map((c) => ({ t: c.time * 1000, o: c.open, h: c.high, l: c.low, c: c.close })));
       })
