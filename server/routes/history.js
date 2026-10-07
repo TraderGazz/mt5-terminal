@@ -184,14 +184,16 @@ router.get('/totals', authRequired, async (req, res) => {
     const deposit =
       sum(manualBalanceRows, (r) => Number(r.profit) > 0, (r) => r.profit) +
       sum(ledgerRows, (r) => r.deal_type === 'balance', (r) => r.profit);
+    // Снятие — положительная сумма (модуль), как на мобильной (balTotals.withdrawal
+    // там тоже положительное число); «Баланс» ниже вычитает его, а не прибавляет.
     const withdrawal =
-      sum(manualBalanceRows, (r) => Number(r.profit) < 0, (r) => r.profit) +
+      -sum(manualBalanceRows, (r) => Number(r.profit) < 0, (r) => r.profit) -
       sum(ledgerRows, (r) => r.deal_type === 'withdrawal', (r) => r.profit);
     const profit = sum(tradeRows, () => true, (r) => r.profit);
     const swap = sum(tradeRows, () => true, (r) => r.swap);
     const commission = sum(tradeRows, () => true, (r) => r.commission);
     const cfd = sum(cfdRows, () => true, (r) => r.profit);
-    const balance = deposit + withdrawal + profit + swap + commission + cfd;
+    const balance = deposit - withdrawal + profit + swap + commission + cfd;
     const round2 = (n) => Math.round(n * 100) / 100;
 
     res.json({
