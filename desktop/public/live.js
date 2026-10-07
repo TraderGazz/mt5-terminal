@@ -316,8 +316,8 @@
     const { begin, end, pw, ph } = view;
     const X = (g) => view.x(g - begin);
     const Y = (p) => view.y(p);
-    const hiR = (a, b) => { let m = -Infinity; for (let i = a; i <= b; i++) m = Math.max(m, bars[i].h); return m; };
-    const loR = (a, b) => { let m = Infinity; for (let i = a; i <= b; i++) m = Math.min(m, bars[i].l); return m; };
+    const hiR = (a, b) => { let m = -Infinity; for (let i = Math.max(0, a); i <= Math.min(bars.length - 1, b); i++) m = Math.max(m, bars[i].h); return m; };
+    const loR = (a, b) => { let m = Infinity; for (let i = Math.max(0, a); i <= Math.min(bars.length - 1, b); i++) m = Math.min(m, bars[i].l); return m; };
     const n = bars.length;
     const tenkan = (p) => (hiR(p - 8, p) + loR(p - 8, p)) / 2;
     const kijun = (p) => (hiR(p - 25, p) + loR(p - 25, p)) / 2;
@@ -343,10 +343,14 @@
     if (f.ichimoku) {
     // Ишимоку: Тенкан (9), Кийджун (26), Senkou A/B (52, сдвиг +26), Чикоу (сдвиг −26).
     const from = Math.max(begin, 52), to = Math.min(end, n);
-    const line = (color, fn) => {
+    // Облако проецируется на 26 баров вперёд, но свечей дальше последней
+    // загруженной у нас нет — проекцию обрезаем реальным концом данных,
+    // иначе обращение к несуществующим барам портило отрисовку.
+    const cloudTo = Math.min(to + 26, n);
+    const line = (color, fn, upTo = to) => {
       ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.beginPath();
       let started = false;
-      for (let g = from; g < to; g++) {
+      for (let g = from; g < upTo; g++) {
         const v = fn(g);
         if (v == null) { started = false; continue; }
         if (!started) { ctx.moveTo(X(g), Y(v)); started = true; } else ctx.lineTo(X(g), Y(v));
@@ -357,24 +361,24 @@
     line('#1e88e5', (g) => kijun(g));
     line('#43a047', (g) => (g + 26 < n ? bars[g + 26].c : null));
     // Облако: между Senkou A (тенкан+кийджун)/2 и Senkou B, сдвинутыми на +26 вперёд.
-    const sA = (g) => (g - 26 >= 52 ? (tenkan(g - 26) + kijun(g - 26)) / 2 : null);
-    const sB = (g) => (g - 26 >= 52 ? spanB(g - 26) : null);
+    const sA = (g) => { const p = g - 26; return p >= 52 && p < n ? (tenkan(p) + kijun(p)) / 2 : null; };
+    const sB = (g) => { const p = g - 26; return p >= 52 && p < n ? spanB(p) : null; };
     ctx.fillStyle = 'rgba(67,160,71,0.12)';
     ctx.beginPath();
     let open = false;
-    for (let g = from; g < to + 26; g++) {
+    for (let g = from; g < cloudTo; g++) {
       const a = sA(g), bb = sB(g);
       if (a == null || bb == null) { open = false; continue; }
       if (!open) { ctx.moveTo(X(g), Y(a)); open = true; } else ctx.lineTo(X(g), Y(a));
     }
-    for (let g = Math.min(to + 26, end + 26) - 1; g >= from; g--) {
+    for (let g = cloudTo - 1; g >= from; g--) {
       const bb = sB(g);
       if (bb != null) ctx.lineTo(X(g), Y(bb));
     }
     ctx.closePath();
     ctx.fill();
-    line('#f9a825', (g) => sA(g));
-    line('#8e24aa', (g) => sB(g));
+    line('#f9a825', (g) => sA(g), cloudTo);
+    line('#8e24aa', (g) => sB(g), cloudTo);
     }
     ctx.restore();
   }
