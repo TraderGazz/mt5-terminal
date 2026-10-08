@@ -458,13 +458,13 @@
     const font = 'font:13px Segoe UI,Tahoma,Arial,sans-serif';
     const row = (label, value, opts = {}) => `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid #e4e4e4">
-        <span style="color:${opts.muted ? '#8a8a8a' : '#1a1a1a'}">${label}</span>
-        <span style="color:${opts.danger ? '#d93025' : '#8a8a8a'}">${esc(value)}${opts.chevron ? ' <span style=\'color:#c4c4c4\'>&rsaquo;</span>' : ''}</span>
+        <span style="color:#1a1a1a">${label}</span>
+        <span style="color:#1a1a1a">${esc(value)}${opts.chevron ? ' <span style=\'color:#8a8a8a\'>&rsaquo;</span>' : ''}</span>
       </div>`;
     modal('Счет', `
       <div style="${font};width:360px;color:#000;background:#fff">
         <div style="text-align:center;padding:4px 0 16px">
-          <img src="mt5-logo.png" alt="" style="width:56px;height:56px;border-radius:12px;margin-bottom:10px">
+          <img src="account-icon.png" alt="" style="width:56px;height:56px;border-radius:12px;margin-bottom:10px">
           <div style="font-size:15px;font-weight:600">${esc(a.holder)}</div>
           <div style="color:#8a8a8a;margin-top:2px">${esc(a.login)} - ${esc(a.server)}</div>
           ${typeof a.balance === 'number' ? `<div style="color:#8a8a8a;margin-top:1px">${fmt(a.balance)} ${esc(a.currency || 'RUB')}</div>` : ''}
@@ -472,19 +472,16 @@
         </div>
         <div>
           ${row('Компания', a.company, { chevron: true })}
-          ${row('Имя', a.holder, { muted: true })}
-          ${row('Email', '', { muted: true })}
-          ${row('Телефон', '', { muted: true })}
-          ${row('Логин', a.login, { muted: true })}
-          ${row('Сервер', a.server, { muted: true })}
-          ${row('Подключено', accessServer, { muted: true })}
+          ${row('Имя', a.holder)}
+          ${row('Email', '')}
+          ${row('Телефон', '')}
+          ${row('Логин', a.login)}
+          ${row('Сервер', a.server)}
+          ${row('Подключено', accessServer)}
         </div>
         <div style="padding:14px 0 4px">
           <a href="#" id="mt5OtherDevice" style="display:block;padding:7px 0;color:#1a73e8;text-decoration:none">Подключить на другом устройстве &rsaquo;</a>
           <a href="#" id="mt5DeleteAcc" style="display:block;padding:7px 0;color:#d93025;text-decoration:none">Удалить счет &rsaquo;</a>
-        </div>
-        <div style="text-align:right;margin-top:10px">
-          <button value="cancel" style="min-width:80px;height:24px">Закрыть</button>
         </div>
       </div>`);
   }
