@@ -445,8 +445,42 @@
   }
   document.addEventListener('click', (e) => { if (e.target.id === 'mt5LoginBtn') doLogin(); });
 
+  // Реквизиты счёта (как в оригинальном MT5 при клике на счёт, когда уже
+  // авторизован) — Email/Телефон у нас нигде не хранятся, оставляем пустыми,
+  // как и в реальном кабинете заказчика (поля там тоже пустые).
+  function showAccountInfo() {
+    const a = accountInfo || {};
+    const esc = (s) => String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+    const row = (label, value) => `<tr><td style="padding:4px 0;color:#666">${label}</td><td style="padding:4px 0">${esc(value)}</td></tr>`;
+    modal('Счет', `
+      <div style="font:12px Tahoma,Arial,sans-serif;width:360px;color:#000">
+        <div style="display:flex;gap:12px;align-items:center;margin-bottom:14px">
+          <img src="mt5-logo.png" alt="" style="width:40px;height:40px">
+          <div>
+            <div style="font-weight:bold">${esc(a.holder)}</div>
+            <div style="color:#666">${esc(a.login)} - ${esc(a.server)}</div>
+          </div>
+        </div>
+        <table style="width:100%;font:12px Tahoma,Arial,sans-serif;border-collapse:collapse">
+          ${row('Компания', a.company)}
+          ${row('Имя', a.holder)}
+          ${row('Email', '')}
+          ${row('Телефон', '')}
+          ${row('Логин', a.login)}
+          ${row('Сервер', a.server)}
+          ${row('Подключено', a.accessServer)}
+        </table>
+        <div style="margin-top:10px"><a href="#" id="mt5OtherDevice" style="color:#1a73e8;text-decoration:none">Подключить на другом устройстве</a></div>
+        <div style="margin-top:4px"><a href="#" id="mt5DeleteAcc" style="color:#c00;text-decoration:none">Удалить счет</a></div>
+        <div style="text-align:right;margin-top:14px">
+          <button value="cancel" style="min-width:80px;height:24px">Закрыть</button>
+        </div>
+      </div>`);
+  }
+
   function openAccountDialog() {
-    showLoginForm();
+    if (getToken()) showAccountInfo();
+    else showLoginForm();
   }
 
   function init() {
@@ -462,6 +496,7 @@
       const summary = e.target.closest('summary');
       if (summary && summary.textContent.trim() === 'Счета' && !getToken()) openAccountDialog();
       if (summary && summary.textContent.trim() === 'Индикаторы') openIndicatorsDialog();
+      if (e.target.id === 'mt5OtherDevice' || e.target.id === 'mt5DeleteAcc') e.preventDefault();
     });
     if (!getToken()) {
       const cap = document.getElementById('windowCaption');
