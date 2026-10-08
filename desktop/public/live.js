@@ -451,28 +451,39 @@
   function showAccountInfo() {
     const a = accountInfo || {};
     const esc = (s) => String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
-    const row = (label, value) => `<tr><td style="padding:4px 0;color:#666">${label}</td><td style="padding:4px 0">${esc(value)}</td></tr>`;
+    // Как и в мобильной версии (data/account.ts): «Подключен» в БД почти
+    // всегда пусто (брокер не присылает), поэтому подставляем тот же текст,
+    // что мобильная берёт из мок-константы по умолчанию.
+    const accessServer = a.accessServer || 'RFD Access Server 1';
+    const font = 'font:13px Segoe UI,Tahoma,Arial,sans-serif';
+    const row = (label, value, opts = {}) => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid #e4e4e4">
+        <span style="color:${opts.muted ? '#8a8a8a' : '#1a1a1a'}">${label}</span>
+        <span style="color:${opts.danger ? '#d93025' : '#8a8a8a'}">${esc(value)}${opts.chevron ? ' <span style=\'color:#c4c4c4\'>&rsaquo;</span>' : ''}</span>
+      </div>`;
     modal('Счет', `
-      <div style="font:12px Tahoma,Arial,sans-serif;width:360px;color:#000">
-        <div style="display:flex;gap:12px;align-items:center;margin-bottom:14px">
-          <img src="mt5-logo.png" alt="" style="width:40px;height:40px">
-          <div>
-            <div style="font-weight:bold">${esc(a.holder)}</div>
-            <div style="color:#666">${esc(a.login)} - ${esc(a.server)}</div>
-          </div>
+      <div style="${font};width:360px;color:#000;background:#fff">
+        <div style="text-align:center;padding:4px 0 16px">
+          <img src="mt5-logo.png" alt="" style="width:56px;height:56px;border-radius:12px;margin-bottom:10px">
+          <div style="font-size:15px;font-weight:600">${esc(a.holder)}</div>
+          <div style="color:#8a8a8a;margin-top:2px">${esc(a.login)} - ${esc(a.server)}</div>
+          ${typeof a.balance === 'number' ? `<div style="color:#8a8a8a;margin-top:1px">${fmt(a.balance)} ${esc(a.currency || 'RUB')}</div>` : ''}
+          <div style="margin-top:10px"><span style="border:1px solid #d7d7d7;color:#8a8a8a;border-radius:12px;padding:3px 12px;font-size:12px">Hedge</span></div>
         </div>
-        <table style="width:100%;font:12px Tahoma,Arial,sans-serif;border-collapse:collapse">
-          ${row('Компания', a.company)}
-          ${row('Имя', a.holder)}
-          ${row('Email', '')}
-          ${row('Телефон', '')}
-          ${row('Логин', a.login)}
-          ${row('Сервер', a.server)}
-          ${row('Подключено', a.accessServer)}
-        </table>
-        <div style="margin-top:10px"><a href="#" id="mt5OtherDevice" style="color:#1a73e8;text-decoration:none">Подключить на другом устройстве</a></div>
-        <div style="margin-top:4px"><a href="#" id="mt5DeleteAcc" style="color:#c00;text-decoration:none">Удалить счет</a></div>
-        <div style="text-align:right;margin-top:14px">
+        <div>
+          ${row('Компания', a.company, { chevron: true })}
+          ${row('Имя', a.holder, { muted: true })}
+          ${row('Email', '', { muted: true })}
+          ${row('Телефон', '', { muted: true })}
+          ${row('Логин', a.login, { muted: true })}
+          ${row('Сервер', a.server, { muted: true })}
+          ${row('Подключено', accessServer, { muted: true })}
+        </div>
+        <div style="padding:14px 0 4px">
+          <a href="#" id="mt5OtherDevice" style="display:block;padding:7px 0;color:#1a73e8;text-decoration:none">Подключить на другом устройстве &rsaquo;</a>
+          <a href="#" id="mt5DeleteAcc" style="display:block;padding:7px 0;color:#d93025;text-decoration:none">Удалить счет &rsaquo;</a>
+        </div>
+        <div style="text-align:right;margin-top:10px">
           <button value="cancel" style="min-width:80px;height:24px">Закрыть</button>
         </div>
       </div>`);
