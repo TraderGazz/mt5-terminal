@@ -468,7 +468,7 @@
           <div style="font-size:15px;font-weight:600">${esc(a.holder)}</div>
           <div style="color:#8a8a8a;margin-top:2px">${esc(a.login)} - ${esc(a.server)}</div>
           ${typeof a.balance === 'number' ? `<div style="color:#8a8a8a;margin-top:1px">${fmt(a.balance)} ${esc(a.currency || 'RUB')}</div>` : ''}
-          <div style="margin-top:10px;display:flex;gap:6px;justify-content:center"><span style="border:1px solid #2e9e4f;color:#2e9e4f;border-radius:12px;padding:3px 0;width:64px;text-align:center;font-size:12px">Real</span><span style="border:1.5px solid #8a8a8a;color:#5a5a5a;border-radius:12px;padding:3px 0;width:64px;text-align:center;font-size:12px">Hedge</span></div>
+          <div style="margin-top:10px;display:flex;gap:6px;justify-content:center"><span style="border:1px solid #2e9e4f;color:#2e9e4f;border-radius:12px;padding:3px 0;width:64px;text-align:center;font-size:12px">Real</span><span style="border:1px solid #b0b0b0;color:#8a8a8a;border-radius:12px;padding:3px 0;width:64px;text-align:center;font-size:12px">Hedge</span></div>
         </div>
         <div>
           ${row('Компания', a.company, { chevron: true })}
