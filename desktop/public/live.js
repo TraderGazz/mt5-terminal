@@ -491,6 +491,47 @@
     else showLoginForm();
   }
 
+  // Правый клик по уже нарисованной линии — «Удалить»/«Свойства» вместо
+  // общего меню графика (в оригинале так и работает удаление объектов).
+  function hitLine(x, y) {
+    if (typeof state === 'undefined' || typeof point !== 'function') return -1;
+    return state.lines.findIndex((l) => {
+      const a = point(l.t1, l.p1);
+      const b = point(l.t2, l.p2);
+      if (l.type === 'horizontal') return Math.abs(y - a.y) < 6;
+      if (l.type === 'vertical') return Math.abs(x - a.x) < 6;
+      const dist = Math.abs((b.y - a.y) * x - (b.x - a.x) * y + b.x * a.y - b.y * a.x) / Math.max(1, Math.hypot(b.y - a.y, b.x - a.x));
+      return dist < 6 && x >= Math.min(a.x, b.x) - 6 && x <= Math.max(a.x, b.x) + 6;
+    });
+  }
+  if (typeof canvas !== 'undefined') {
+    const prevContextMenu = canvas.oncontextmenu;
+    canvas.oncontextmenu = (e) => {
+      const r = canvas.getBoundingClientRect();
+      const hit = hitLine(e.clientX - r.left, e.clientY - r.top);
+      if (hit >= 0) {
+        e.preventDefault();
+        state.selectedLine = hit;
+        draw();
+        popup([['Свойства', 'edit-line'], ['Удалить', 'delete-line']], e.clientX, e.clientY);
+        return;
+      }
+      if (prevContextMenu) prevContextMenu(e);
+    };
+  }
+  const prevLineAction = action;
+  action = function (cmd, e) {
+    if (cmd === 'delete-line') {
+      if (state.selectedLine >= 0) { state.lines.splice(state.selectedLine, 1); state.selectedLine = -1; draw(); }
+      return;
+    }
+    if (cmd === 'edit-line') {
+      if (state.selectedLine >= 0 && typeof editObject === 'function') editObject(state.selectedLine);
+      return;
+    }
+    prevLineAction(cmd, e);
+  };
+
   function init() {
     loadLines();
     draw();
