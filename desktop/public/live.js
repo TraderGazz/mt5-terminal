@@ -500,8 +500,16 @@
       const b = point(l.t2, l.p2);
       if (l.type === 'horizontal') return Math.abs(y - a.y) < 6;
       if (l.type === 'vertical') return Math.abs(x - a.x) < 6;
+      if (l.type === 'fibonacci') {
+        const left = Math.min(a.x, b.x) - 6;
+        const right = typeof view !== 'undefined' && view ? view.pw : Math.max(a.x, b.x);
+        return x >= left && x <= right && [0, .236, .382, .5, .618, 1, 1.618, 2.618, 4.236].some((r) => Math.abs(y - (a.y + (b.y - a.y) * r)) < 6);
+      }
       const dist = Math.abs((b.y - a.y) * x - (b.x - a.x) * y + b.x * a.y - b.y * a.x) / Math.max(1, Math.hypot(b.y - a.y, b.x - a.x));
-      return dist < 6 && x >= Math.min(a.x, b.x) - 6 && x <= Math.max(a.x, b.x) + 6;
+      const extended = l.type === 'trend' && l.ray && typeof view !== 'undefined' && view;
+      const xMin = extended ? 0 : Math.min(a.x, b.x) - 6;
+      const xMax = extended ? view.pw : Math.max(a.x, b.x) + 6;
+      return dist < 6 && x >= xMin && x <= xMax;
     });
   }
   if (typeof canvas !== 'undefined') {
