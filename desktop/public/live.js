@@ -559,7 +559,9 @@
       const el = document.querySelector('#extraTerminal');
       if (!el) return;
       // Заказчик попросил тот же набор итогов, что и внизу «Торговли» (patchTotals).
-      el.innerHTML = `<div class="terminal-grid assets-grid"><div class="terminal-grid-head"><span>Актив</span><span>Объем</span><span>Цена</span><span>Прибыль</span></div>${rows}</div><div class="assets-summary">Баланс: ${fmt(accountInfo.balance)} ${currency}　 Средства: ${fmt(accountInfo.equity)}　 Свободная маржа: ${fmt(accountInfo.freeMargin)}　 Маржа: ${fmt(accountInfo.margin)}　 Уровень маржи: ${level}　 Плавающий результат: ${fmt(floating)}</div>`;
+      el.innerHTML = `<div class="terminal-grid assets-grid"><div class="terminal-grid-head"><span>Актив</span><span>Объем</span><span>Цена</span><span>Прибыль</span></div>${rows}</div><div class="assets-summary">Баланс: ${fmt(accountInfo.balance)} ${currency}　 Средства: ${fmt(accountInfo.equity)}　 Свободная маржа: ${fmt(accountInfo.freeMargin)}　 Маржа: ${fmt(accountInfo.margin)}　 Уровень маржи: ${level}　 Прибыль: ${fmt(floating)}</div>`;
+      // Заказчик: вкладка должна сразу открываться внизу (видны итоги и последние позиции).
+      el.scrollTop = el.scrollHeight;
     };
   }
 
