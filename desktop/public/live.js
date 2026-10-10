@@ -540,6 +540,27 @@
     prevLineAction(cmd, e);
   };
 
+  // «Активы» в прототипе был декоративным (демо-баланс 100 000 EUR,
+  // фейковая прибыль по demo-котировкам) — заказчик указал на бессмысленные
+  // цифры. Подменяем реальными данными счёта после того, как прототип
+  // отрисует страницу.
+  if (typeof renderTerminalPage === 'function') {
+    const prevRenderTerminalPage = renderTerminalPage;
+    renderTerminalPage = function () {
+      prevRenderTerminalPage();
+      if (typeof terminalUI === 'undefined' || terminalUI.active !== 'Активы') return;
+      if (!accountInfo || typeof accountInfo.balance !== 'number') return;
+      const currency = accountInfo.currency || 'RUB';
+      const floating = accountInfo.equity - accountInfo.balance;
+      const rows = (typeof positions !== 'undefined' ? positions : [])
+        .map((p) => `<div class="terminal-grid-row"><span>${p.symbol}</span><span>${(p.type === 'sell' ? '-' : '') + p.volume}</span><span>${(p.open ?? 0).toFixed(5)}</span><span>${fmt(p.profit ?? 0)}</span></div>`)
+        .join('') || '<div class="terminal-empty">Нет открытых позиций</div>';
+      const el = document.querySelector('#extraTerminal');
+      if (!el) return;
+      el.innerHTML = `<div class="terminal-grid assets-grid"><div class="terminal-grid-head"><span>Актив</span><span>Объем</span><span>Цена</span><span>Прибыль</span></div>${rows}</div><div class="assets-summary">Баланс: ${fmt(accountInfo.balance)} ${currency}　 Плавающий результат: ${fmt(floating)}　 Средства: ${fmt(accountInfo.equity)}</div>`;
+    };
+  }
+
   function init() {
     loadLines();
     draw();
@@ -575,7 +596,7 @@
     // REST /api/account (добор из БД). Мёржим поверх уже загруженных
     // реквизитов, а не заменяем целиком — иначе после первого WS-тика
     // ФИО/компания превращались бы в undefined.
-    ws.on('account', (d) => { accountInfo = { ...accountInfo, ...d }; patchCaption(); patchNavigator(); patchTotals(); });
+    ws.on('account', (d) => { accountInfo = { ...accountInfo, ...d }; patchCaption(); patchNavigator(); patchTotals(); if (typeof renderTerminalPage === 'function') renderTerminalPage(); });
     loadPositions();
     ws.on("positions", (d) => terminalAPI.setPositions(sortNewestFirst((d || []).map(mapPosition))));
     loadHistory();
