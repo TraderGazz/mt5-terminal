@@ -552,12 +552,14 @@
       if (!accountInfo || typeof accountInfo.balance !== 'number') return;
       const currency = accountInfo.currency || 'RUB';
       const floating = accountInfo.equity - accountInfo.balance;
+      const level = typeof accountInfo.marginLevel === 'number' ? `${fmt(accountInfo.marginLevel)}%` : '—';
       const rows = (typeof positions !== 'undefined' ? positions : [])
         .map((p) => `<div class="terminal-grid-row"><span>${p.symbol}</span><span>${(p.type === 'sell' ? '-' : '') + p.volume}</span><span>${(p.open ?? 0).toFixed(5)}</span><span>${fmt(p.profit ?? 0)}</span></div>`)
         .join('') || '<div class="terminal-empty">Нет открытых позиций</div>';
       const el = document.querySelector('#extraTerminal');
       if (!el) return;
-      el.innerHTML = `<div class="terminal-grid assets-grid"><div class="terminal-grid-head"><span>Актив</span><span>Объем</span><span>Цена</span><span>Прибыль</span></div>${rows}</div><div class="assets-summary">Баланс: ${fmt(accountInfo.balance)} ${currency}　 Плавающий результат: ${fmt(floating)}　 Средства: ${fmt(accountInfo.equity)}</div>`;
+      // Заказчик попросил тот же набор итогов, что и внизу «Торговли» (patchTotals).
+      el.innerHTML = `<div class="terminal-grid assets-grid"><div class="terminal-grid-head"><span>Актив</span><span>Объем</span><span>Цена</span><span>Прибыль</span></div>${rows}</div><div class="assets-summary">Баланс: ${fmt(accountInfo.balance)} ${currency}　 Средства: ${fmt(accountInfo.equity)}　 Свободная маржа: ${fmt(accountInfo.freeMargin)}　 Маржа: ${fmt(accountInfo.margin)}　 Уровень маржи: ${level}　 Плавающий результат: ${fmt(floating)}</div>`;
     };
   }
 
