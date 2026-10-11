@@ -30,12 +30,26 @@
     const headers = {};
     const token = getToken();
     if (token) headers.Authorization = `Bearer ${token}`;
-    const res = await fetch(url, { method: opts.method || 'GET', headers });
+    let body;
+    if (opts.body !== undefined) { headers['Content-Type'] = 'application/json'; body = JSON.stringify(opts.body); }
+    const res = await fetch(url, { method: opts.method || 'GET', headers, body });
     if (res.status === 401) { clearToken(); throw new Error('Не авторизован'); }
     const text = await res.text();
     const data = text ? JSON.parse(text) : null;
     if (!res.ok) throw new Error((data && data.error) || `Ошибка ${res.status}`);
     return data;
+  }
+
+  // Реальная торговля (Buy/Sell/закрытие/SL-TP) доступна только роли admin —
+  // то же ограничение, что и в мобильной версии (Trade.tsx: canTrade =
+  // role==='admin'). У логина заказчика роль другая, и его MT5-счёт сам по
+  // себе Read Only — торговать физически не может, даже если бы кнопки
+  // работали.
+  function canTrade() {
+    try {
+      const user = JSON.parse(localStorage.getItem('mt5pc-user') || 'null');
+      return user?.role === 'admin';
+    } catch { return false; }
   }
 
   // --- WS-клиент: тот же протокол, что в client/desktop api/ws.ts ---------
@@ -527,6 +541,47 @@
       if (prevContextMenu) prevContextMenu(e);
     };
   }
+  // Реальное открытие сделки (Buy/Sell по рынку, с SL/TP) — та же проверка
+  // объёма/уровней, что и в прототипе, но вместо локального push в массив —
+  // настоящий ордер брокеру. Не-admin получает ту же надпись в #hint, что
+  // мобильная показывает вместо кнопки.
+  if (typeof trade === 'function') {
+    trade = function (type, volume = +document.getElementById('volume').value, sl = 0, tp = 0) {
+      const hint = document.getElementById('hint');
+      if (!canTrade()) { if (hint) hint.textContent = 'Торговля доступна только администратору'; return false; }
+      if (!Number.isFinite(volume) || volume < 0.01 || volume > 100) { if (hint) hint.textContent = 'Допустимый объем: 0.01–100'; return false; }
+      const open = type === 'buy' ? state.ask : state.bid;
+      if ((sl && (type === 'buy' ? sl >= open : sl <= open)) || (tp && (type === 'buy' ? tp <= open : tp >= open))) {
+        if (hint) hint.textContent = 'Проверьте уровни Stop Loss / Take Profit';
+        return false;
+      }
+      if (hint) hint.textContent = 'Отправка ордера...';
+      api('/trading/open', { method: 'POST', body: { type, volume, stopLoss: sl || undefined, takeProfit: tp || undefined } })
+        .then((r) => {
+          if (hint) hint.textContent = `Сделка открыта: тикет #${r.order ?? r.deal ?? '—'}`;
+          loadPositions();
+          const dialog = document.getElementById('dialog');
+          if (dialog?.open) dialog.close();
+          state.tab = 'trade';
+          location.hash = 'trade';
+          table();
+        })
+        .catch((err) => { if (hint) hint.textContent = err.message || 'Не удалось открыть сделку'; });
+      return false; // диалог закроется из .then() после реального подтверждения, не раньше
+    };
+  }
+
+  // Реальное закрытие позиции — то же самое ограничение по роли.
+  if (typeof closePosition === 'function') {
+    closePosition = function (id) {
+      const hint = document.getElementById('hint');
+      if (!canTrade()) { if (hint) hint.textContent = 'Торговля доступна только администратору'; return; }
+      api('/trading/close', { method: 'POST', body: { ticket: id } })
+        .then(() => { if (hint) hint.textContent = `Позиция #${id} закрыта`; loadPositions(); })
+        .catch((err) => { if (hint) hint.textContent = err.message || 'Не удалось закрыть позицию'; });
+    };
+  }
+
   const prevLineAction = action;
   action = function (cmd, e) {
     if (cmd === 'delete-line') {
@@ -535,6 +590,23 @@
     }
     if (cmd === 'edit-line') {
       if (state.selectedLine >= 0 && typeof editObject === 'function') editObject(state.selectedLine);
+      return;
+    }
+    // Перехватываем «Изменить позицию» ДО прототипа: его версия правит
+    // SL/TP только локально в объекте позиции, без реального ордера.
+    if (cmd === 'position:modify') {
+      const p = (typeof positions !== 'undefined' ? positions : []).find((pp) => pp.id === sim.selected);
+      if (!p) { if (typeof audit === 'function') audit('Выберите открытую позицию'); return; }
+      modal(`Изменить позицию #${p.id}`, `<label>Stop Loss <input id="modifySL" type="number" min="0" step=".00001" value="${p.sl}"></label><label>Take Profit <input id="modifyTP" type="number" min="0" step=".00001" value="${p.tp}"></label><p id="modifyErr" style="color:#c00;min-height:16px;margin:4px 0"></p><button type="button" id="savePosition">Изменить</button>`);
+      document.getElementById('savePosition').onclick = () => {
+        const errEl = document.getElementById('modifyErr');
+        if (!canTrade()) { if (errEl) errEl.textContent = 'Доступно только администратору'; return; }
+        const sl = +document.getElementById('modifySL').value;
+        const tp = +document.getElementById('modifyTP').value;
+        api(`/trading/position/${p.id}/modify`, { method: 'POST', body: { stopLoss: sl || undefined, takeProfit: tp || undefined } })
+          .then(() => { document.getElementById('dialog').close(); loadPositions(); })
+          .catch((err) => { if (errEl) errEl.textContent = err.message || 'Не удалось изменить позицию'; });
+      };
       return;
     }
     prevLineAction(cmd, e);
