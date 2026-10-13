@@ -352,17 +352,18 @@ export default function HistoryPage() {
   // data shows up; with thousands of DOM rows layout can still take a few
   // extra frames, so scrollTo(bottom) is re-issued each frame until
   // scrollHeight stops growing (capped so a stuck render can't loop).
-  const autoScrolledRef = useRef(false);
-  // Менять период — тоже «новый визит»: без сброса guard'а скролл-вниз
-  // срабатывал только один раз за всю сессию, и после выбора другого
-  // периода (новый fetch, список перемонтируется из-за <PageLoading/>)
-  // экран оставался наверху.
+  // Храним range.from, для которого уже скроллили — не булев флаг «было
+  // один раз за визит»: предыдущая версия на base этого флага переставала
+  // скроллить после первой же смены периода (два отдельных эффекта с
+  // одной и той же зависимостью [range.from] давали ту же дыру — ref
+  // сбрасывался, но реальный скролл в отдельном effect всё равно мог не
+  // переисполниться, если `deals` пересчитывался раньше первого flush).
+  // Единый эффект с явным сравнением «для этого ли периода уже скроллили»
+  // не зависит от порядка исполнения двух хуков.
+  const scrolledForRef = useRef<number | null>(null);
   useEffect(() => {
-    autoScrolledRef.current = false;
-  }, [range.from]);
-  useEffect(() => {
-    if (autoScrolledRef.current || deals.length === 0) return;
-    autoScrolledRef.current = true;
+    if (deals.length === 0 || scrolledForRef.current === range.from) return;
+    scrolledForRef.current = range.from;
 
     let cancelled = false;
     let rafId = 0;
@@ -393,7 +394,7 @@ export default function HistoryPage() {
       cancelled = true;
       cancelAnimationFrame(rafId);
     };
-  }, [deals]);
+  }, [deals, range.from]);
 
   const orders = useMemo<HistoryOrder[]>(() => {
     const filled: HistoryOrder[] = deals.map((d) => ({
