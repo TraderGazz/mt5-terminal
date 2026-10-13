@@ -353,6 +353,13 @@ export default function HistoryPage() {
   // extra frames, so scrollTo(bottom) is re-issued each frame until
   // scrollHeight stops growing (capped so a stuck render can't loop).
   const autoScrolledRef = useRef(false);
+  // Менять период — тоже «новый визит»: без сброса guard'а скролл-вниз
+  // срабатывал только один раз за всю сессию, и после выбора другого
+  // периода (новый fetch, список перемонтируется из-за <PageLoading/>)
+  // экран оставался наверху.
+  useEffect(() => {
+    autoScrolledRef.current = false;
+  }, [range.from]);
   useEffect(() => {
     if (autoScrolledRef.current || deals.length === 0) return;
     autoScrolledRef.current = true;
