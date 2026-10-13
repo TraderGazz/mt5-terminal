@@ -116,7 +116,17 @@ export function setHistoryFrom(from: number | null) {
   const next = from != null && Number.isFinite(from) ? new Date(from).toISOString() : null;
   if (next === fromIso) return;
   fromIso = next;
-  if (IS_API && started) void refresh();
+  if (IS_API && started) {
+    // loaded оставался true во время рефетча под новый период — страница
+    // не показывала <PageLoading/>, а рендерила СТАРЫЕ deals/dealLegs (уже
+    // не подходящие под новый фильтр, почти пустые) вперемешку со строками
+    // из выписки (ledgerBalanceRows — чистая синхронная функция, готова для
+    // нового периода мгновенно). На экране — одни "Balance", пока запрос не
+    // завершится (повторный заход в Историю уже видит кэш и работает сразу).
+    loaded = false;
+    notify();
+    void refresh();
+  }
 }
 
 async function refresh() {
