@@ -362,6 +362,21 @@ export default function HistoryPage() {
   // не зависит от порядка исполнения двух хуков.
   const scrolledForRef = useRef<number | null>(null);
   useEffect(() => {
+    // Пока идёт рефетч под новый период, deals/historyLoaded проходят через
+    // ПРОМЕЖУТОЧНЫЙ рендер с historyLoaded=false (<PageLoading/>, контент
+    // резко «схлопывается» — браузер сам подрезает scrollTop под новую,
+    // маленькую высоту). Если к этому моменту скролл уже был отмечен
+    // выполненным (например, сработал РАНЬШЕ — на первом рендере после
+    // смены фильтра, когда ещё не было самого fetch, а deals успели
+    // пересчитаться из старых, но случайно пересекающихся с новым периодом
+    // данных), finally-рендер с настоящими данными уже не переscrollивал —
+    // экран оставался там, куда его подрезал браузер (обычно 0 = верх).
+    // Сбрасываем отметку на время загрузки, чтобы «настоящий» рендер ПОСЛЕ
+    // неё заново получил право на скролл.
+    if (!historyLoaded) {
+      scrolledForRef.current = null;
+      return;
+    }
     if (deals.length === 0 || scrolledForRef.current === range.from) return;
     scrolledForRef.current = range.from;
 
@@ -394,7 +409,7 @@ export default function HistoryPage() {
       cancelled = true;
       cancelAnimationFrame(rafId);
     };
-  }, [deals, range.from]);
+  }, [deals, range.from, historyLoaded]);
 
   const orders = useMemo<HistoryOrder[]>(() => {
     const filled: HistoryOrder[] = deals.map((d) => ({
