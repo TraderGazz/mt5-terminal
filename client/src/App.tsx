@@ -12,6 +12,9 @@ import TradeEditPage from '@/pages/TradeEdit';
 import HistoryPage from '@/pages/History';
 import HistoryPeriodPage from '@/pages/HistoryPeriod';
 import SettingsPage from '@/pages/Settings';
+import SettingsNewsPage from '@/pages/SettingsNews';
+import SettingsTradaysPage from '@/pages/SettingsTradays';
+import SettingsJournalPage from '@/pages/SettingsJournal';
 import LoginPage from '@/pages/Login';
 import AccountPage from '@/pages/Account';
 
@@ -50,6 +53,9 @@ export default function App() {
             <Route path="settings" element={<SettingsPage />} />
           </Route>
           <Route path="account" element={<AccountPage />} />
+          <Route path="settings/news" element={<SettingsNewsPage />} />
+          <Route path="settings/tradays" element={<SettingsTradaysPage />} />
+          <Route path="settings/journal" element={<SettingsJournalPage />} />
           {/* Chrome-less (свой NavBar с Отмена/Сохранить, без TabBar) — маршрут
               существовал только в коде страницы, но не был подключён сюда,
               из-за чего переход падал в wildcard-редирект на "/" (Котировки). */}

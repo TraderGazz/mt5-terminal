@@ -26,6 +26,7 @@ import {
 import { SYMBOL } from '@/config';
 import { useCurrentRole } from '@/components/auth/session';
 import { useTradeMaintenanceMode } from '@/data/authSession';
+import { logEvent } from '@/data/journal';
 
 /** First-mount animations run once per session (design.md §6). */
 let hasMountedOnce = false;
@@ -176,6 +177,7 @@ export default function TradePage() {
     openTrade({ type, volume, stopLoss, takeProfit })
       .then((r) => {
         setToast(`Сделка открыта: ${type} ${volume} лот, тикет #${r.order ?? r.deal ?? '—'}`);
+        logEvent(`Открыта сделка: ${type} ${volume} лот ${SYMBOL}, тикет #${r.order ?? r.deal ?? '—'}`);
         setOrderSheet(false);
         return refreshPositions();
       })
@@ -190,6 +192,7 @@ export default function TradePage() {
     closeTrade({ ticket: target.id })
       .then(() => {
         setToast(`Позиция #${target.id} закрыта`);
+        logEvent(`Закрыта позиция #${target.id}`);
         setCloseConfirm(null);
         setSelected(null);
         return refreshPositions();
@@ -219,6 +222,7 @@ export default function TradePage() {
     modifyPosition(ticket, { stopLoss, takeProfit })
       .then(() => {
         setToast(`Позиция #${ticket}: SL/TP изменены`);
+        logEvent(`Изменены SL/TP позиции #${ticket}`);
         setModifySheet(false);
         return refreshPositions();
       })

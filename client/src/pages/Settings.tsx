@@ -104,6 +104,12 @@ export default function SettingsPage() {
   const onRowTap = (row: SettingsRowDef) => {
     if (row.key === 'interface') {
       setLangSheet(true);
+    } else if (row.key === 'news') {
+      navigate('/settings/news');
+    } else if (row.key === 'tradays') {
+      navigate('/settings/tradays');
+    } else if (row.key === 'journal') {
+      navigate('/settings/journal');
     } else {
       setStub(row);
     }

@@ -252,3 +252,13 @@ export const updatePositionOverride = (ticket: number, body: { openPrice?: numbe
 
 export const clearPositionOverride = (ticket: number) =>
   api<{ cleared: true }>(`/trading/position/${ticket}`, { method: 'DELETE' });
+
+export interface ApiNewsItem {
+  title: string;
+  link: string;
+  pubDate: string;
+  description: string;
+  image: string | null;
+}
+
+export const getNews = () => api<{ items: ApiNewsItem[]; stale?: boolean }>('/news');

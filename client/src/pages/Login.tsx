@@ -11,6 +11,7 @@ import { startSession } from '@/components/auth/session';
 import { ACCOUNT } from '@/mocks/account';
 import { IS_API } from '@/config';
 import { login as apiLogin } from '@/api/auth';
+import { logEvent } from '@/data/journal';
 
 const SERVERS = ['AlfaForexRU-Real'];
 
@@ -60,6 +61,7 @@ export default function LoginPage() {
       apiLogin(login.trim(), password)
         .then(() => {
           startSession(login.trim()); // мок-сессия для совместимости UI
+          logEvent(`Вход в систему (${login.trim()})`);
           // Если сюда попали из-за протухшей сессии (api/http.ts 401),
           // вернуть туда же (например обратно в /admin), а не всегда на
           // Котировки — иначе разлогин посреди работы в админке "выбивает"
