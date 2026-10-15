@@ -48,7 +48,9 @@ export default function SettingsTradaysPage() {
   useEffect(() => {
     let cancelled = false;
     loadScriptOnce(WIDGET_SCRIPT_SRC).then(() => {
-      if (!cancelled) window.economicCalendar?.({ width: '100%', height: '100%', mode: 2, lang: 'ru', containerId });
+      // Высота в процентах не всегда протягивается сквозь flex-родителей до
+      // iframe — виджет оставлял под собой пустое место. Фиксированный пиксель.
+      if (!cancelled) window.economicCalendar?.({ width: '100%', height: 560, mode: 2, lang: 'ru', containerId });
     });
     return () => {
       cancelled = true;
@@ -58,8 +60,8 @@ export default function SettingsTradaysPage() {
   return (
     <div className="flex min-h-full flex-col bg-bg-grouped">
       <NavBar title="Tradays" solid left={<BackButton onClick={() => navigate(-1)} />} />
-      <div className="min-h-[600px] flex-1 px-2 py-2">
-        <div id={containerId} className="h-full min-h-[600px] w-full" />
+      <div className="px-2 py-2">
+        <div id={containerId} className="w-full" />
       </div>
     </div>
   );
