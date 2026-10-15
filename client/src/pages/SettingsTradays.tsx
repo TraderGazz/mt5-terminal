@@ -1,15 +1,40 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useId } from 'react';
 import { useNavigate } from 'react-router';
 import NavBar, { BackButton } from '@/components/NavBar';
 
+// Реальная (не выдуманная) форма API — проверено содержимым самого
+// widget.js: он не экспортирует класс, а вешает на window функцию
+// economicCalendar(opts), плюс window.calendarCompletedID — массив уже
+// инициализированных containerId (повторный вызов с тем же id — no-op,
+// поэтому id должен быть уникальным на каждый маунт страницы, иначе при
+// повторном заходе виджет молча не отрисуется).
 declare global {
   interface Window {
-    TradaysWidget?: { Calendar: new (opts: Record<string, unknown>, elId: string) => void };
+    economicCalendar?: (opts: Record<string, unknown>) => void;
+    calendarCompletedID?: string[];
   }
 }
 
 const WIDGET_SCRIPT_SRC = 'https://www.tradays.com/c/js/widgets/calendar/widget.js?v=22';
-const CONTAINER_ID = 'tradaysEconomicCalendar';
+
+function loadScriptOnce(src: string): Promise<void> {
+  const existing = document.querySelector<HTMLScriptElement>(`script[src="${src}"]`);
+  if (existing) {
+    return (existing as HTMLScriptElement & { dataset: { loaded?: string } }).dataset.loaded === '1'
+      ? Promise.resolve()
+      : new Promise((resolve) => existing.addEventListener('load', () => resolve(), { once: true }));
+  }
+  return new Promise((resolve) => {
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = true;
+    script.onload = () => {
+      script.dataset.loaded = '1';
+      resolve();
+    };
+    document.body.appendChild(script);
+  });
+}
 
 /**
  * «Настройки → Tradays» (заявка заказчика: раньше была заглушка «Режим
@@ -18,39 +43,23 @@ const CONTAINER_ID = 'tradaysEconomicCalendar';
  */
 export default function SettingsTradaysPage() {
   const navigate = useNavigate();
-  const mountedRef = useRef(false);
+  const containerId = `tradays-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
 
   useEffect(() => {
-    if (mountedRef.current) return;
-    mountedRef.current = true;
-
-    const init = () => {
-      if (window.TradaysWidget) {
-        new window.TradaysWidget.Calendar(
-          { width: '100%', height: '100%', mode: '2' },
-          CONTAINER_ID,
-        );
-      }
+    let cancelled = false;
+    loadScriptOnce(WIDGET_SCRIPT_SRC).then(() => {
+      if (!cancelled) window.economicCalendar?.({ width: '100%', height: '100%', mode: 2, lang: 'ru', containerId });
+    });
+    return () => {
+      cancelled = true;
     };
-
-    const existing = document.querySelector<HTMLScriptElement>(`script[src="${WIDGET_SCRIPT_SRC}"]`);
-    if (existing) {
-      if (window.TradaysWidget) init();
-      else existing.addEventListener('load', init);
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = WIDGET_SCRIPT_SRC;
-    script.async = true;
-    script.onload = init;
-    document.body.appendChild(script);
-  }, []);
+  }, [containerId]);
 
   return (
     <div className="flex min-h-full flex-col bg-bg-grouped">
       <NavBar title="Tradays" solid left={<BackButton onClick={() => navigate(-1)} />} />
       <div className="min-h-[600px] flex-1 px-2 py-2">
-        <div id={CONTAINER_ID} className="h-full min-h-[600px] w-full" />
+        <div id={containerId} className="h-full min-h-[600px] w-full" />
       </div>
     </div>
   );
