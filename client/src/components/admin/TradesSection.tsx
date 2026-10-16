@@ -453,6 +453,7 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
                 <tr className="border-b border-separator text-[12px] uppercase tracking-wide text-text-secondary">
                   <th className="px-5 py-3 font-medium">Тикет / Символ</th>
                   <th className="px-4 py-3 font-medium">Тип</th>
+                  <th className="px-4 py-3 text-right font-medium">Объём</th>
                   <th className="px-4 py-3 text-right font-medium">Цена открытия</th>
                   <th className="px-4 py-3 text-right font-medium">Текущая цена</th>
                   <th className="px-4 py-3 text-right font-medium">Прибыль</th>
@@ -471,8 +472,9 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
                     <td className="px-4 py-3">
                       <Pill tone={TYPE_TONE[p.type] ?? 'gray'}>{p.type}</Pill>
                     </td>
-                    <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(p.openPrice)}</td>
-                    <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(p.currentPrice)}</td>
+                    <td className="tnum px-4 py-3 text-right text-[14px] text-black">{p.volume}</td>
+                    <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmtPrice(p.openPrice)}</td>
+                    <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmtPrice(p.currentPrice)}</td>
                     <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(p.profit)}</td>
                     <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(p.swap)}</td>
                     <td className="tnum whitespace-nowrap px-4 py-3 text-[13px] text-text-secondary">
@@ -506,8 +508,9 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
                   <Pill tone={TYPE_TONE[p.type] ?? 'gray'}>{p.type}</Pill>
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
-                  <Field label="Цена открытия" value={fmt(p.openPrice)} />
-                  <Field label="Текущая цена" value={fmt(p.currentPrice)} />
+                  <Field label="Объём" value={String(p.volume)} />
+                  <Field label="Цена открытия" value={fmtPrice(p.openPrice)} />
+                  <Field label="Текущая цена" value={fmtPrice(p.currentPrice)} />
                   <Field label="Прибыль" value={fmt(p.profit)} />
                   <Field label="Своп" value={fmt(p.swap)} />
                   <Field
