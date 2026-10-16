@@ -637,6 +637,82 @@
     };
   }
 
+  // Перекрестие (Cross) в прототипе рисовало только пунктирные линии, без
+  // цены/времени у курсора и без протяжки-измерения (бары/пункты/%), как в
+  // оригинале MT5. Добавляем поверх уже нарисованного кадра.
+  const SYMBOL_DIGITS = { EURUSDrfd: 5, USDRUBrfd: 3 };
+  let measureStart = null;
+  if (typeof canvas !== 'undefined') {
+    const prevMeasureDown = canvas.onpointerdown;
+    canvas.onpointerdown = (e) => {
+      if (state.tool === 'cross' && typeof coord === 'function') {
+        const r = canvas.getBoundingClientRect();
+        const x = e.clientX - r.left;
+        const y = e.clientY - r.top;
+        measureStart = { x, y, ...coord(x, y) };
+        canvas.setPointerCapture(e.pointerId);
+        draw();
+        return;
+      }
+      measureStart = null;
+      prevMeasureDown(e);
+    };
+    const prevMeasureUp = canvas.onpointerup;
+    canvas.onpointerup = (e) => {
+      if (measureStart) { measureStart = null; draw(); return; }
+      prevMeasureUp(e);
+    };
+  }
+  if (typeof draw === 'function') {
+    const prevCrossDraw = draw;
+    draw = function (...args) {
+      prevCrossDraw(...args);
+      if (!view || typeof coord !== 'function') return;
+      const { pw, ph } = view;
+      const digits = SYMBOL_DIGITS[state.symbol] ?? 5;
+      if (mouse && state.cross) {
+        const c = coord(mouse.x, mouse.y);
+        ctx.font = '11px Tahoma';
+        ctx.fillStyle = '#ffeb3b';
+        ctx.fillRect(pw, mouse.y - 7, 55, 14);
+        ctx.fillStyle = '#000';
+        ctx.fillText(c.p.toFixed(digits), pw + 3, mouse.y + 3);
+        const d = new Date(c.t);
+        const label = `${String(d.getUTCDate()).padStart(2, '0')}.${String(d.getUTCMonth() + 1).padStart(2, '0')} ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+        const tw = ctx.measureText(label).width;
+        ctx.fillStyle = '#ffeb3b';
+        ctx.fillRect(mouse.x - tw / 2 - 4, ph, tw + 8, 14);
+        ctx.fillStyle = '#000';
+        ctx.fillText(label, mouse.x - tw / 2, ph + 10);
+      }
+      if (measureStart && mouse) {
+        const c2 = coord(mouse.x, mouse.y);
+        ctx.strokeStyle = '#2b6cb0';
+        ctx.setLineDash([4, 2]);
+        ctx.beginPath();
+        ctx.moveTo(measureStart.x, measureStart.y);
+        ctx.lineTo(mouse.x, mouse.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        const period = periods[state.tf] * 60000;
+        const bars = Math.max(1, Math.round(Math.abs(c2.t - measureStart.t) / period));
+        const diff = c2.p - measureStart.p;
+        const points = Math.round(Math.abs(diff) * 10 ** digits);
+        const percent = (diff / measureStart.p) * 100;
+        const sign = diff >= 0 ? '+' : '-';
+        const text = `${c2.p.toFixed(digits)}: ${bars} bar${bars === 1 ? '' : 's'}, ${sign}${points} points, ${sign}${Math.abs(percent).toFixed(2)}%`;
+        ctx.font = '11px Tahoma';
+        const tw2 = ctx.measureText(text).width;
+        const boxX = Math.min(measureStart.x, mouse.x);
+        const boxY = Math.min(measureStart.y, mouse.y) - 16;
+        ctx.fillStyle = 'rgba(0,0,0,0.75)';
+        ctx.fillRect(boxX, boxY, tw2 + 8, 14);
+        ctx.fillStyle = '#fff';
+        ctx.fillText(text, boxX + 4, boxY + 10);
+      }
+    };
+  }
+
   function init() {
     loadLines();
     draw();
