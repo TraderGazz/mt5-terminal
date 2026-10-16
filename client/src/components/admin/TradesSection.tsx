@@ -448,7 +448,7 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
         <>
           {/* Desktop/tablet: table */}
           <AdminCard className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[820px] border-collapse text-left">
+            <table className="w-full min-w-[920px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-separator text-[12px] uppercase tracking-wide text-text-secondary">
                   <th className="px-5 py-3 font-medium">Тикет / Символ</th>
@@ -459,7 +459,7 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
                   <th className="px-4 py-3 text-right font-medium">Прибыль</th>
                   <th className="px-4 py-3 text-right font-medium">Своп</th>
                   <th className="px-4 py-3 font-medium">Открыта</th>
-                  <th className="sticky right-0 bg-white px-4 py-3 text-right font-medium shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.12)]">Действия</th>
+                  <th className="px-4 py-3 text-right font-medium">Действия</th>
                 </tr>
               </thead>
               <tbody>
@@ -480,7 +480,7 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
                     <td className="tnum whitespace-nowrap px-4 py-3 text-[13px] text-text-secondary">
                       {p.openTime ? formatDateTime(new Date(p.openTime).getTime()) : '—'}
                     </td>
-                    <td className="sticky right-0 bg-white px-4 py-3 text-right shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.12)]">
+                    <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1">
                         <AdminButton variant="text" onClick={() => openEdit(p)}>
                           Изменить
@@ -923,7 +923,7 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
         <>
           {/* Desktop/tablet: table */}
           <AdminCard className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[760px] border-collapse text-left">
+            <table className="w-full min-w-[1020px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-separator text-[12px] uppercase tracking-wide text-text-secondary">
                   <th className="px-5 py-3 font-medium">Тикет / Символ</th>
@@ -934,7 +934,7 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
                   <th className="px-4 py-3 text-right font-medium">Своп</th>
                   <th className="px-4 py-3 text-right font-medium">Комиссия</th>
                   <th className="px-4 py-3 font-medium">Закрыта</th>
-                  <th className="sticky right-0 bg-white px-4 py-3 text-right font-medium shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.12)]">Действия</th>
+                  <th className="px-4 py-3 text-right font-medium">Действия</th>
                 </tr>
               </thead>
               <tbody>
@@ -957,7 +957,7 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
                     <td className="tnum whitespace-nowrap px-4 py-3 text-[13px] text-text-secondary">
                       {r.close_time ? formatDateTime(new Date(r.close_time).getTime()) : '—'}
                     </td>
-                    <td className="sticky right-0 bg-white px-4 py-3 text-right shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.12)]">
+                    <td className="px-4 py-3 text-right">
                       {isLedgerRow(r) ? (
                         <span className="text-[12px] text-text-secondary">выписка</span>
                       ) : (
