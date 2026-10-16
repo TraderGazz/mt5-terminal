@@ -923,16 +923,18 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
         <>
           {/* Desktop/tablet: table */}
           <AdminCard className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[1020px] border-collapse text-left">
+            <table className="w-full min-w-[1220px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-separator text-[12px] uppercase tracking-wide text-text-secondary">
                   <th className="px-5 py-3 font-medium">Тикет / Символ</th>
                   <th className="px-4 py-3 font-medium">Тип</th>
+                  <th className="px-4 py-3 text-right font-medium">Объём</th>
                   <th className="px-4 py-3 text-right font-medium">Цена откр.</th>
                   <th className="px-4 py-3 text-right font-medium">Цена закр.</th>
                   <th className="px-4 py-3 text-right font-medium">Прибыль</th>
                   <th className="px-4 py-3 text-right font-medium">Своп</th>
                   <th className="px-4 py-3 text-right font-medium">Комиссия</th>
+                  <th className="px-4 py-3 font-medium">Открыта</th>
                   <th className="px-4 py-3 font-medium">Закрыта</th>
                   <th className="px-4 py-3 text-right font-medium">Действия</th>
                 </tr>
@@ -949,11 +951,15 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
                     <td className="px-4 py-3">
                       <Pill tone={TYPE_TONE[r.deal_type] ?? 'gray'}>{r.deal_type}</Pill>
                     </td>
+                    <td className="tnum px-4 py-3 text-right text-[14px] text-black">{r.volume || '—'}</td>
                     <td className="tnum px-4 py-3 text-right text-[13px] text-text-secondary">{fmtPrice(r.open_price)}</td>
                     <td className="tnum px-4 py-3 text-right text-[13px] text-text-secondary">{fmtPrice(r.close_price)}</td>
                     <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(r.profit)}</td>
                     <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(r.swap)}</td>
                     <td className="tnum px-4 py-3 text-right text-[14px] text-black">{fmt(r.commission)}</td>
+                    <td className="tnum whitespace-nowrap px-4 py-3 text-[13px] text-text-secondary">
+                      {r.open_time ? formatDateTime(new Date(r.open_time).getTime()) : '—'}
+                    </td>
                     <td className="tnum whitespace-nowrap px-4 py-3 text-[13px] text-text-secondary">
                       {r.close_time ? formatDateTime(new Date(r.close_time).getTime()) : '—'}
                     </td>
@@ -998,11 +1004,16 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
                   <Pill tone={TYPE_TONE[r.deal_type] ?? 'gray'}>{r.deal_type}</Pill>
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
+                  <Field label="Объём" value={String(r.volume || '—')} />
                   <Field label="Цена откр." value={fmtPrice(r.open_price)} />
                   <Field label="Цена закр." value={fmtPrice(r.close_price)} />
                   <Field label="Прибыль" value={fmt(r.profit)} />
                   <Field label="Своп" value={fmt(r.swap)} />
                   <Field label="Комиссия" value={fmt(r.commission)} />
+                  <Field
+                    label="Открыта"
+                    value={r.open_time ? formatDateTime(new Date(r.open_time).getTime()) : '—'}
+                  />
                   <Field
                     label="Закрыта"
                     value={r.close_time ? formatDateTime(new Date(r.close_time).getTime()) : '—'}
