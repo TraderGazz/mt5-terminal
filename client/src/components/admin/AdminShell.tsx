@@ -183,7 +183,7 @@ export default function AdminShell({
           <span className="text-[17px] font-semibold text-black">{title}</span>
         </header>
 
-        <main className="mx-auto w-full max-w-[980px] flex-1 px-4 pb-10 pt-4 md:px-8 md:pt-8">
+        <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 pb-10 pt-4 md:px-8 md:pt-8">
           {children}
         </main>
       </div>
