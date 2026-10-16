@@ -24,10 +24,15 @@ router.get('/', authRequired, async (req, res) => {
 
     res.json({
       account: {
-        login: acc.login || stored?.account_number || '',
+        // Заявка заказчика 2026-10-16: можно переименовать брокера на
+        // отображении (компания/сервер/номер), не переключаясь на другой
+        // реальный счёт — поэтому для ЭТИХ полей сохранённое в БД (admin
+        // правит через /api/admin/branding) главнее, чем то, что реально
+        // прислал мост.
+        login: stored?.account_number || acc.login || '',
         holder: stored?.holder || acc.name || '',
         company: stored?.company || 'ООО «Альфа-Форекс»',
-        server: acc.server || stored?.server || '',
+        server: stored?.server || acc.server || '',
         accessServer: stored?.access_server || '',
         currency: acc.currency || stored?.currency || 'RUB',
         leverage: acc.leverage,

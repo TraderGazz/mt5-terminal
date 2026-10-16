@@ -85,6 +85,22 @@ export const updateAdminBalance = (
 export const resetAdminBalance = () =>
   api<{ account: ApiAdminAccount }>('/admin/balance', { method: 'DELETE' }).then((r) => r.account);
 
+// ---------- Брендинг (название/сервер/номер счёта на отображении) ----------
+
+export interface ApiBranding {
+  account_number: string;
+  holder: string;
+  company: string;
+  server: string;
+  access_server: string;
+}
+
+export const getBranding = () =>
+  api<{ branding: ApiBranding }>('/admin/branding').then((r) => r.branding);
+
+export const updateBranding = (body: Partial<ApiBranding>) =>
+  api<{ branding: ApiBranding }>('/admin/branding', { method: 'PATCH', body }).then((r) => r.branding);
+
 // ---------- Sync settings (автообмен) ----------
 
 export interface ApiSyncSettings {

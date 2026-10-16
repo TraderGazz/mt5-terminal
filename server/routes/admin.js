@@ -12,6 +12,40 @@ const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).cat
 // All admin endpoints require admin role.
 router.use(authRequired, requireRole('admin'), requireDb);
 
+// ---------- Брендинг (заявка заказчика 2026-10-16) ----------
+// Название компании/сервера/номер счёта, которые видит заказчик на сайте —
+// чисто отображение, читается в account.js с приоритетом над тем, что
+// прислал реальный мост (см. комментарий там). Переключение на ДРУГОЙ
+// реальный счёт брокера (сам логин/пароль в MT5) сюда не входит — это
+// отдельная ручная операция на сервере (вход в EA-терминал через VNC),
+// автоматизировать кнопкой на сайте нельзя.
+router.get('/branding', wrap(async (req, res) => {
+  const { rows } = await query(
+    'SELECT account_number, holder, company, server, access_server FROM accounts ORDER BY id LIMIT 1'
+  );
+  res.json({ branding: rows[0] || { account_number: '', holder: '', company: '', server: '', access_server: '' } });
+}));
+
+router.patch('/branding', wrap(async (req, res) => {
+  const fields = ['account_number', 'holder', 'company', 'server', 'access_server'];
+  const updates = [];
+  const params = [];
+  for (const f of fields) {
+    if (req.body?.[f] !== undefined) {
+      params.push(String(req.body[f]));
+      updates.push(`${f} = $${params.length}`);
+    }
+  }
+  if (!updates.length) return res.status(400).json({ error: 'Нет полей для изменения' });
+  const { rows } = await query(
+    `UPDATE accounts SET ${updates.join(', ')}, updated_at = now()
+     WHERE id = (SELECT id FROM accounts ORDER BY id LIMIT 1)
+     RETURNING account_number, holder, company, server, access_server`,
+    params,
+  );
+  res.json({ branding: rows[0] });
+}));
+
 // ---------- Users (roles: admin / trader / viewer) ----------
 
 const ROLES = ['admin', 'trader', 'viewer'];

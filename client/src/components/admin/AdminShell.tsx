@@ -6,6 +6,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowLeftRight,
+  Building2,
   FileDown,
   Import,
   ListChecks,
@@ -19,7 +20,7 @@ import { useState, type ReactNode } from 'react';
 import { BrandGlyph } from './bits';
 import { getAuthUser } from '@/api/auth';
 
-export type AdminSectionId = 'users' | 'trades' | 'sessions' | 'imports' | 'balance' | 'sync' | 'reports';
+export type AdminSectionId = 'users' | 'trades' | 'sessions' | 'imports' | 'balance' | 'sync' | 'reports' | 'branding';
 
 export const ADMIN_SECTIONS: {
   id: AdminSectionId;
@@ -33,6 +34,7 @@ export const ADMIN_SECTIONS: {
   { id: 'balance', label: 'Баланс', icon: Wallet },
   { id: 'sync', label: 'Автообмен', icon: ArrowLeftRight },
   { id: 'reports', label: 'Отчёты', icon: FileDown },
+  { id: 'branding', label: 'Брендинг', icon: Building2 },
 ];
 
 function NavItems({
