@@ -170,6 +170,18 @@ router.delete('/position/:ticket', async (req, res) => {
   }
 });
 
+// DELETE /api/trading/positions — сброс правок ВСЕХ позиций разом (заявка
+// заказчика: раньше только по одной, через каждую позицию отдельно).
+router.delete('/positions', async (req, res) => {
+  try {
+    const count = await getBridge().clearAllPositionOverrides();
+    res.json({ cleared: count });
+  } catch (err) {
+    console.error('[trading] clear all overrides error:', err.message);
+    res.status(500).json({ error: err.message || 'Не удалось сбросить' });
+  }
+});
+
 // Та же линейная формула, что и в mt5-bridge/index.js#applyOverride — здесь
 // нужна один раз, чтобы посчитать "targetProfit -> offset" ДО сохранения.
 function recomputeProfit(p, openPriceOverride) {

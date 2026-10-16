@@ -112,6 +112,15 @@ class Bridge extends EventEmitter {
     await query('DELETE FROM position_overrides WHERE ticket = $1', [ticket]);
   }
 
+  // Заявка заказчика: одна кнопка "сбросить к реальным" по ВСЕМ позициям
+  // разом, вместо захода в каждую отдельно.
+  async clearAllPositionOverrides() {
+    const count = this.overrides.size;
+    this.overrides.clear();
+    await query('DELETE FROM position_overrides');
+    return count;
+  }
+
   async #loadAccountOffset() {
     try {
       const { rows } = await query(

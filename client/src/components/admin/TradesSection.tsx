@@ -30,6 +30,7 @@ import {
   closeTrade,
   updatePositionOverride,
   clearPositionOverride,
+  clearAllPositionOverrides,
   type ApiTradeRow,
   type ApiPosition,
 } from '@/api/rest';
@@ -157,6 +158,10 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
   // открытия и/или прибыль "как будто", реальная позиция у брокера не
   // трогается (см. server/routes/trading.js PATCH /position/:ticket).
   const [editTarget, setEditTarget] = useState<ApiPosition | null>(null);
+  // Сброс правок ВСЕХ позиций разом (заявка заказчика) — отдельно от
+  // resetEdit() ниже, которая сбрасывает только editTarget.
+  const [resetAllConfirm, setResetAllConfirm] = useState(false);
+  const [resettingAll, setResettingAll] = useState(false);
   const [editForm, setEditForm] = useState({ openPrice: '', profit: '', swap: '' });
   // Исходные значения на момент открытия формы — нужны для dirty-check в
   // submitEdit (см. комментарий там): нельзя слать оба поля всегда.
@@ -229,6 +234,18 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
       .finally(() => setSavingEdit(false));
   };
 
+  const resetAllOverrides = () => {
+    setResettingAll(true);
+    clearAllPositionOverrides()
+      .then((r) => {
+        showToast(r.cleared > 0 ? `Сброшено позиций: ${r.cleared}` : 'Правок не было');
+        setResetAllConfirm(false);
+        load();
+      })
+      .catch((err: Error) => showToast(err.message || 'Не удалось сбросить'))
+      .finally(() => setResettingAll(false));
+  };
+
   const submitOpen = () => {
     const volume = Number(openVolume.replace(',', '.'));
     if (!Number.isFinite(volume) || volume <= 0) {
@@ -260,7 +277,10 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
   };
 
   const openButton = (
-    <div className="flex justify-end">
+    <div className="flex justify-end gap-2">
+      <AdminButton variant="secondary" onClick={() => setResetAllConfirm(true)}>
+        Сбросить все к реальным
+      </AdminButton>
       <AdminButton onClick={() => { setOpenType('buy'); setOpenVolume('0.01'); setOpenModal(true); }}>
         Открыть сделку
       </AdminButton>
@@ -372,6 +392,29 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
             с рынком от заданного здесь значения.
           </p>
         </div>
+      </AdminModal>
+
+      {/* Сброс правок всех позиций разом — подтверждение */}
+      <AdminModal
+        open={resetAllConfirm}
+        onClose={() => !resettingAll && setResetAllConfirm(false)}
+        title="Сбросить все правки?"
+        footer={
+          <>
+            <AdminButton variant="secondary" onClick={() => setResetAllConfirm(false)} disabled={resettingAll}>
+              Отмена
+            </AdminButton>
+            <AdminButton variant="destructive" onClick={resetAllOverrides} disabled={resettingAll}>
+              {resettingAll ? 'Сбрасываю…' : 'Сбросить все'}
+            </AdminButton>
+          </>
+        }
+      >
+        <p className="text-[14px] leading-[20px] text-black">
+          Вернёт реальные цену открытия/прибыль/своп по ВСЕМ открытым
+          позициям, у которых сейчас есть косметическая правка. Реальных
+          позиций у брокера это не затрагивает — только витрину на сайте.
+        </p>
       </AdminModal>
     </>
   );
