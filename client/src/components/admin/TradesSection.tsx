@@ -459,7 +459,7 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
                   <th className="px-4 py-3 text-right font-medium">Прибыль</th>
                   <th className="px-4 py-3 text-right font-medium">Своп</th>
                   <th className="px-4 py-3 font-medium">Открыта</th>
-                  <th className="px-4 py-3 text-right font-medium">Действия</th>
+                  <th className="sticky right-0 bg-white px-4 py-3 text-right font-medium shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.12)]">Действия</th>
                 </tr>
               </thead>
               <tbody>
@@ -480,7 +480,7 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
                     <td className="tnum whitespace-nowrap px-4 py-3 text-[13px] text-text-secondary">
                       {p.openTime ? formatDateTime(new Date(p.openTime).getTime()) : '—'}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="sticky right-0 bg-white px-4 py-3 text-right shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.12)]">
                       <div className="flex justify-end gap-1">
                         <AdminButton variant="text" onClick={() => openEdit(p)}>
                           Изменить
@@ -934,7 +934,7 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
                   <th className="px-4 py-3 text-right font-medium">Своп</th>
                   <th className="px-4 py-3 text-right font-medium">Комиссия</th>
                   <th className="px-4 py-3 font-medium">Закрыта</th>
-                  <th className="px-4 py-3 text-right font-medium">Действия</th>
+                  <th className="sticky right-0 bg-white px-4 py-3 text-right font-medium shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.12)]">Действия</th>
                 </tr>
               </thead>
               <tbody>
@@ -957,7 +957,7 @@ function HistoryEditor({ showToast }: { showToast: (msg: string) => void }) {
                     <td className="tnum whitespace-nowrap px-4 py-3 text-[13px] text-text-secondary">
                       {r.close_time ? formatDateTime(new Date(r.close_time).getTime()) : '—'}
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="sticky right-0 bg-white px-4 py-3 text-right shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.12)]">
                       {isLedgerRow(r) ? (
                         <span className="text-[12px] text-text-secondary">выписка</span>
                       ) : (

@@ -7,8 +7,43 @@
 import { Router } from 'express';
 import { authRequired, requireRole } from './auth.js';
 import { getBridge } from '../services/mt5-bridge/index.js';
+import { query, isDbReady } from '../db.js';
 
 const router = Router();
+
+// Закрыли позицию, у которой была косметическая "правка витрины" (заявка
+// заказчика 2026-10-16: закрытая отредактированная позиция должна и в
+// Истории показывать отредактированную — плюсовую — прибыль, а не настоящую
+// минусовую от брокера). closeTrade() не возвращает итоговую строку
+// истории сразу — её туда кладёт фоновая синхронизация (каждые ~30с),
+// поэтому ждём её результат и патчим один раз, как только строка появится
+// (is_edited=TRUE защищает её от того, чтобы синк потом откатил обратно —
+// тот же механизм, что у обычной ручной правки через PATCH /api/trades/:id).
+async function carryOverrideToHistory(ticket, targetProfit, targetSwap) {
+  if (!isDbReady()) return;
+  const ATTEMPTS = 20;
+  const DELAY_MS = 3000;
+  for (let i = 0; i < ATTEMPTS; i++) {
+    await new Promise((resolve) => setTimeout(resolve, DELAY_MS));
+    try {
+      const { rows } = await query('SELECT id, is_edited FROM trades WHERE ticket = $1', [ticket]);
+      if (!rows[0]) continue; // синк ещё не подтянул закрытую сделку — ждём дальше
+      if (!rows[0].is_edited) {
+        await query('UPDATE trades SET profit = $1, swap = $2, is_edited = TRUE WHERE id = $3', [
+          targetProfit,
+          targetSwap,
+          rows[0].id,
+        ]);
+        console.log(`[trading] правка позиции #${ticket} перенесена в историю после закрытия`);
+      }
+      return;
+    } catch (err) {
+      console.error('[trading] carryOverrideToHistory error:', err.message);
+      return;
+    }
+  }
+  console.warn(`[trading] #${ticket}: не дождались синхронизации истории для переноса правки (${(ATTEMPTS * DELAY_MS) / 1000}с)`);
+}
 
 router.use(authRequired, requireRole('admin'));
 
@@ -50,8 +85,28 @@ router.post('/close', async (req, res) => {
   const volume = req.body?.volume != null ? Number(req.body.volume) : undefined;
   const bridge = getBridge();
   try {
+    // Снимок отображаемой (с учётом правки) прибыли ДО закрытия — именно
+    // её перенесём в историю, если правка была.
+    const override = bridge.getPositionOverride(ticket);
+    const hasOverride = override.openPriceOverride != null || override.profitOffset != null || override.swapOffset != null;
+    let targetProfit = null;
+    let targetSwap = null;
+    if (hasOverride) {
+      const pos = (await bridge.positions()).find((p) => p.id === ticket);
+      if (pos) {
+        targetProfit = pos.profit;
+        targetSwap = pos.swap;
+      }
+    }
+
     const result = await bridge.closeTrade({ ticket, volume });
     console.log(`[trading] ${req.user.login} закрыл позицию #${ticket}`);
+
+    if (hasOverride && targetProfit != null) {
+      await bridge.clearPositionOverride(ticket); // позиция больше не открыта — витрина ей не нужна
+      carryOverrideToHistory(ticket, targetProfit, targetSwap).catch(() => {});
+    }
+
     res.json(result);
   } catch (err) {
     console.error('[trading] close error:', err.message);
