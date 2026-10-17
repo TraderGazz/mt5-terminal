@@ -10,7 +10,7 @@ import { AdminButton, AdminCard, AdminInput } from './bits';
 import { getBranding, updateBranding, type ApiBranding } from '@/api/admin';
 
 const EMPTY: ApiBranding = {
-  account_number: '',
+  display_login: '',
   holder: '',
   company: '',
   server: '',
@@ -55,7 +55,7 @@ export default function BrandingSection({ showToast }: { showToast: (msg: string
         <AdminInput label="Имя держателя счёта" value={form.holder} onChange={set('holder')} />
         <AdminInput label="Название сервера" value={form.server} onChange={set('server')} />
         <AdminInput label="Сервер подключения (в Навигаторе)" value={form.access_server} onChange={set('access_server')} />
-        <AdminInput label="Номер счёта" value={form.account_number} onChange={set('account_number')} />
+        <AdminInput label="Номер счёта" value={form.display_login} onChange={set('display_login')} />
         {/* Заказчик: "Телефон и почту не нужно указывать [на сайте], но в
             админке сделайте возможность" — эти два поля нигде не
             отображаются на мобильной/ПК версии, только хранятся здесь. */}

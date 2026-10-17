@@ -19,15 +19,34 @@ router.use(authRequired, requireRole('admin'), requireDb);
 // реальный счёт брокера (сам логин/пароль в MT5) сюда не входит — это
 // отдельная ручная операция на сервере (вход в EA-терминал через VNC),
 // автоматизировать кнопкой на сайте нельзя.
+// ВАЖНО: ищем/правим строго строку с account_number = РЕАЛЬНЫЙ логин
+// моста, не "первую по id" — account_number это ключ, по которому
+// mt5-sync.js (ON CONFLICT) узнаёт "тот же это счёт или новый". Баг-репорт
+// 2026-10-17: раньше редактируемым полем был сам account_number — стоило
+// его поменять, синк переставал узнавать реальный счёт и заводил ВТОРУЮ
+// строку с пустым брендингом, которую затем ORDER BY id LIMIT 1 иногда и
+// подсовывал сайту вместо отредактированной. display_login — отдельная,
+// чисто витринная колонка, account_number теперь нигде админкой не трогается.
 router.get('/branding', wrap(async (req, res) => {
-  const { rows } = await query(
-    'SELECT account_number, holder, company, server, access_server, email, phone FROM accounts ORDER BY id LIMIT 1'
-  );
-  res.json({ branding: rows[0] || { account_number: '', holder: '', company: '', server: '', access_server: '', email: '', phone: '' } });
+  const acc = await getBridge().account().catch(() => null);
+  const realLogin = acc?.login ? String(acc.login) : null;
+  const { rows } = realLogin
+    ? await query(
+        'SELECT display_login, holder, company, server, access_server, email, phone FROM accounts WHERE account_number = $1',
+        [realLogin],
+      )
+    : { rows: [] };
+  res.json({
+    branding: rows[0] || { display_login: '', holder: '', company: '', server: '', access_server: '', email: '', phone: '' },
+  });
 }));
 
 router.patch('/branding', wrap(async (req, res) => {
-  const fields = ['account_number', 'holder', 'company', 'server', 'access_server', 'email', 'phone'];
+  const acc = await getBridge().account().catch(() => null);
+  const realLogin = acc?.login ? String(acc.login) : null;
+  if (!realLogin) return res.status(502).json({ error: 'Мост недоступен — не удалось определить реальный счёт' });
+
+  const fields = ['display_login', 'holder', 'company', 'server', 'access_server', 'email', 'phone'];
   const updates = [];
   const params = [];
   for (const f of fields) {
@@ -37,12 +56,14 @@ router.patch('/branding', wrap(async (req, res) => {
     }
   }
   if (!updates.length) return res.status(400).json({ error: 'Нет полей для изменения' });
+  params.push(realLogin);
   const { rows } = await query(
     `UPDATE accounts SET ${updates.join(', ')}, updated_at = now()
-     WHERE id = (SELECT id FROM accounts ORDER BY id LIMIT 1)
-     RETURNING account_number, holder, company, server, access_server, email, phone`,
+     WHERE account_number = $${params.length}
+     RETURNING display_login, holder, company, server, access_server, email, phone`,
     params,
   );
+  if (!rows[0]) return res.status(404).json({ error: 'Строка счёта не найдена (синхронизация ещё не создала её?)' });
   res.json({ branding: rows[0] });
 }));
 

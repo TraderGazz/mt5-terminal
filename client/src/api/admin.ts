@@ -88,7 +88,9 @@ export const resetAdminBalance = () =>
 // ---------- Брендинг (название/сервер/номер счёта на отображении) ----------
 
 export interface ApiBranding {
-  account_number: string;
+  // Отображаемый номер счёта — НЕ реальный account_number (тот не
+  // редактируется отсюда, это ключ фоновой синхронизации с мостом).
+  display_login: string;
   holder: string;
   company: string;
   server: string;

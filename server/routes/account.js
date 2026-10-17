@@ -15,8 +15,15 @@ router.get('/', authRequired, async (req, res) => {
     let stored = null;
     if (isDbReady()) {
       try {
+        // ВАЖНО: ищем строго по account_number = реальный логин моста, а не
+        // "ORDER BY id LIMIT 1" — mt5-sync.js тоже ключуется по account_number
+        // (ON CONFLICT), и если строк несколько (см. баг-репорт 2026-10-17:
+        // смена display_login раньше велась через сам account_number,
+        // синк не узнавал счёт и плодил новую строку с пустым брендингом),
+        // упавшая "первая по id" могла оказаться вообще не той.
         const { rows } = await query(
-          'SELECT account_number, holder, company, server, access_server, currency FROM accounts ORDER BY id LIMIT 1'
+          'SELECT display_login, holder, company, server, access_server, currency FROM accounts WHERE account_number = $1',
+          [String(acc.login || '')],
         );
         stored = rows[0] || null;
       } catch { /* БД не обязательна */ }
@@ -28,8 +35,10 @@ router.get('/', authRequired, async (req, res) => {
         // отображении (компания/сервер/номер), не переключаясь на другой
         // реальный счёт — поэтому для ЭТИХ полей сохранённое в БД (admin
         // правит через /api/admin/branding) главнее, чем то, что реально
-        // прислал мост.
-        login: stored?.account_number || acc.login || '',
+        // прислал мост. display_login — ОТДЕЛЬНАЯ колонка от account_number:
+        // последний остаётся настоящим и используется синхронизацией как
+        // ключ, его трогать нельзя.
+        login: stored?.display_login || acc.login || '',
         holder: stored?.holder || acc.name || '',
         company: stored?.company || 'ООО «Альфа-Форекс»',
         server: stored?.server || acc.server || '',
@@ -59,8 +68,12 @@ router.get('/public-branding', async (req, res) => {
   let stored = null;
   if (isDbReady()) {
     try {
+      // Нет токена — не можем спросить мост "какой реальный логин сейчас",
+      // поэтому берём строку, где явно заполнен display_login (её и правит
+      // admin через Брендинг), а не просто первую по id (см. баг-репорт
+      // 2026-10-17 про дублирующиеся строки от синхронизации).
       const { rows } = await query(
-        'SELECT account_number, company, server, access_server FROM accounts ORDER BY id LIMIT 1'
+        "SELECT display_login, company, server, access_server FROM accounts ORDER BY (display_login <> '') DESC, id ASC LIMIT 1"
       );
       stored = rows[0] || null;
     } catch { /* БД не обязательна */ }
@@ -69,7 +82,7 @@ router.get('/public-branding', async (req, res) => {
     company: stored?.company || 'ООО «Альфа-Форекс»',
     server: stored?.server || 'AlfaForexRU-Real',
     accessServer: stored?.access_server || 'RFD Access Server 1',
-    accountNumber: stored?.account_number || '',
+    accountNumber: stored?.display_login || '',
   });
 });
 

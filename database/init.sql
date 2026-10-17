@@ -145,6 +145,9 @@ CREATE TABLE IF NOT EXISTS accounts (
     company         VARCHAR(255)  DEFAULT '',
     server          VARCHAR(64)   DEFAULT '',
     access_server   VARCHAR(64)   DEFAULT '',
+    -- Отображаемый номер счёта (заявка "Брендинг") — НЕ account_number:
+    -- тот используется синхронизацией как ключ реального счёта.
+    display_login   VARCHAR(32)   DEFAULT '',
     email           VARCHAR(255)  DEFAULT '',
     phone           VARCHAR(64)   DEFAULT '',
     currency        VARCHAR(8)    DEFAULT 'RUB',
