@@ -15,6 +15,11 @@ import SettingsPage from '@/pages/Settings';
 import SettingsNewsPage from '@/pages/SettingsNews';
 import SettingsTradaysPage from '@/pages/SettingsTradays';
 import SettingsJournalPage from '@/pages/SettingsJournal';
+import SettingsMailPage from '@/pages/SettingsMail';
+import SettingsChatPage from '@/pages/SettingsChat';
+import SettingsCommunityPage from '@/pages/SettingsCommunity';
+import SettingsMql5Page from '@/pages/SettingsMql5';
+import SettingsOtpPage from '@/pages/SettingsOtp';
 import LoginPage from '@/pages/Login';
 import AccountPage from '@/pages/Account';
 
@@ -56,6 +61,11 @@ export default function App() {
           <Route path="settings/news" element={<SettingsNewsPage />} />
           <Route path="settings/tradays" element={<SettingsTradaysPage />} />
           <Route path="settings/journal" element={<SettingsJournalPage />} />
+          <Route path="settings/mail" element={<SettingsMailPage />} />
+          <Route path="settings/chat" element={<SettingsChatPage />} />
+          <Route path="settings/community" element={<SettingsCommunityPage />} />
+          <Route path="settings/mql5" element={<SettingsMql5Page />} />
+          <Route path="settings/otp" element={<SettingsOtpPage />} />
           {/* Chrome-less (свой NavBar с Отмена/Сохранить, без TabBar) — маршрут
               существовал только в коде страницы, но не был подключён сюда,
               из-за чего переход падал в wildcard-редирект на "/" (Котировки). */}

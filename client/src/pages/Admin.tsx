@@ -20,6 +20,7 @@ import BalanceSection from '@/components/admin/BalanceSection';
 import SyncSection from '@/components/admin/SyncSection';
 import ReportsSection from '@/components/admin/ReportsSection';
 import BrandingSection from '@/components/admin/BrandingSection';
+import MailSection from '@/components/admin/MailSection';
 
 const SECTION_TITLES: Record<AdminSectionId, string> = {
   users: 'Пользователи',
@@ -30,6 +31,7 @@ const SECTION_TITLES: Record<AdminSectionId, string> = {
   sync: 'Настройки автообмена',
   reports: 'Создание торгового отчёта',
   branding: 'Брендинг',
+  mail: 'Почта',
 };
 
 // В мок-режиме (без бэкенда) нет реального JWT — оставляем прежний локальный
@@ -105,6 +107,7 @@ export default function Admin() {
           {section === 'sync' && <SyncSection showToast={setToast} />}
           {section === 'reports' && <ReportsSection showToast={setToast} />}
           {section === 'branding' && <BrandingSection showToast={setToast} />}
+          {section === 'mail' && <MailSection showToast={setToast} />}
         </motion.div>
       </AnimatePresence>
       <Toast message={toast} onClose={() => setToast(null)} />

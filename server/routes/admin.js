@@ -312,6 +312,34 @@ router.patch('/app-settings', wrap(async (req, res) => {
   res.json({ settings: rows[0] });
 }));
 
+// ---------- Почта (заявка заказчика 2026-10-17: «Настройки → Почта») ----------
+// Системные сообщения, которые пишет админ — клиент видит их в /api/mail.
+
+router.get('/mail', wrap(async (req, res) => {
+  const { rows } = await query(
+    'SELECT id, subject, body, created_at FROM mail_messages ORDER BY created_at DESC LIMIT 200',
+  );
+  res.json({ items: rows });
+}));
+
+router.post('/mail', wrap(async (req, res) => {
+  const { subject, body = '' } = req.body || {};
+  if (!subject || !String(subject).trim()) {
+    return res.status(400).json({ error: 'Тема письма обязательна' });
+  }
+  const { rows } = await query(
+    'INSERT INTO mail_messages (subject, body) VALUES ($1, $2) RETURNING id, subject, body, created_at',
+    [String(subject).trim(), String(body)],
+  );
+  res.status(201).json({ item: rows[0] });
+}));
+
+router.delete('/mail/:id', wrap(async (req, res) => {
+  const { rowCount } = await query('DELETE FROM mail_messages WHERE id = $1', [req.params.id]);
+  if (!rowCount) return res.status(404).json({ error: 'Сообщение не найдено' });
+  res.json({ deleted: true });
+}));
+
 // ---------- Report export (HTML / CSV) ----------
 
 function toCsv(rows) {

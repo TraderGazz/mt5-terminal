@@ -16,6 +16,7 @@ import syncRouter from './routes/sync.js';
 import adminRouter from './routes/admin.js';
 import tradingRouter from './routes/trading.js';
 import newsRouter from './routes/news.js';
+import mailRouter from './routes/mail.js';
 import { startSyncScheduler } from './services/sync-service.js';
 import { getBridge } from './services/mt5-bridge/index.js';
 import { attachWsHub } from './services/ws-hub.js';
@@ -53,6 +54,7 @@ app.use('/api/sync', syncRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/trading', tradingRouter);
 app.use('/api/news', newsRouter);
+app.use('/api/mail', mailRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });

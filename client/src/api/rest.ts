@@ -275,3 +275,12 @@ export interface ApiNewsItem {
 }
 
 export const getNews = () => api<{ items: ApiNewsItem[]; stale?: boolean }>('/news');
+
+export interface ApiMailMessage {
+  id: number;
+  subject: string;
+  body: string;
+  created_at: string;
+}
+
+export const getMail = () => api<{ items: ApiMailMessage[] }>('/mail');

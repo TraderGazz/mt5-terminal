@@ -10,6 +10,7 @@ import {
   FileDown,
   Import,
   ListChecks,
+  Mail,
   Menu,
   ShieldAlert,
   Users,
@@ -20,7 +21,7 @@ import { useState, type ReactNode } from 'react';
 import { BrandGlyph } from './bits';
 import { getAuthUser } from '@/api/auth';
 
-export type AdminSectionId = 'users' | 'trades' | 'sessions' | 'imports' | 'balance' | 'sync' | 'reports' | 'branding';
+export type AdminSectionId = 'users' | 'trades' | 'sessions' | 'imports' | 'balance' | 'sync' | 'reports' | 'branding' | 'mail';
 
 export const ADMIN_SECTIONS: {
   id: AdminSectionId;
@@ -35,6 +36,7 @@ export const ADMIN_SECTIONS: {
   { id: 'sync', label: 'Автообмен', icon: ArrowLeftRight },
   { id: 'reports', label: 'Отчёты', icon: FileDown },
   { id: 'branding', label: 'Брендинг', icon: Building2 },
+  { id: 'mail', label: 'Почта', icon: Mail },
 ];
 
 function NavItems({

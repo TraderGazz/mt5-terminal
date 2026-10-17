@@ -252,6 +252,18 @@ CREATE TABLE IF NOT EXISTS account_overrides (
 
 INSERT INTO account_overrides (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 
+-- ============================================================================
+-- mail_messages — «Настройки → Почта»: системные сообщения, пишет админ.
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS mail_messages (
+    id         SERIAL PRIMARY KEY,
+    subject    VARCHAR(255) NOT NULL,
+    body       TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_mail_messages_created_at ON mail_messages (created_at DESC);
+
 COMMIT;
 
 -- Первый admin создаётся сервером при старте из env ADMIN_LOGIN / ADMIN_PASSWORD

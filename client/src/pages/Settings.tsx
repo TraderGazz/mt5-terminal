@@ -107,6 +107,16 @@ export default function SettingsPage() {
       navigate('/settings/tradays');
     } else if (row.key === 'journal') {
       navigate('/settings/journal');
+    } else if (row.key === 'mail') {
+      navigate('/settings/mail');
+    } else if (row.key === 'chat') {
+      navigate('/settings/chat');
+    } else if (row.key === 'community') {
+      navigate('/settings/community');
+    } else if (row.key === 'mql5') {
+      navigate('/settings/mql5');
+    } else if (row.key === 'otp') {
+      navigate('/settings/otp');
     } else {
       setStub(row);
     }

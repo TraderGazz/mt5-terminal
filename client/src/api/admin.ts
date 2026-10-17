@@ -194,6 +194,23 @@ export interface ApiSession {
   name: string;
 }
 
+// ---------- Почта (системные сообщения, «Настройки → Почта») ----------
+
+export interface ApiMailMessage {
+  id: number;
+  subject: string;
+  body: string;
+  created_at: string;
+}
+
+export const getAdminMail = () => api<{ items: ApiMailMessage[] }>('/admin/mail').then((r) => r.items);
+
+export const createMailMessage = (body: { subject: string; body: string }) =>
+  api<{ item: ApiMailMessage }>('/admin/mail', { method: 'POST', body }).then((r) => r.item);
+
+export const deleteMailMessage = (id: number) =>
+  api<{ deleted: true }>(`/admin/mail/${id}`, { method: 'DELETE' });
+
 export const getSessions = () => api<{ sessions: ApiSession[] }>('/admin/sessions').then((r) => r.sessions);
 
 export const revokeSession = (id: string) =>
