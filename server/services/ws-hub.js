@@ -17,6 +17,7 @@
 import { WebSocketServer } from 'ws';
 import jwt from 'jsonwebtoken';
 import { getBridge } from './mt5-bridge/index.js';
+import { buildAccountView } from './account-view.js';
 
 const JWT_SECRET = () => process.env.JWT_SECRET || 'dev-insecure-secret';
 const SNAPSHOT_THROTTLE_MS = 1500;
@@ -100,7 +101,10 @@ export function attachWsHub(server) {
 
   async function pushAccount(target) {
     try {
-      const acc = await bridge.account();
+      // buildAccountView() (не сырой bridge.account()!) — иначе этот пуш
+      // через пару секунд затирал правильный Брендинг обратно на реальные/
+      // моковые значения (баг-репорт 2026-10-17).
+      const acc = await buildAccountView(bridge);
       if (target) send(target, { channel: 'account', data: acc });
       else broadcast('account', acc);
     } catch { /* мост недоступен — молчим, статус отдельно */ }

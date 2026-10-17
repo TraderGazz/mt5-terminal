@@ -2,62 +2,19 @@ import { Router } from 'express';
 import { authRequired } from './auth.js';
 import { getBridge } from '../services/mt5-bridge/index.js';
 import { query, isDbReady } from '../db.js';
+import { buildAccountView } from '../services/account-view.js';
 
 const router = Router();
 
 // GET /api/account — снимок счёта для страниц «Торговля» / «Настройки».
-// Источник: MT5-мост (live). Реквизиты (ФИО/компания) — из БД, если есть.
+// Источник: MT5-мост (live) + Брендинг из БД (см. account-view.js — та же
+// функция использует WS-пуш 'account' в ws-hub.js, чтобы оба пути слияния
+// не расходились).
 router.get('/', authRequired, async (req, res) => {
   const bridge = getBridge();
   try {
-    const acc = await bridge.account();
-
-    let stored = null;
-    if (isDbReady()) {
-      try {
-        // ВАЖНО: ищем строго по account_number = реальный логин моста, а не
-        // "ORDER BY id LIMIT 1" — mt5-sync.js тоже ключуется по account_number
-        // (ON CONFLICT), и если строк несколько (см. баг-репорт 2026-10-17:
-        // смена display_login раньше велась через сам account_number,
-        // синк не узнавал счёт и плодил новую строку с пустым брендингом),
-        // упавшая "первая по id" могла оказаться вообще не той.
-        const loginKey = String(acc.login || '');
-        const { rows } = await query(
-          'SELECT display_login, holder, company, server, access_server, currency FROM accounts WHERE account_number = $1',
-          [loginKey],
-        );
-        stored = rows[0] || null;
-        // ВРЕМЕННЫЙ диагностический лог (баг-репорт 2026-10-17: Настройки
-        // не подхватывают Брендинг) — убрать после разбора.
-        console.log('[account] loginKey=%j matched=%s stored=%j', loginKey, !!stored, stored);
-      } catch { /* БД не обязательна */ }
-    }
-
-    res.json({
-      account: {
-        // Заявка заказчика 2026-10-16: можно переименовать брокера на
-        // отображении (компания/сервер/номер), не переключаясь на другой
-        // реальный счёт — поэтому для ЭТИХ полей сохранённое в БД (admin
-        // правит через /api/admin/branding) главнее, чем то, что реально
-        // прислал мост. display_login — ОТДЕЛЬНАЯ колонка от account_number:
-        // последний остаётся настоящим и используется синхронизацией как
-        // ключ, его трогать нельзя.
-        login: stored?.display_login || acc.login || '',
-        holder: stored?.holder || acc.name || '',
-        company: stored?.company || 'ООО «Альфа-Форекс»',
-        server: stored?.server || acc.server || '',
-        accessServer: stored?.access_server || '',
-        currency: acc.currency || stored?.currency || 'RUB',
-        leverage: acc.leverage,
-        balance: acc.balance,
-        equity: acc.equity,
-        margin: acc.margin,
-        freeMargin: acc.freeMargin,
-        marginLevel: acc.marginLevel,
-        floatingProfit: acc.floatingProfit,
-      },
-      source: bridge.status(),
-    });
+    const account = await buildAccountView(bridge);
+    res.json({ account, source: bridge.status() });
   } catch (err) {
     console.error('[account] error:', err.message);
     res.status(502).json({ error: 'MT5-мост недоступен', detail: err.message });
