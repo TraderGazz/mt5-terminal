@@ -21,11 +21,15 @@ router.get('/', authRequired, async (req, res) => {
         // смена display_login раньше велась через сам account_number,
         // синк не узнавал счёт и плодил новую строку с пустым брендингом),
         // упавшая "первая по id" могла оказаться вообще не той.
+        const loginKey = String(acc.login || '');
         const { rows } = await query(
           'SELECT display_login, holder, company, server, access_server, currency FROM accounts WHERE account_number = $1',
-          [String(acc.login || '')],
+          [loginKey],
         );
         stored = rows[0] || null;
+        // ВРЕМЕННЫЙ диагностический лог (баг-репорт 2026-10-17: Настройки
+        // не подхватывают Брендинг) — убрать после разбора.
+        console.log('[account] loginKey=%j matched=%s stored=%j', loginKey, !!stored, stored);
       } catch { /* БД не обязательна */ }
     }
 
