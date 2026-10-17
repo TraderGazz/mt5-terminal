@@ -93,6 +93,10 @@ export interface ApiBranding {
   company: string;
   server: string;
   access_server: string;
+  // Не показываются на самом сайте (заявка заказчика: "не нужно указывать,
+  // но в админке сделайте возможность") — хранятся на будущее.
+  email: string;
+  phone: string;
 }
 
 export const getBranding = () =>

@@ -19,6 +19,7 @@ import ImportsSection from '@/components/admin/ImportsSection';
 import BalanceSection from '@/components/admin/BalanceSection';
 import SyncSection from '@/components/admin/SyncSection';
 import ReportsSection from '@/components/admin/ReportsSection';
+import BrandingSection from '@/components/admin/BrandingSection';
 
 const SECTION_TITLES: Record<AdminSectionId, string> = {
   users: 'Пользователи',
@@ -103,7 +104,7 @@ export default function Admin() {
           )}
           {section === 'sync' && <SyncSection showToast={setToast} />}
           {section === 'reports' && <ReportsSection showToast={setToast} />}
-          {/* 'branding' временно скрыт — заказчик ещё не подтвердил, см. AdminShell.tsx */}
+          {section === 'branding' && <BrandingSection showToast={setToast} />}
         </motion.div>
       </AnimatePresence>
       <Toast message={toast} onClose={() => setToast(null)} />

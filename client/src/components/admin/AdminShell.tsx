@@ -6,6 +6,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowLeftRight,
+  Building2,
   FileDown,
   Import,
   ListChecks,
@@ -33,8 +34,7 @@ export const ADMIN_SECTIONS: {
   { id: 'balance', label: 'Баланс', icon: Wallet },
   { id: 'sync', label: 'Автообмен', icon: ArrowLeftRight },
   { id: 'reports', label: 'Отчёты', icon: FileDown },
-  // 'branding' временно скрыт из навигации (заказчик ещё не подтвердил) —
-  // код/роуты остаются, просто не показываем пункт меню. См. BrandingSection.tsx.
+  { id: 'branding', label: 'Брендинг', icon: Building2 },
 ];
 
 function NavItems({

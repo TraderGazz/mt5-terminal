@@ -21,13 +21,13 @@ router.use(authRequired, requireRole('admin'), requireDb);
 // автоматизировать кнопкой на сайте нельзя.
 router.get('/branding', wrap(async (req, res) => {
   const { rows } = await query(
-    'SELECT account_number, holder, company, server, access_server FROM accounts ORDER BY id LIMIT 1'
+    'SELECT account_number, holder, company, server, access_server, email, phone FROM accounts ORDER BY id LIMIT 1'
   );
-  res.json({ branding: rows[0] || { account_number: '', holder: '', company: '', server: '', access_server: '' } });
+  res.json({ branding: rows[0] || { account_number: '', holder: '', company: '', server: '', access_server: '', email: '', phone: '' } });
 }));
 
 router.patch('/branding', wrap(async (req, res) => {
-  const fields = ['account_number', 'holder', 'company', 'server', 'access_server'];
+  const fields = ['account_number', 'holder', 'company', 'server', 'access_server', 'email', 'phone'];
   const updates = [];
   const params = [];
   for (const f of fields) {
@@ -40,7 +40,7 @@ router.patch('/branding', wrap(async (req, res) => {
   const { rows } = await query(
     `UPDATE accounts SET ${updates.join(', ')}, updated_at = now()
      WHERE id = (SELECT id FROM accounts ORDER BY id LIMIT 1)
-     RETURNING account_number, holder, company, server, access_server`,
+     RETURNING account_number, holder, company, server, access_server, email, phone`,
     params,
   );
   res.json({ branding: rows[0] });

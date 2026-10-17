@@ -145,6 +145,8 @@ CREATE TABLE IF NOT EXISTS accounts (
     company         VARCHAR(255)  DEFAULT '',
     server          VARCHAR(64)   DEFAULT '',
     access_server   VARCHAR(64)   DEFAULT '',
+    email           VARCHAR(255)  DEFAULT '',
+    phone           VARCHAR(64)   DEFAULT '',
     currency        VARCHAR(8)    DEFAULT 'RUB',
     balance         DECIMAL(15,2) DEFAULT 0,
     equity          DECIMAL(15,2) DEFAULT 0,

@@ -9,7 +9,15 @@ import { useEffect, useState } from 'react';
 import { AdminButton, AdminCard, AdminInput } from './bits';
 import { getBranding, updateBranding, type ApiBranding } from '@/api/admin';
 
-const EMPTY: ApiBranding = { account_number: '', holder: '', company: '', server: '', access_server: '' };
+const EMPTY: ApiBranding = {
+  account_number: '',
+  holder: '',
+  company: '',
+  server: '',
+  access_server: '',
+  email: '',
+  phone: '',
+};
 
 export default function BrandingSection({ showToast }: { showToast: (msg: string) => void }) {
   const [form, setForm] = useState<ApiBranding>(EMPTY);
@@ -43,16 +51,16 @@ export default function BrandingSection({ showToast }: { showToast: (msg: string
   return (
     <AdminCard title="Брендинг" className="max-w-[520px]">
       <div className="flex flex-col gap-3 p-5">
-        <p className="text-[13px] leading-[18px] text-text-secondary">
-          Эти поля влияют только на то, что видит заказчик на сайте (мобильная
-          версия и ПК) — название брокера, сервера и номер счёта. Реальный
-          торговый счёт/брокер, к которому подключён мост, это не меняет.
-        </p>
         <AdminInput label="Название компании" value={form.company} onChange={set('company')} />
         <AdminInput label="Имя держателя счёта" value={form.holder} onChange={set('holder')} />
         <AdminInput label="Название сервера" value={form.server} onChange={set('server')} />
         <AdminInput label="Сервер подключения (в Навигаторе)" value={form.access_server} onChange={set('access_server')} />
         <AdminInput label="Номер счёта" value={form.account_number} onChange={set('account_number')} />
+        {/* Заказчик: "Телефон и почту не нужно указывать [на сайте], но в
+            админке сделайте возможность" — эти два поля нигде не
+            отображаются на мобильной/ПК версии, только хранятся здесь. */}
+        <AdminInput label="Email (не отображается на сайте)" value={form.email} onChange={set('email')} />
+        <AdminInput label="Телефон (не отображается на сайте)" value={form.phone} onChange={set('phone')} />
         <div className="flex justify-end pt-2">
           <AdminButton onClick={save} disabled={saving}>
             {saving ? 'Сохраняю…' : 'Сохранить'}
