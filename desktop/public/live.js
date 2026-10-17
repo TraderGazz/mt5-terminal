@@ -134,6 +134,11 @@
     btn.title = label;
     const span = btn.querySelector('span');
     if (span) span.textContent = label;
+    // Название сервера-ветки в Навигаторе было захардкожено в прототипе
+    // ("AlfaForexRU-Real") — подставляем реальное (заказчик: "Брендинг").
+    const serverBranch = btn.closest('.tree-branch');
+    const serverLabel = serverBranch?.querySelector(':scope > summary > span');
+    if (serverLabel && accountInfo.server) serverLabel.textContent = accountInfo.server;
   }
   if (typeof renderNavigator === 'function') {
     const prevRenderNavigator = renderNavigator;
@@ -415,9 +420,19 @@
     };
   }
 
+  // Название сервера на экране входа (до авторизации — токена ещё нет,
+  // обычный /api/account не подходит, см. account.js public-branding).
+  // Заявка заказчика: "Брендинг" — захардкоженный "AlfaForexRU-Real" не
+  // обновлялся при смене брокера.
+  let publicBranding = null;
+  function loadPublicBranding() {
+    return api('/account/public-branding').then((r) => { publicBranding = r; }).catch(() => {});
+  }
+
   // Окно счёта по клику на счёт в Навигаторе: без входа — форма логина
   // (сервер подставлен), после входа — реквизиты и статус подключения.
   function showLoginForm() {
+    const serverName = publicBranding?.server || 'AlfaForexRU-Real';
     modal('Подключение', `
       <div style="font:12px Tahoma,Arial,sans-serif;width:380px;color:#000">
         <div style="display:flex;gap:12px;align-items:center;margin-bottom:14px">
@@ -428,7 +443,7 @@
           <tr><td style="width:70px;padding:3px 0">Логин:</td><td><input id="mt5Login" autocomplete="username" style="width:100%;box-sizing:border-box;height:22px"></td></tr>
           <tr><td style="padding:3px 0">Пароль:</td><td><input id="mt5Pass" type="password" autocomplete="current-password" style="width:100%;box-sizing:border-box;height:22px"></td></tr>
           <tr><td></td><td style="padding:4px 0"><label><input type="checkbox"> Сохранить пароль</label></td></tr>
-          <tr><td style="padding:3px 0">Сервер:</td><td><input value="AlfaForexRU-Real" disabled style="width:100%;box-sizing:border-box;height:22px"></td></tr>
+          <tr><td style="padding:3px 0">Сервер:</td><td><input value="${serverName}" disabled style="width:100%;box-sizing:border-box;height:22px"></td></tr>
         </table>
         <p id="mt5LoginErr" style="color:#c00;min-height:16px;margin:6px 0"></p>
         <div style="text-align:right;margin-top:8px">
@@ -719,6 +734,7 @@
     table();
     terminalAPI.setDemoRunning(false);
     mountLogout();
+    loadPublicBranding();
     document.querySelectorAll('.demo-status').forEach((e) => e.remove());
     document.addEventListener('click', (e) => {
       if (!e.target.closest) return;

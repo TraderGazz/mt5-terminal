@@ -98,6 +98,16 @@ export interface ApiHistoryResponse {
 
 export const getAccount = () => api<{ account: ApiAccount }>('/account').then((r) => r.account);
 
+export interface ApiPublicBranding {
+  company: string;
+  server: string;
+  accessServer: string;
+  accountNumber: string;
+}
+
+// Без авторизации (экран входа — токена ещё нет).
+export const getPublicBranding = () => api<ApiPublicBranding>('/account/public-branding', { auth: false });
+
 export const getPositions = () => api<{ positions: ApiPosition[] }>('/positions').then((r) => r.positions);
 
 export const getQuotes = () =>

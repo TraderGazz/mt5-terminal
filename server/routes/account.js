@@ -51,4 +51,26 @@ router.get('/', authRequired, async (req, res) => {
   }
 });
 
+// GET /api/account/public-branding — название компании/сервера для ЭКРАНА
+// ВХОДА (до авторизации — токена ещё нет, обычный /api/account сюда не
+// подходит). Только текст для отображения, никаких финансовых/личных
+// данных — поэтому без authRequired.
+router.get('/public-branding', async (req, res) => {
+  let stored = null;
+  if (isDbReady()) {
+    try {
+      const { rows } = await query(
+        'SELECT account_number, company, server, access_server FROM accounts ORDER BY id LIMIT 1'
+      );
+      stored = rows[0] || null;
+    } catch { /* БД не обязательна */ }
+  }
+  res.json({
+    company: stored?.company || 'ООО «Альфа-Форекс»',
+    server: stored?.server || 'AlfaForexRU-Real',
+    accessServer: stored?.access_server || 'RFD Access Server 1',
+    accountNumber: stored?.account_number || '',
+  });
+});
+
 export default router;

@@ -28,9 +28,6 @@ const IOS_EASE: [number, number, number, number] = [0.32, 0.72, 0, 1];
 /** First-mount stagger happens only once per session (design.md §6). */
 let hasMountedOnce = false;
 
-/** Company name with straight quotes, exactly as in MT5 iOS. */
-const COMPANY_TITLE = 'ООО "Альфа-Форекс"';
-
 /**
  * Menu rows (MT5 iOS «Настройки»). Group 1 renders inside the profile card;
  * groups 2/3 are separate white cards. Icons are self-contained SVG squares
@@ -147,7 +144,7 @@ export default function SettingsPage() {
               {account.holder}
             </span>
             <span className="block truncate text-[15px] leading-[20px] tracking-[-0.24px] text-black">
-              {COMPANY_TITLE}
+              {account.company}
             </span>
             <span className="tnum mt-[5px] block truncate text-[15px] leading-[20px] tracking-[-0.24px] text-black">
               {account.accountId} - {account.server}

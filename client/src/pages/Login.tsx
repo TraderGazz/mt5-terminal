@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { AnimatePresence, motion } from 'framer-motion';
 import AppShell from '@/components/AppShell';
@@ -12,14 +12,15 @@ import { ACCOUNT } from '@/mocks/account';
 import { IS_API } from '@/config';
 import { login as apiLogin } from '@/api/auth';
 import { logEvent } from '@/data/journal';
-
-const SERVERS = ['AlfaForexRU-Real'];
+import { getPublicBranding } from '@/api/rest';
 
 /** Mock credentials (auth.md §4): any non-empty login + password «demo». */
 const DEMO_PASSWORD = 'demo';
 
-/** Company name with straight quotes, exactly as in the MT5 iOS header. */
-const COMPANY_TITLE = 'ООО "Альфа-Форекс"';
+/** Company name with straight quotes, exactly as in the MT5 iOS header —
+ * заменяется реальным названием брокера (/api/account/public-branding)
+ * сразу после загрузки, см. useEffect ниже (заявка заказчика: "Брендинг"). */
+const DEFAULT_COMPANY_TITLE = 'ООО "Альфа-Форекс"';
 
 /**
  * Авторизация (`/login`, auth.md) — визуальная копия MT5 iOS: прозрачный
@@ -33,6 +34,7 @@ export default function LoginPage() {
     typeof window !== 'undefined' && (window.history.state?.idx ?? 0) > 0;
 
   const [server, setServer] = useState(ACCOUNT.server);
+  const [companyTitle, setCompanyTitle] = useState(DEFAULT_COMPANY_TITLE);
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(true);
@@ -43,6 +45,18 @@ export default function LoginPage() {
   const [toast, setToast] = useState<string | null>(null);
 
   const canSubmit = login.trim().length > 0 && password.length > 0 && !submitting;
+
+  useEffect(() => {
+    if (!IS_API) return;
+    getPublicBranding()
+      .then((b) => {
+        setCompanyTitle(b.company);
+        setServer(b.server);
+      })
+      .catch(() => {
+        /* остаются дефолты — экран входа не должен падать из-за этого */
+      });
+  }, []);
 
   const fail = (msg: string) => {
     setSubmitting(false);
@@ -103,7 +117,7 @@ export default function LoginPage() {
               <span className="flex min-w-0 items-center gap-2.5">
                 <BrokerLogo size={32} />
                 <span className="truncate text-[17px] font-semibold tracking-[-0.41px] text-black">
-                  {COMPANY_TITLE}
+                  {companyTitle}
                 </span>
               </span>
             </>
@@ -260,8 +274,8 @@ export default function LoginPage() {
       <ActionSheet
         open={serverSheet}
         title="Выберите сервер"
-        actions={SERVERS.map((s) => ({
-          label: s === server ? `${s} ✓` : s,
+        actions={[server].map((s) => ({
+          label: `${s} ✓`,
           onSelect: () => setServer(s),
         }))}
         onClose={() => setServerSheet(false)}

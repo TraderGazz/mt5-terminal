@@ -9,9 +9,6 @@ import BrokerLogo from '@/components/auth/BrokerLogo';
 import { useAccount } from '@/data/account';
 import { formatMoneyMT5 } from '@/components/history/utils';
 
-/** Company name with straight quotes, exactly as in MT5 iOS. */
-const COMPANY_TITLE = 'ООО "Альфа-Форекс"';
-
 const BADGES = [
   { label: 'Read Only', color: '#8E8E93' },
   { label: 'Hedge', color: '#007AFF' },
@@ -79,7 +76,7 @@ export default function AccountPage() {
           >
             <span className="text-[17px] tracking-[-0.41px] text-black">Компания</span>
             <span className="min-w-0 flex-1 truncate text-right text-[17px] tracking-[-0.41px] text-black">
-              {COMPANY_TITLE}
+              {account.company}
             </span>
             <ChevronRight size={16} strokeWidth={2.2} className="ml-1 shrink-0 text-[#C7C7CC]" />
           </button>
