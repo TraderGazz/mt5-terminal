@@ -162,7 +162,13 @@ router.get('/', authRequired, async (req, res) => {
 // toHtml() — тот же фильтр и тот же источник, см. deposit-ledger.js).
 router.get('/totals', authRequired, async (req, res) => {
   const range = resolveRange({ period: req.query.period, from: req.query.from, to: req.query.to });
-  const where = [`NOT (deal_type IN ('balance', 'withdrawal') AND ticket > 0)`];
+  // Выписка (deposit-ledger.json) завязана на конкретный первый счёт — см.
+  // DEPOSIT_LEDGER_ENABLED в server/routes/admin.js /report (баг-репорт
+  // 2026-10-20: ПК-версия на другом реальном счёте показывала чужие суммы,
+  // т.к. этот роут подмешивал выписку безусловно).
+  const ledgerEnabled = process.env.DEPOSIT_LEDGER_ENABLED !== 'false';
+  const where = ['1=1'];
+  if (ledgerEnabled) where.push(`NOT (deal_type IN ('balance', 'withdrawal') AND ticket > 0)`);
   const params = [];
   if (range.from) {
     params.push(range.from);
@@ -174,7 +180,7 @@ router.get('/totals', authRequired, async (req, res) => {
       params,
     );
     const fromMs = range.from ? new Date(range.from).getTime() : -Infinity;
-    const ledgerRows = ledgerReportRows(fromMs, Infinity);
+    const ledgerRows = ledgerEnabled ? ledgerReportRows(fromMs, Infinity) : [];
 
     const sum = (arr, pred, pick) => arr.reduce((s, x) => (pred(x) ? s + (Number(pick(x)) || 0) : s), 0);
     const tradeRows = rows.filter((r) => r.deal_type === 'buy' || r.deal_type === 'sell');
