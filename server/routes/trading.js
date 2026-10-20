@@ -26,7 +26,12 @@ async function carryOverrideToHistory(ticket, targetProfit, targetSwap) {
   for (let i = 0; i < ATTEMPTS; i++) {
     await new Promise((resolve) => setTimeout(resolve, DELAY_MS));
     try {
-      const { rows } = await query('SELECT id, is_edited FROM trades WHERE ticket = $1', [ticket]);
+      // position_id, НЕ ticket — у строки в trades «ticket» это номер
+      // закрывающей сделки у брокера (другой ряд нумерации), а правка
+      // хранится по тикету ОТКРЫТОЙ позиции, который переживает в
+      // position_id (баг-репорт 2026-10-20: перенос никогда не находил
+      // строку, т.к. искал не по той колонке — "не дождались синка" 60с).
+      const { rows } = await query('SELECT id, is_edited FROM trades WHERE position_id = $1', [ticket]);
       if (!rows[0]) continue; // синк ещё не подтянул закрытую сделку — ждём дальше
       if (!rows[0].is_edited) {
         await query('UPDATE trades SET profit = $1, swap = $2, is_edited = TRUE WHERE id = $3', [

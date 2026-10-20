@@ -196,13 +196,18 @@ async function saveDeals(deals) {
       ],
     );
     if (!rows[0] || (d.dealType !== 'buy' && d.dealType !== 'sell') || !d.closePrice) continue;
-    const ov = bridge.getPositionOverride(d.ticket);
+    // position_id — ТОТ ЖЕ тикет, что у открытой позиции (и под которым
+    // хранится правка); d.ticket у закрытой сделки — номер закрывающего
+    // ордера брокера, другая нумерация (баг-репорт 2026-10-20: правка
+    // никогда не находилась, искали не по той колонке).
+    if (!d.positionId) continue;
+    const ov = bridge.getPositionOverride(d.positionId);
     const hasOverride = ov.openPriceOverride != null || ov.profitOffset != null || ov.swapOffset != null;
     if (!hasOverride) continue;
     const { profit, swap } = applyOverrideToClosedDeal(d, ov);
     await query('UPDATE trades SET profit = $1, swap = $2, is_edited = TRUE WHERE id = $3', [profit, swap, rows[0].id]);
-    await bridge.clearPositionOverride(d.ticket);
-    console.log(`[mt5-sync] правка позиции #${d.ticket} перенесена в историю при закрытии (sync)`);
+    await bridge.clearPositionOverride(d.positionId);
+    console.log(`[mt5-sync] правка позиции #${d.positionId} перенесена в историю при закрытии (sync)`);
   }
   return deals.length;
 }
