@@ -519,14 +519,21 @@ ${ledgerTrs}` : ''}
 // GET /api/admin/report?format=html|csv&from=&to=&symbol=
 router.get('/report', wrap(async (req, res) => {
   const { format = 'html', from, to, symbol } = req.query;
-  const where = [
+  // Выписка (deposit-ledger.json) завязана на конкретный первый счёт — на
+  // другом реальном счёте (другой сайт/клиент) её подмешивать нельзя, иначе
+  // в отчёт попадают чужие суммы (баг-репорт 2026-10-20). DEPOSIT_LEDGER_ENABLED
+  // по умолчанию включена (первый сайт не трогаем); для нового счёта задать
+  // DEPOSIT_LEDGER_ENABLED=false в server/.env.
+  const ledgerEnabled = process.env.DEPOSIT_LEDGER_ENABLED !== 'false';
+  const where = ['1=1'];
+  if (ledgerEnabled) {
     // EA-синхронизированные balance/withdrawal (тикет > 0) — известный
     // мусор терминала (напр. "demo deposit"), в отчёт не идут; вместо них
     // ниже подмешивается официальная выписка + ручные записи из админки
     // (тикет < 0), см. ledgerReportRows и заявку заказчика в
     // deposit-ledger.js. Сами сделки/CFD этот фильтр не трогает.
-    `NOT (deal_type IN ('balance', 'withdrawal') AND ticket > 0)`,
-  ];
+    where.push(`NOT (deal_type IN ('balance', 'withdrawal') AND ticket > 0)`);
+  }
   const params = [];
   if (symbol && symbol !== 'all') {
     params.push(symbol);
@@ -550,7 +557,7 @@ router.get('/report', wrap(async (req, res) => {
   // депозита/снятия символа нет, как и в Истории на сайте/в админке).
   const fromMs = from ? new Date(from).getTime() : -Infinity;
   const toMs = to ? new Date(to).getTime() : Infinity;
-  const ledgerRows = symbol && symbol !== 'all' ? [] : ledgerReportRows(fromMs, toMs);
+  const ledgerRows = !ledgerEnabled || (symbol && symbol !== 'all') ? [] : ledgerReportRows(fromMs, toMs);
 
   const rows = [...tradeRows, ...ledgerRows].sort(
     (a, b) => new Date(a.close_time ?? 0).getTime() - new Date(b.close_time ?? 0).getTime(),

@@ -18,6 +18,17 @@ export const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? '
 /** Единственный торговый инструмент (уточнение заказчика). */
 export const SYMBOL = (import.meta.env.VITE_SYMBOL as string | undefined) ?? 'EURUSD';
 
+/**
+ * Официальная выписка брокера (client/data/deposit-ledger.json) привязана
+ * к КОНКРЕТНОМУ первому счёту — при развёртывании под другой реальный счёт
+ * (другой клиент/домен) эти чужие пополнения/снятия подмешивались бы в
+ * Историю как есть (баг-репорт 2026-10-20: второй сайт показывал выписку
+ * первого счёта). По умолчанию включена (первый сайт не трогаем) — для
+ * нового счёта выставить VITE_DEPOSIT_LEDGER_ENABLED=false в client/.env.
+ */
+export const DEPOSIT_LEDGER_ENABLED =
+  (import.meta.env.VITE_DEPOSIT_LEDGER_ENABLED as string | undefined) !== 'false';
+
 /** URL WebSocket-хаба. */
 export function wsUrl(token: string): string {
   const explicit = import.meta.env.VITE_WS_URL as string | undefined;

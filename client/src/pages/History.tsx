@@ -18,6 +18,7 @@ import {
   type DealLeg,
 } from '@/data/history';
 import { depositTotalsForRange, ledgerBalanceRows, type LedgerBalanceRow } from '@/data/depositLedger';
+import { DEPOSIT_LEDGER_ENABLED } from '@/config';
 import { getSymbolMeta } from '@/mocks/symbols';
 import { formatMoneyMT5 } from '@/components/history/utils';
 import SegmentedControl from '@/components/history/SegmentedControl';
@@ -287,7 +288,13 @@ export default function HistoryPage() {
   const manualBalanceOps = useMemo(
     () =>
       getBalanceOps().filter(
-        (d) => d.ticket < 0 && d.closeTime >= range.from && d.closeTime <= range.to,
+        (d) =>
+          // Без выписки (другой реальный счёт, см. config.ts) показываем
+          // ВСЕ синхронизированные депозиты/снятия, не только ручные —
+          // иначе настоящие операции счёта были бы вообще не видны.
+          (!DEPOSIT_LEDGER_ENABLED || d.ticket < 0) &&
+          d.closeTime >= range.from &&
+          d.closeTime <= range.to,
       ),
     [range, dealsVersion],
   );

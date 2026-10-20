@@ -29,10 +29,17 @@
  * один источник данных, а не расхождение между сайтом и отчётом.
  */
 import ledgerData from './deposit-ledger.json';
+import { DEPOSIT_LEDGER_ENABLED } from '@/config';
 
 export const LEDGER_END = new Date(ledgerData.ledgerEndIso).getTime();
 
-const LEDGER = ledgerData.rows as unknown as readonly [string, number, number][];
+// На чужом счёте (другой сайт) эта выписка не имеет отношения к реальным
+// деньгам — см. config.ts DEPOSIT_LEDGER_ENABLED.
+const LEDGER = (DEPOSIT_LEDGER_ENABLED ? ledgerData.rows : []) as unknown as readonly [
+  string,
+  number,
+  number,
+][];
 
 /** Local midnight of an "YYYY-MM-DD" ledger date, ms epoch. */
 function parseIsoDateLocal(iso: string): number {
