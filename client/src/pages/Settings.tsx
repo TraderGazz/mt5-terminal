@@ -5,7 +5,6 @@ import { ChevronRight } from 'lucide-react';
 import NavBar from '@/components/NavBar';
 import ActionSheet from '@/components/ActionSheet';
 import SettingsRow, { type SettingsRowDef } from '@/components/settings/SettingsRow';
-import StubModal from '@/components/settings/StubModal';
 import {
   IconAlgo,
   IconCharts,
@@ -89,7 +88,6 @@ const CARD_CLS = 'mx-5 overflow-hidden rounded-[20px] bg-white';
 export default function SettingsPage() {
   const navigate = useNavigate();
   const account = useAccount();
-  const [stub, setStub] = useState<SettingsRowDef | null>(null);
   const [langSheet, setLangSheet] = useState(false);
 
   const [firstMount] = useState(() => {
@@ -117,8 +115,10 @@ export default function SettingsPage() {
       navigate('/settings/mql5');
     } else if (row.key === 'otp') {
       navigate('/settings/otp');
-    } else {
-      setStub(row);
+    } else if (row.key === 'new-account') {
+      navigate('/settings/new-account');
+    } else if (row.key === 'charts') {
+      navigate('/settings/charts');
     }
   };
 
@@ -217,7 +217,6 @@ export default function SettingsPage() {
         </button>
       </motion.div>
 
-      <StubModal row={stub} onClose={() => setStub(null)} />
       <ActionSheet
         open={langSheet}
         title="Язык интерфейса"

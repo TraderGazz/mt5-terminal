@@ -20,6 +20,8 @@ import SettingsChatPage from '@/pages/SettingsChat';
 import SettingsCommunityPage from '@/pages/SettingsCommunity';
 import SettingsMql5Page from '@/pages/SettingsMql5';
 import SettingsOtpPage from '@/pages/SettingsOtp';
+import SettingsNewAccountPage from '@/pages/SettingsNewAccount';
+import SettingsChartsPage from '@/pages/SettingsCharts';
 import LoginPage from '@/pages/Login';
 import AccountPage from '@/pages/Account';
 
@@ -66,6 +68,8 @@ export default function App() {
           <Route path="settings/community" element={<SettingsCommunityPage />} />
           <Route path="settings/mql5" element={<SettingsMql5Page />} />
           <Route path="settings/otp" element={<SettingsOtpPage />} />
+          <Route path="settings/new-account" element={<SettingsNewAccountPage />} />
+          <Route path="settings/charts" element={<SettingsChartsPage />} />
           {/* Chrome-less (свой NavBar с Отмена/Сохранить, без TabBar) — маршрут
               существовал только в коде страницы, но не был подключён сюда,
               из-за чего переход падал в wildcard-редирект на "/" (Котировки). */}
