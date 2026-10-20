@@ -58,6 +58,13 @@ const dbRowToDeal = (r) => ({
   isEdited: !!r.is_edited,
 });
 
+// Обнулённая вручную запись депозита/снятия (баг-репорт 2026-10-20: при
+// "разбивке" одной синк-суммы на отдельные ручные записи старую строку
+// нельзя удалить — синк тут же вставит её заново с реальной суммой, см.
+// is_edited в mt5-sync.js — поэтому её обнуляют и защищают is_edited=TRUE)
+// не должна мозолить глаза пустой строкой "Balance 0.00".
+const ZEROED_LEDGER_ROW = `NOT (deal_type IN ('balance', 'withdrawal') AND profit = 0)`;
+
 async function loadDeals(range) {
   // Источник правды — БД (с правками). Если пусто/недоступна — берём из моста.
   // При фильтре по периоду пустой результат — законный ответ, мост не трогаем.
@@ -65,12 +72,12 @@ async function loadDeals(range) {
     try {
       if (range.from) {
         const { rows } = await query(
-          'SELECT * FROM trades WHERE COALESCE(close_time, open_time) >= $1 ORDER BY close_time DESC NULLS LAST, id DESC',
+          `SELECT * FROM trades WHERE COALESCE(close_time, open_time) >= $1 AND ${ZEROED_LEDGER_ROW} ORDER BY close_time DESC NULLS LAST, id DESC`,
           [range.from],
         );
         return { deals: rows.map(dbRowToDeal), from: 'db' };
       }
-      const { rows } = await query('SELECT * FROM trades ORDER BY close_time DESC NULLS LAST, id DESC');
+      const { rows } = await query(`SELECT * FROM trades WHERE ${ZEROED_LEDGER_ROW} ORDER BY close_time DESC NULLS LAST, id DESC`);
       if (rows.length) return { deals: rows.map(dbRowToDeal), from: 'db' };
     } catch { /* fall through */ }
   }
