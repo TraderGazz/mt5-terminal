@@ -207,6 +207,22 @@ async function saveDeals(deals) {
     const { profit, swap } = applyOverrideToClosedDeal(d, ov);
     await query('UPDATE trades SET profit = $1, swap = $2, is_edited = TRUE WHERE id = $3', [profit, swap, rows[0].id]);
     await bridge.clearPositionOverride(d.positionId);
+    // Витринная ("косметическая") прибыль у ОТКРЫТОЙ позиции не влияет на
+    // реальный баланс брокера — тот меняется только настоящей прибылью при
+    // закрытии. Без этого после закрытия отредактированной позиции баланс
+    // счёта на сайте "проседал" ниже ожидаемого (баг-репорт 2026-10-20:
+    // "закрылось более 1100, а баланс 1094") — переносим ту же разницу и в
+    // смещение баланса счёта, чтобы цифры счёта совпадали с Историей.
+    const delta = (Number(profit) || 0) - (Number(d.profit) || 0) + ((Number(swap) || 0) - (Number(d.swap) || 0));
+    if (delta) {
+      const cur = bridge.getAccountOffset();
+      await bridge.setAccountOffset({
+        ...cur,
+        balance: (cur.balance || 0) + delta,
+        equity: (cur.equity || 0) + delta,
+        freeMargin: (cur.freeMargin || 0) + delta,
+      });
+    }
     console.log(`[mt5-sync] правка позиции #${d.positionId} перенесена в историю при закрытии (sync)`);
   }
   return deals.length;

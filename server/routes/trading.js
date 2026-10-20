@@ -31,14 +31,30 @@ async function carryOverrideToHistory(ticket, targetProfit, targetSwap) {
       // хранится по тикету ОТКРЫТОЙ позиции, который переживает в
       // position_id (баг-репорт 2026-10-20: перенос никогда не находил
       // строку, т.к. искал не по той колонке — "не дождались синка" 60с).
-      const { rows } = await query('SELECT id, is_edited FROM trades WHERE position_id = $1', [ticket]);
+      const { rows } = await query('SELECT id, is_edited, profit, swap FROM trades WHERE position_id = $1', [ticket]);
       if (!rows[0]) continue; // синк ещё не подтянул закрытую сделку — ждём дальше
       if (!rows[0].is_edited) {
+        const realProfit = Number(rows[0].profit) || 0;
+        const realSwap = Number(rows[0].swap) || 0;
         await query('UPDATE trades SET profit = $1, swap = $2, is_edited = TRUE WHERE id = $3', [
           targetProfit,
           targetSwap,
           rows[0].id,
         ]);
+        // Витринная прибыль не меняет реальный баланс брокера — переносим
+        // ту же разницу в смещение баланса счёта (см. mt5-sync.js), иначе
+        // "Средства/Баланс" на сайте просядут ниже ожидаемого после закрытия.
+        const delta = (targetProfit - realProfit) + (targetSwap - realSwap);
+        if (delta) {
+          const bridge = getBridge();
+          const cur = bridge.getAccountOffset();
+          await bridge.setAccountOffset({
+            ...cur,
+            balance: (cur.balance || 0) + delta,
+            equity: (cur.equity || 0) + delta,
+            freeMargin: (cur.freeMargin || 0) + delta,
+          });
+        }
         console.log(`[trading] правка позиции #${ticket} перенесена в историю после закрытия`);
       }
       return;
