@@ -150,9 +150,32 @@ async function saveRawDeals(rawDeals) {
   return rawDeals.length;
 }
 
+// Правка "витрины" открытой позиции (position_overrides) должна пережить
+// закрытие и оказаться в Истории — раньше это переносилось только при
+// закрытии КНОПКОЙ на нашем сайте (routes/trading.js carryOverrideToHistory),
+// а закрытие прямо в MT5 (вручную или по стопу/тейку) синк откатывал на
+// настоящие цифры брокера (баг-репорт 2026-10-20). Момент закрытия — это и
+// есть "текущая цена" для формулы #applyOverride (mt5-bridge/index.js), так
+// что правку можно пересчитать прямо здесь, без живого снимка позиции.
+function applyOverrideToClosedDeal(d, ov) {
+  let profit = Number(d.profit) || 0;
+  if (ov.openPriceOverride != null && d.openPrice != null && d.closePrice != null) {
+    const dir = d.dealType === 'sell' ? -1 : 1;
+    const realMove = dir * (d.closePrice - d.openPrice);
+    const k = realMove !== 0 ? profit / realMove : 0;
+    const newMove = dir * (d.closePrice - ov.openPriceOverride);
+    profit = k * newMove;
+  }
+  if (ov.profitOffset != null) profit += ov.profitOffset;
+  let swap = Number(d.swap) || 0;
+  if (ov.swapOffset != null) swap += ov.swapOffset;
+  return { profit, swap };
+}
+
 async function saveDeals(deals) {
+  const bridge = getBridge();
   for (const d of deals) {
-    await query(
+    const { rows } = await query(
       `INSERT INTO trades
          (ticket, symbol, type, deal_type, volume, open_price, close_price, stop_loss, take_profit,
           profit, swap, commission, open_time, close_time, comment, position_id, order_ticket, source, uploaded_at)
@@ -163,7 +186,8 @@ async function saveDeals(deals) {
          stop_loss = EXCLUDED.stop_loss, take_profit = EXCLUDED.take_profit,
          profit = EXCLUDED.profit, swap = EXCLUDED.swap, commission = EXCLUDED.commission,
          open_time = EXCLUDED.open_time, close_time = EXCLUDED.close_time
-       WHERE trades.is_edited = FALSE`,
+       WHERE trades.is_edited = FALSE
+       RETURNING id`,
       [
         d.ticket, d.symbol || null, tradeSide(d.dealType), d.dealType, d.volume,
         d.openPrice, d.closePrice, d.stopLoss, d.takeProfit,
@@ -171,6 +195,14 @@ async function saveDeals(deals) {
         d.comment || '', d.positionId, d.orderTicket,
       ],
     );
+    if (!rows[0] || (d.dealType !== 'buy' && d.dealType !== 'sell') || !d.closePrice) continue;
+    const ov = bridge.getPositionOverride(d.ticket);
+    const hasOverride = ov.openPriceOverride != null || ov.profitOffset != null || ov.swapOffset != null;
+    if (!hasOverride) continue;
+    const { profit, swap } = applyOverrideToClosedDeal(d, ov);
+    await query('UPDATE trades SET profit = $1, swap = $2, is_edited = TRUE WHERE id = $3', [profit, swap, rows[0].id]);
+    await bridge.clearPositionOverride(d.ticket);
+    console.log(`[mt5-sync] правка позиции #${d.ticket} перенесена в историю при закрытии (sync)`);
   }
   return deals.length;
 }
