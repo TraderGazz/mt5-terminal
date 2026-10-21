@@ -1,7 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router';
 import Layout from '@/components/Layout';
-import PortraitLock from '@/components/PortraitLock';
 import PageLoading from '@/components/PageLoading';
 import { IS_API } from '@/config';
 import { isAuthed } from '@/api/auth';
@@ -48,7 +47,6 @@ function RequireAuth() {
 export default function App() {
   return (
     <BrowserRouter basename="/mobile">
-      <PortraitLock />
       <Routes>
         {/* Tabbed pages with app chrome (NavBar slot + TabBar) */}
         <Route element={<RequireAuth />}>
