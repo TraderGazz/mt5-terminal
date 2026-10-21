@@ -8,11 +8,17 @@
    режиме). Класс .force-portrait переключается PortraitLock.tsx. */
 @media screen and (orientation: landscape) {
   html.force-portrait {
+    overflow: hidden;
+  }
+  /* html переключает transform ненадёжно в Safari на iOS (сохраняет старые
+     размеры viewport) — body отрабатывает стабильнее на практике. */
+  html.force-portrait body {
     width: 100vh;
     height: 100vw;
     position: fixed;
     top: 100%;
     left: 0;
+    margin: 0;
     transform-origin: top left;
     transform: rotate(-90deg);
     overflow: hidden;
