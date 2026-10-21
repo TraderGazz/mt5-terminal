@@ -2,23 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Заявка заказчика 2026-10-21: держать мобильный терминал в портретной
-   раскладке независимо от реального поворота устройства (manifest.webmanifest
-   "orientation": "portrait" не работает в Safari на iOS даже в установленном
-   режиме). Класс .force-portrait переключается PortraitLock.tsx. */
-@media screen and (orientation: landscape) {
-  html.force-portrait {
-    width: 100vh;
-    height: 100vw;
-    position: fixed;
-    top: 100%;
-    left: 0;
-    transform-origin: top left;
-    transform: rotate(-90deg);
-    overflow: hidden;
-  }
-}
-
 @layer base {
   :root {
     --background: 0 0% 100%;
