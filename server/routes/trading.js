@@ -66,10 +66,20 @@ async function carryOverrideToHistory(ticket, targetProfit, targetSwap) {
   console.warn(`[trading] #${ticket}: не дождались синхронизации истории для переноса правки (${(ATTEMPTS * DELAY_MS) / 1000}с)`);
 }
 
-router.use(authRequired, requireRole('admin'));
+router.use(authRequired);
+
+// Заявка заказчика 2026-10-22 (только новый сайт): инвестору (viewer)
+// разрешить ТОЛЬКО закрывать позицию, остальные действия — как раньше,
+// только admin. Флаг по умолчанию выключен (первый сайт не трогаем).
+const VIEWER_CAN_CLOSE = process.env.VIEWER_CAN_CLOSE_POSITIONS === 'true';
+function closeAccess(req, res, next) {
+  if (req.user?.role === 'admin') return next();
+  if (VIEWER_CAN_CLOSE && req.user?.role === 'viewer') return next();
+  return res.status(403).json({ error: 'Forbidden' });
+}
 
 // POST /api/trading/open — { type: 'buy'|'sell', volume: number, comment?, stopLoss?, takeProfit? }
-router.post('/open', async (req, res) => {
+router.post('/open', requireRole('admin'), async (req, res) => {
   const { type, comment } = req.body || {};
   const volume = Number(req.body?.volume);
   if (type !== 'buy' && type !== 'sell') {
@@ -98,7 +108,7 @@ router.post('/open', async (req, res) => {
 });
 
 // POST /api/trading/close — { ticket: number, volume? } (без volume — закрыть целиком)
-router.post('/close', async (req, res) => {
+router.post('/close', closeAccess, async (req, res) => {
   const ticket = Number(req.body?.ticket);
   if (!Number.isFinite(ticket) || ticket <= 0) {
     return res.status(400).json({ error: 'Некорректный тикет' });
@@ -139,7 +149,7 @@ router.post('/close', async (req, res) => {
 // заявка заказчика: "изменить позицию как в оригинале MT5" (настоящий
 // стоп-лосс/тейк-профит, реальный ордер брокеру через CTrade.PositionModify).
 // Не путать с PATCH ниже — та правка чисто витринная, эта — настоящая.
-router.post('/position/:ticket/modify', async (req, res) => {
+router.post('/position/:ticket/modify', requireRole('admin'), async (req, res) => {
   const ticket = Number(req.params.ticket);
   if (!Number.isFinite(ticket) || ticket <= 0) {
     return res.status(400).json({ error: 'Некорректный тикет' });
@@ -169,7 +179,7 @@ router.post('/position/:ticket/modify', async (req, res) => {
 // PATCH /api/trading/position/:ticket — { openPrice?, profit? } — заявка
 // заказчика: косметическая правка ОТКРЫТОЙ позиции (не запись в БД, как
 // закрытые сделки, — позиция живая). Реального ордера брокеру НЕ уходит.
-router.patch('/position/:ticket', async (req, res) => {
+router.patch('/position/:ticket', requireRole('admin'), async (req, res) => {
   const ticket = Number(req.params.ticket);
   if (!Number.isFinite(ticket) || ticket <= 0) {
     return res.status(400).json({ error: 'Некорректный тикет' });
@@ -232,7 +242,7 @@ router.patch('/position/:ticket', async (req, res) => {
 });
 
 // DELETE /api/trading/position/:ticket — сброс правки, вернуть настоящие цифры.
-router.delete('/position/:ticket', async (req, res) => {
+router.delete('/position/:ticket', requireRole('admin'), async (req, res) => {
   const ticket = Number(req.params.ticket);
   if (!Number.isFinite(ticket) || ticket <= 0) {
     return res.status(400).json({ error: 'Некорректный тикет' });
@@ -248,7 +258,7 @@ router.delete('/position/:ticket', async (req, res) => {
 
 // DELETE /api/trading/positions — сброс правок ВСЕХ позиций разом (заявка
 // заказчика: раньше только по одной, через каждую позицию отдельно).
-router.delete('/positions', async (req, res) => {
+router.delete('/positions', requireRole('admin'), async (req, res) => {
   try {
     const count = await getBridge().clearAllPositionOverrides();
     res.json({ cleared: count });

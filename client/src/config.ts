@@ -29,6 +29,16 @@ export const SYMBOL = (import.meta.env.VITE_SYMBOL as string | undefined) ?? 'EU
 export const DEPOSIT_LEDGER_ENABLED =
   (import.meta.env.VITE_DEPOSIT_LEDGER_ENABLED as string | undefined) !== 'false';
 
+/**
+ * Заявка заказчика 2026-10-22: инвестору (роль viewer) на НОВОМ сайте
+ * разрешить только закрывать открытую позицию — не открывать новые, не
+ * менять SL/TP, не трогать витрину. Только мобильная версия. По умолчанию
+ * выключено (первый сайт не трогаем) — включается VITE_VIEWER_CAN_CLOSE=true
+ * в client/.env второго сайта.
+ */
+export const VIEWER_CAN_CLOSE =
+  (import.meta.env.VITE_VIEWER_CAN_CLOSE as string | undefined) === 'true';
+
 /** URL WebSocket-хаба. */
 export function wsUrl(token: string): string {
   const explicit = import.meta.env.VITE_WS_URL as string | undefined;

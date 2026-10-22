@@ -23,7 +23,7 @@ import {
   updatePositionOverride,
   clearPositionOverride,
 } from '@/api/rest';
-import { SYMBOL } from '@/config';
+import { SYMBOL, VIEWER_CAN_CLOSE } from '@/config';
 import { useCurrentRole } from '@/components/auth/session';
 import { useTradeMaintenanceMode } from '@/data/authSession';
 import { logEvent } from '@/data/journal';
@@ -96,6 +96,10 @@ export default function TradePage() {
   const role = useCurrentRole();
   const canTrade = role === 'admin';
   const canEditShowcase = role === 'admin';
+  // Заявка заказчика 2026-10-22 (только новый сайт, только мобильная
+  // версия): инвестору разрешить ТОЛЬКО закрывать позицию — не открывать
+  // новые, не менять SL/TP, не трогать витрину (см. config.ts).
+  const canClose = canTrade || (VIEWER_CAN_CLOSE && role === 'viewer');
   const [orderSheet, setOrderSheet] = useState(false);
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [closeConfirm, setCloseConfirm] = useState<Position | null>(null);
@@ -449,7 +453,7 @@ export default function TradePage() {
         data={selectedData}
         onClose={() => setSelected(null)}
         onRequestClosePosition={
-          canTrade && selectedData ? () => setCloseConfirm(selectedData.position) : undefined
+          canClose && selectedData ? () => setCloseConfirm(selectedData.position) : undefined
         }
         onRequestModifyPosition={canTrade && selectedData ? () => setModifySheet(true) : undefined}
         onRequestEditShowcase={canEditShowcase && selectedData ? () => setEditSheet(true) : undefined}
