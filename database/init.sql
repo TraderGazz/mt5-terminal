@@ -35,7 +35,12 @@ CREATE TABLE IF NOT EXISTS trades (
     is_edited     BOOLEAN DEFAULT FALSE,
     -- Источник строки: mt5-sync | html-report | manual | seed
     source        VARCHAR(32) DEFAULT 'manual',
-    uploaded_at   TIMESTAMPTZ DEFAULT now()
+    uploaded_at   TIMESTAMPTZ DEFAULT now(),
+    -- Ручные депозиты/снятия (ticket<0) учитываются в общем балансе счёта
+    -- (mt5-bridge/index.js #manualEntriesDelta), ЕСЛИ это новые деньги,
+    -- которых реально не было у брокера. FALSE — для строк-разбивки уже
+    -- реально существующего события (см. миграцию 013).
+    count_in_balance BOOLEAN NOT NULL DEFAULT TRUE
 );
 
 CREATE INDEX IF NOT EXISTS idx_trades_close_time  ON trades (close_time DESC);
