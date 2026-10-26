@@ -103,11 +103,32 @@ export function buildHistory(deals, opts = {}) {
     showCfd: widest || cfd !== 0,
   };
 
+  // Депозит/снятие как псевдопозиция — та же форма строки, что у обычной
+  // агрегированной позиции (aggregatePositions), чтобы ПК-терминал мог
+  // отрисовать их в том же списке (баг-репорт 2026-10-26: ПК показывал
+  // правильный итог "Пополнение" внизу, но саму строку депозита в списке
+  // никогда не видел — buildHistory() для вкладок positions/deals включал
+  // только buy/sell, депозиты/снятия туда не попадали в принципе).
+  const toBalanceRow = (d) => ({
+    ticket: d.ticket,
+    positionId: d.ticket,
+    symbol: '',
+    type: d.dealType,
+    volume: 0,
+    openPrice: null,
+    closePrice: null,
+    openTime: d.closeTime,
+    closeTime: d.closeTime,
+    profit: d.profit,
+    swap: 0,
+    commission: 0,
+  });
+
   // ---- строки активной вкладки ----
   let rows = [];
   let orderStats = null;
   if (tab === 'positions') {
-    rows = aggregatePositions(tradeDeals);
+    rows = [...aggregatePositions(tradeDeals), ...balanceOps.map(toBalanceRow)];
     if (sort !== 'default') rows.sort(comparator(sort));
     else rows.sort(comparator('closeTime'));
   } else if (tab === 'orders') {
@@ -132,7 +153,7 @@ export function buildHistory(deals, opts = {}) {
       canceled: canceled.length,
     };
   } else {
-    rows = [...tradeDeals].sort(comparator(sort));
+    rows = [...tradeDeals, ...balanceOps.map(toBalanceRow)].sort(comparator(sort));
   }
 
   return {
