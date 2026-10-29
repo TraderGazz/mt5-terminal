@@ -12,6 +12,7 @@ import { MockBridge } from './mock.js';
 import { RealBridge } from './real.js';
 import * as N from './normalize.js';
 import { query } from '../../db.js';
+import { readClosedTradeEditDelta } from '../closed-trade-edits.js';
 
 const MODE = (process.env.MT5_BRIDGE || 'mock').toLowerCase();
 const SYMBOL = process.env.MT5_SYMBOL || 'EURUSD';
@@ -243,7 +244,10 @@ class Bridge extends EventEmitter {
     // прибавлять и здесь тоже. Если КОГДА-НИБУДЬ снова понадобится ручной
     // бэкфилл именно ПРОПУЩЕННОГО синком реального события — делать это
     // не через этот же механизм (иначе вернётся задвоение), а отдельно.
-    const manualDelta = await this.#manualEntriesDelta();
+    // Closed-position edits are committed atomically with their deltas. Read
+    // from DB for every snapshot: REST and WS see the same correction and no
+    // in-memory accountOffset update can overwrite it.
+    const manualDelta = await this.#manualEntriesDelta() + await readClosedTradeEditDelta(query);
     if (manualDelta !== 0) {
       acc = {
         ...acc,

@@ -76,6 +76,23 @@ export async function query(text, params) {
   }
 }
 
+// All statements use the SAME connection; pool.query(BEGIN) is not a transaction.
+export async function withTransaction(work) {
+  if (!pool) throw new Error('Database is not configured');
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await work(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 // Express middleware: reject data routes with 503 when DB is down.
 export function requireDb(req, res, next) {
   if (!pool || !dbReady) {

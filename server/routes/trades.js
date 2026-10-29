@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { query, requireDb } from '../db.js';
+import { query, requireDb, withTransaction } from '../db.js';
+import { editTrade } from '../services/closed-trade-edits.js';
 import { authRequired, requireRole } from './auth.js';
 
 const router = Router();
@@ -107,26 +108,19 @@ const EDITABLE_FIELDS = [
 ];
 
 router.patch('/:id', canEdit, async (req, res) => {
-  const updates = [];
-  const params = [];
+  const fields = {};
   for (const field of EDITABLE_FIELDS) {
     if (req.body[field] !== undefined) {
-      params.push(req.body[field]);
-      updates.push(`${field} = $${params.length}`);
+      fields[field] = req.body[field];
     }
   }
-  if (!updates.length) {
+  if (!Object.keys(fields).length) {
     return res.status(400).json({ error: 'No editable fields provided' });
   }
-  updates.push('is_edited = TRUE');
-  params.push(req.params.id);
   try {
-    const { rows } = await query(
-      `UPDATE trades SET ${updates.join(', ')} WHERE id = $${params.length} RETURNING *`,
-      params
-    );
-    if (!rows[0]) return res.status(404).json({ error: 'Trade not found' });
-    res.json({ trade: rows[0] });
+    const trade = await withTransaction((client) => editTrade(client, req.params.id, fields, req.user.login));
+    if (!trade) return res.status(404).json({ error: 'Trade not found' });
+    res.json({ trade });
   } catch (err) {
     console.error('[trades] patch error:', err.message);
     res.status(500).json({ error: 'Failed to update trade' });
