@@ -13,7 +13,7 @@ const WATCH_SYMBOLS = (process.env.MT5_WATCH_SYMBOLS || `${SYMBOL},USDRUBrfd,XAU
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
-const TF_MINUTES = { M1: 1, M5: 5, M15: 15, M30: 30, H1: 60, H4: 240, D1: 1440 };
+const TF_MINUTES = { M1: 1, M5: 5, M15: 15, M30: 30, H1: 60, H4: 240, D1: 1440, W1: 10080, MN1: 44640 };
 // EA/сервер брокера трактует любые даты в запросах как СВОЁ локальное время
 // (UTC+3), без пересчёта — зеркально normalize.js:toIso(), которая на выходе
 // из EA вычитает этот же сдвиг. Поэтому исходящие from_date/to_date нужно
@@ -191,7 +191,7 @@ export class RealBridge extends EventEmitter {
       // большими"). У D1 всего 1 бар/день, лишних данных для EA это не
       // создаёт, поэтому поднимаем потолок настолько, чтобы D1 получал
       // полные 360+ баров.
-      fromDate = new Date(toDate.getTime() - Math.min(neededDays, 550) * 24 * 60 * 60 * 1000);
+      fromDate = new Date(toDate.getTime() - Math.min(neededDays, timeframe === 'MN1' ? 20000 : timeframe === 'W1' ? 4000 : 550) * 24 * 60 * 60 * 1000);
     }
     // Полный datetime, не только дата: StringToTime() у EA разбирает дату
     // без времени как полночь ("2026-09-14" -> "2026-09-14 00:00:00") — то

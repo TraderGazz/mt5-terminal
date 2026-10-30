@@ -12,6 +12,7 @@ import { MockBridge } from './mock.js';
 import { RealBridge } from './real.js';
 import * as N from './normalize.js';
 import { query } from '../../db.js';
+import { roundMoney } from '../money.js';
 import { readClosedTradeEditDelta } from '../closed-trade-edits.js';
 
 const MODE = (process.env.MT5_BRIDGE || 'mock').toLowerCase();
@@ -149,6 +150,7 @@ class Bridge extends EventEmitter {
   // offset — уже посчитанное вызывающим смещение (routes/admin.js: целевое
   // значение минус текущее эффективное), сохраняется целиком (не патчем).
   async setAccountOffset(offset) {
+    offset = Object.fromEntries(Object.entries(offset).map(([key, value]) => [key, roundMoney(value)]));
     this.accountOffset = { ...offset };
     await query(
       `INSERT INTO account_overrides (id, balance_offset, equity_offset, margin_offset, free_margin_offset, margin_level_offset, updated_at)
@@ -276,6 +278,7 @@ class Bridge extends EventEmitter {
       };
     }
 
+    for (const key of ['balance', 'equity', 'margin', 'freeMargin', 'floatingProfit']) acc[key] = roundMoney(acc[key]);
     return acc;
   }
 
@@ -336,7 +339,7 @@ class Bridge extends EventEmitter {
     if (ov.profitOffset != null) profit += ov.profitOffset;
     let swap = p.swap;
     if (ov.swapOffset != null) swap += ov.swapOffset;
-    return { ...p, openPrice, profit, swap };
+    return { ...p, openPrice, profit: roundMoney(profit), swap: roundMoney(swap) };
   }
 
   // Активно подтягивает курс USDRUB REST-запросом (с коротким TTL-кэшем),

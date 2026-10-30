@@ -7,6 +7,7 @@
 import { getBridge } from './mt5-bridge/index.js';
 import { normalizeDeal, toIso as toIsoBroker } from './mt5-bridge/normalize.js';
 import { query, isDbReady } from '../db.js';
+import { roundMoney, addMoney, tradeDelta } from './money.js';
 
 const INTERVAL_MS = Number(process.env.MT5_SYNC_INTERVAL_MS) || 30_000;
 const HISTORY_MONTHS = Number(process.env.MT5_SYNC_HISTORY_MONTHS) || 120; // вся история счёта, не только год
@@ -169,7 +170,7 @@ function applyOverrideToClosedDeal(d, ov) {
   if (ov.profitOffset != null) profit += ov.profitOffset;
   let swap = Number(d.swap) || 0;
   if (ov.swapOffset != null) swap += ov.swapOffset;
-  return { profit, swap };
+  return { profit: roundMoney(profit), swap: roundMoney(swap) };
 }
 
 async function saveDeals(deals) {
@@ -213,14 +214,14 @@ async function saveDeals(deals) {
     // счёта на сайте "проседал" ниже ожидаемого (баг-репорт 2026-10-20:
     // "закрылось более 1100, а баланс 1094") — переносим ту же разницу и в
     // смещение баланса счёта, чтобы цифры счёта совпадали с Историей.
-    const delta = (Number(profit) || 0) - (Number(d.profit) || 0) + ((Number(swap) || 0) - (Number(d.swap) || 0));
+    const delta = tradeDelta(profit, swap, d.profit, d.swap);
     if (delta) {
       const cur = bridge.getAccountOffset();
       await bridge.setAccountOffset({
         ...cur,
-        balance: (cur.balance || 0) + delta,
-        equity: (cur.equity || 0) + delta,
-        freeMargin: (cur.freeMargin || 0) + delta,
+        balance: addMoney(cur.balance, delta),
+        equity: addMoney(cur.equity, delta),
+        freeMargin: addMoney(cur.freeMargin, delta),
       });
     }
     console.log(`[mt5-sync] правка позиции #${d.positionId} перенесена в историю при закрытии (sync)`);

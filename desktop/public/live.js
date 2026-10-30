@@ -11,7 +11,7 @@
 (() => {
   const API_URL = '/api';
   const TOKEN_KEY = 'mt5pc-token';
-  const SUPPORTED_TF = ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1'];
+  const SUPPORTED_TF = ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1', 'W1', 'MN'];
   // Та же фиксированная дата, что и период «Год» в мобильной версии
   // (historyFilter.ts YEAR_PERIOD_START) — не «365 дней назад», а начало
   // счёта; серверное понятие periodов=year считает иначе (скользящий год),
@@ -282,16 +282,21 @@
 
   // --- Свечи -----------------------------------------------------------------
   let candleUnsub = null;
+  let candleRequest = 0;
   function loadCandles(tf) {
+    const request = ++candleRequest;
+    const apiTf = tf === 'MN' ? 'MN1' : tf;
     if (candleUnsub) { candleUnsub(); candleUnsub = null; }
     // +60 баров запаса слева — Ишимоку/фракталам нужна история ДО начала
     // окна для расчёта (9–52 бара), иначе у левого края виден обрыв.
-    api('/candles', { query: { timeframe: tf, count: tf === 'M1' ? 1000 : 360 } })
+    api('/candles', { query: { timeframe: apiTf, count: tf === 'M1' ? 1000 : 360 } })
       .then((r) => {
+        if (request !== candleRequest) return;
         terminalAPI.setBars((r.bars || []).map((c) => ({ t: c.time * 1000, o: c.open, h: c.high, l: c.low, c: c.close })));
       })
       .catch(() => {});
-    candleUnsub = ws.on(`candle:${tf}`, (d) => {
+    candleUnsub = ws.on(`candle:${apiTf}`, (d) => {
+      if (request !== candleRequest) return;
       const bars = d && d.bars;
       if (!bars || !bars.length) return;
       terminalAPI.setBars(bars.map((c) => ({ t: c.time * 1000, o: c.open, h: c.high, l: c.low, c: c.close })));

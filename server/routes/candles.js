@@ -4,7 +4,7 @@ import { getBridge } from '../services/mt5-bridge/index.js';
 
 const router = Router();
 
-const TF = new Set(['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1']);
+const TF = new Set(['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1', 'W1', 'MN1']);
 
 // GET /api/candles?timeframe=M5&from=&to= — свечи EURUSD для графика.
 router.get('/', authRequired, async (req, res) => {

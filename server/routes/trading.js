@@ -8,6 +8,7 @@ import { Router } from 'express';
 import { authRequired, requireRole } from './auth.js';
 import { getBridge } from '../services/mt5-bridge/index.js';
 import { query, isDbReady } from '../db.js';
+import { roundMoney, addMoney, tradeDelta } from '../services/money.js';
 
 const router = Router();
 
@@ -44,15 +45,15 @@ async function carryOverrideToHistory(ticket, targetProfit, targetSwap) {
         // Витринная прибыль не меняет реальный баланс брокера — переносим
         // ту же разницу в смещение баланса счёта (см. mt5-sync.js), иначе
         // "Средства/Баланс" на сайте просядут ниже ожидаемого после закрытия.
-        const delta = (targetProfit - realProfit) + (targetSwap - realSwap);
+        const delta = tradeDelta(targetProfit, targetSwap, realProfit, realSwap);
         if (delta) {
           const bridge = getBridge();
           const cur = bridge.getAccountOffset();
           await bridge.setAccountOffset({
             ...cur,
-            balance: (cur.balance || 0) + delta,
-            equity: (cur.equity || 0) + delta,
-            freeMargin: (cur.freeMargin || 0) + delta,
+            balance: addMoney(cur.balance, delta),
+            equity: addMoney(cur.equity, delta),
+            freeMargin: addMoney(cur.freeMargin, delta),
           });
         }
         console.log(`[trading] правка позиции #${ticket} перенесена в историю после закрытия`);
@@ -125,8 +126,8 @@ router.post('/close', closeAccess, async (req, res) => {
     if (hasOverride) {
       const pos = (await bridge.positions()).find((p) => p.id === ticket);
       if (pos) {
-        targetProfit = pos.profit;
-        targetSwap = pos.swap;
+        targetProfit = roundMoney(pos.profit);
+        targetSwap = roundMoney(pos.swap);
       }
     }
 
