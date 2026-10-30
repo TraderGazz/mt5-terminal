@@ -24,9 +24,16 @@ test('sub-kopeck position results cannot accumulate into a two-kopeck balance di
 });
 test('weekly/monthly requests ask EA for their own timeframe and enough history', async () => {
   const requests = [];
+  let failures = 0;
   const server = http.createServer((req, res) => {
     requests.push(new URL(req.url, 'http://localhost'));
     res.setHeader('Content-Type', 'application/json');
+    if (failures > 0) {
+      failures--;
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: 'Failed to retrieve data' }));
+      return;
+    }
     res.end(JSON.stringify({ data: [] }));
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -45,6 +52,16 @@ test('weekly/monthly requests ask EA for their own timeframe and enough history'
     assert.ok(spans[1].days >= 540);
     assert.ok(spans[2].days >= 360 * 7);
     assert.ok(spans[3].days >= 360 * 31);
+    failures = 1;
+    await bridge.getCandles({ timeframe: 'MN1', count: 360 });
+    assert.equal(requests.length, 6);
+    assert.equal(requests[4].search, requests[5].search);
+    failures = 2;
+    await bridge.getCandles({ timeframe: 'MN1', count: 360 });
+    assert.equal(requests.length, 9);
+    assert.ok(requests[8].searchParams.get('from_date') > requests[7].searchParams.get('from_date'));
+    failures = 3;
+    await assert.rejects(bridge.getCandles({ timeframe: 'MN1', count: 360 }), /HTTP 500/);
   } finally {
     if (saved === undefined) delete process.env.MT5_BRIDGE_URL;
     else process.env.MT5_BRIDGE_URL = saved;
@@ -88,8 +105,50 @@ test('native renderer also permits zooming out with only twelve W1/MN bars', asy
     ${renderer}
     result = ['W1','MN'].map(tf => {
       const opt = {tf,zoom:1,shift:true,type:'candles',quote:1.1};
-      return [renderPriceCanvas(canvas,data,opt).step, renderPriceCanvas(canvas,data,{...opt,zoom:.25}).step];
+      const initial = renderPriceCanvas(canvas,data,opt);
+      const small = renderPriceCanvas(canvas,data,{...opt,zoom:.25});
+      return [initial.step, small.step, initial.x(11), small.x(11), initial.pw * .81];
     });
   `, context);
-  for (const [initial, zoomedOut] of context.result) assert.ok(zoomedOut < initial / 3);
+  for (const [initial, zoomedOut, lastX, smallLastX, rightEdge] of context.result) {
+    assert.ok(zoomedOut < initial / 3);
+    assert.ok(Math.abs(lastX - rightEdge) < initial);
+    assert.ok(Math.abs(smallLastX - rightEdge) < initial);
+  }
+});
+
+test('desktop loads W1/MN1, ignores stale responses and exposes load failures', async () => {
+  const source = await readFile(new URL('../../desktop/public/live.js', import.meta.url), 'utf8');
+  const start = source.indexOf('  let candleUnsub = null;');
+  const end = source.indexOf('// Служебная строка прототипа', start);
+  assert.ok(start > 0 && end > start);
+  const requests = [], displayed = [], elements = {};
+  elements.chart = { append: node => { elements[node.id] = node; } };
+  const context = vm.createContext({
+    document: {
+      getElementById: id => elements[id],
+      createElement: () => ({ style: {}, replaceChildren() {}, append() {} }),
+      createTextNode: text => text,
+    },
+    api: (path, options) => new Promise((resolve, reject) => requests.push({ path, options, resolve, reject })),
+    ws: { on: () => () => {} },
+    terminalAPI: { setBars: data => displayed.push(data) },
+    console: { error() {} },
+  });
+  vm.runInContext(source.slice(start, end) + '\nglobalThis.load = loadCandles;', context);
+  context.load('W1');
+  context.load('MN');
+  assert.equal(requests[0].options.query.timeframe, 'W1');
+  assert.equal(requests[1].options.query.timeframe, 'MN1');
+  requests[0].resolve({bars:[{time:1,open:1,high:2,low:0,close:1}]});
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(displayed.length, 0);
+  requests[1].reject(new Error('HTTP 502'));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(elements.candleStatus.style.display, 'flex');
+  context.load('W1');
+  requests[2].resolve({bars:[{time:1,open:1,high:2,low:0,close:1}]});
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(displayed.length, 1);
+  assert.equal(elements.candleStatus.style.display, 'none');
 });

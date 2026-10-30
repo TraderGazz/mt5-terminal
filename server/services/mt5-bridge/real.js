@@ -200,16 +200,36 @@ export class RealBridge extends EventEmitter {
     // пробел перед StringToTime — если прислать уже с пробелом, валидатор
     // формата на стороне EA отклоняет запрос с HTTP 400).
     const fmt = (d) => brokerDate(d).toISOString().slice(0, 19);
-    const res = await get(
+    const fetchPrices = (start) => get(
       '/history/prices',
       {
         symbol: symbol || this.symbol,
         time_frame: timeframe,
-        from_date: fmt(fromDate),
+        from_date: fmt(start),
         to_date: fmt(toDate),
       },
       20_000,
     );
+    let res;
+    try {
+      res = await fetchPrices(fromDate);
+    } catch (error) {
+      // CopyRates returns <=0 while MT5 is downloading an unused timeframe.
+      // Retry once after allowing history synchronization to finish. No retry
+      // for authentication, validation or networking errors.
+      if (!['W1', 'MN1'].includes(timeframe) || !error.message.includes('HTTP 500')) throw error;
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      try {
+        res = await fetchPrices(fromDate);
+      } catch (retryError) {
+        if (from || timeframe !== 'MN1' || !retryError.message.includes('HTTP 500')) throw retryError;
+        // Some broker feeds reject monthly requests predating their archive.
+        // Try a shorter real archive; never synthesize missing candles.
+        const recentStart = new Date(toDate.getTime() - 20 * 366 * 86400000);
+        if (recentStart <= fromDate) throw retryError;
+        res = await fetchPrices(recentStart);
+      }
+    }
     // На случай, если EA всё же вернул больше баров, чем реально нужно —
     // обрезаем до count с конца (свежие бары), чтобы не гонять лишнее
     // по сети и не грузить клиент.

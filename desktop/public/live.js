@@ -283,18 +283,45 @@
   // --- Свечи -----------------------------------------------------------------
   let candleUnsub = null;
   let candleRequest = 0;
+  function candleStatus(message, retry) {
+    let panel = document.getElementById('candleStatus');
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = 'candleStatus';
+      panel.style.cssText = 'position:absolute;inset:0;z-index:20;background:rgba(255,255,255,.96);display:flex;align-items:center;justify-content:center;gap:12px;font:13px Tahoma;color:#333';
+      document.getElementById('chart').append(panel);
+    }
+    panel.replaceChildren();
+    panel.style.display = message ? 'flex' : 'none';
+    if (!message) return;
+    panel.append(document.createTextNode(message));
+    if (retry) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = 'Повторить';
+      button.onclick = retry;
+      panel.append(button);
+    }
+  }
   function loadCandles(tf) {
     const request = ++candleRequest;
     const apiTf = tf === 'MN' ? 'MN1' : tf;
+    candleStatus('Загрузка графика…');
     if (candleUnsub) { candleUnsub(); candleUnsub = null; }
     // +60 баров запаса слева — Ишимоку/фракталам нужна история ДО начала
     // окна для расчёта (9–52 бара), иначе у левого края виден обрыв.
     api('/candles', { query: { timeframe: apiTf, count: tf === 'M1' ? 1000 : 360 } })
       .then((r) => {
         if (request !== candleRequest) return;
+        if (!r.bars || !r.bars.length) throw new Error('Empty candle history');
+        candleStatus('');
         terminalAPI.setBars((r.bars || []).map((c) => ({ t: c.time * 1000, o: c.open, h: c.high, l: c.low, c: c.close })));
       })
-      .catch(() => {});
+      .catch((error) => {
+        if (request !== candleRequest) return;
+        console.error('[candles]', apiTf, error);
+        candleStatus('Не удалось загрузить график ' + tf, () => loadCandles(tf));
+      });
     candleUnsub = ws.on(`candle:${apiTf}`, (d) => {
       if (request !== candleRequest) return;
       const bars = d && d.bars;
