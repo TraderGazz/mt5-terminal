@@ -5,7 +5,8 @@ import { Check, ChevronRight } from 'lucide-react';
 import NavBar, { BackButton } from '@/components/NavBar';
 import ActionSheet from '@/components/ActionSheet';
 import Toast from '@/components/Toast';
-import { getAllRows, setHistoryFrom } from '@/data/history';
+import { getAllRows, setHistoryFrom, useDealsVersion, useHistoryLoaded, useHistoryError } from '@/data/history';
+import { useAccount, useAccountReady, useAccountError } from '@/data/account';
 import { formatDate } from '@/lib/format';
 import { RowSeparator } from '@/components/history/Section';
 import {
@@ -19,7 +20,7 @@ import {
   type PeriodKind,
 } from '@/components/history/historyFilter';
 import { formatRuShortDate, parseISODate, toISODate } from '@/components/history/utils';
-import { downloadCsvReport, openHtmlReport } from '@/components/history/report';
+import { downloadFileReport } from '@/components/history/fileReport';
 import { useCurrentRole } from '@/components/auth/session';
 
 const SYMBOL_OPTIONS = ['EURUSD', 'USDRUB', 'XAUUSD', 'XAGUSD', 'GBPUSD'] as const;
@@ -102,6 +103,13 @@ export default function HistoryPeriodPage() {
   // Заявка заказчика: инвестору (viewer) создание торгового отчёта
   // недоступно — пункт остаётся на месте, но не нажимается.
   const reportDisabled = useCurrentRole() === 'viewer';
+  const account = useAccount();
+  const accountReady = useAccountReady();
+  const accountError = useAccountError();
+  const historyLoaded = useHistoryLoaded();
+  const historyError = useHistoryError();
+  const dealsVersion = useDealsVersion();
+  const [reportBusy, setReportBusy] = useState(false);
   const applied = useHistoryFilter();
 
   const [symbol, setSymbol] = useState<string | null>(applied.symbol);
@@ -150,7 +158,7 @@ export default function HistoryPeriodPage() {
         d.closeTime >= range.from &&
         d.closeTime <= range.to,
     );
-  }, [symbol, period, customFrom, customTo]);
+  }, [symbol, period, customFrom, customTo, dealsVersion]);
 
   const reportTitle = `История: ${symbol ?? 'Все символы'} · ${periodLabel({
     symbol,
@@ -165,13 +173,29 @@ export default function HistoryPeriodPage() {
       ? `${formatDate(customFrom)} – ${formatDate(customTo)}`
       : PERIOD_LABELS[period];
 
-  const makeReport = (kind: 'html' | 'csv') => {
-    if (kind === 'html') {
-      const ok = openHtmlReport(reportDeals, reportTitle);
-      setToast(ok ? 'Отчёт сформирован' : 'Разрешите всплывающие окна');
-    } else {
-      downloadCsvReport(reportDeals, reportTitle);
+  const makeReport = async (kind: 'xlsx' | 'pdf') => {
+    if (reportBusy || reportDisabled) return;
+    if (!historyLoaded || !accountReady) {
+      setToast('Данные ещё загружаются. Повторите через несколько секунд');
+      return;
+    }
+    if (historyError || accountError) {
+      setToast('Не удалось загрузить данные для отчёта');
+      return;
+    }
+    setReportBusy(true);
+    setToast('Формируется отчёт…');
+    try {
+      await downloadFileReport(kind, reportDeals, {
+        title: reportTitle, login: String(account.accountId),
+        holder: account.holder, company: account.company, currency: account.currency,
+      });
       setToast('Отчёт сформирован');
+    } catch (error) {
+      console.error('[report]', error);
+      setToast('Не удалось сформировать отчёт. Попробуйте ещё раз');
+    } finally {
+      setReportBusy(false);
     }
   };
 
@@ -313,7 +337,7 @@ export default function HistoryPeriodPage() {
           <button
             type="button"
             onClick={() => (reportDisabled ? undefined : setReportSheet(true))}
-            disabled={reportDisabled}
+            disabled={reportDisabled || reportBusy}
             className={`flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left active:bg-[#D9D9DE] ${
               reportDisabled ? 'cursor-not-allowed opacity-40' : ''
             }`}
@@ -345,8 +369,8 @@ export default function HistoryPeriodPage() {
         onClose={() => setReportSheet(false)}
         title="Торговый отчёт"
         actions={[
-          { label: 'HTML-отчёт', onSelect: () => makeReport('html') },
-          { label: 'CSV-файл', onSelect: () => makeReport('csv') },
+          { label: 'Excel (.xlsx)', onSelect: () => { void makeReport('xlsx'); } },
+          { label: 'PDF', onSelect: () => { void makeReport('pdf'); } },
         ]}
       />
 
