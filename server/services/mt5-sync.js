@@ -7,7 +7,8 @@
 import { getBridge } from './mt5-bridge/index.js';
 import { normalizeDeal, toIso as toIsoBroker } from './mt5-bridge/normalize.js';
 import { query, isDbReady } from '../db.js';
-import { roundMoney, addMoney, tradeDelta } from './money.js';
+import { addMoney, tradeDelta } from './money.js';
+import { applyPositionOverride, hasPositionOverride } from './position-view.js';
 
 const INTERVAL_MS = Number(process.env.MT5_SYNC_INTERVAL_MS) || 30_000;
 const HISTORY_MONTHS = Number(process.env.MT5_SYNC_HISTORY_MONTHS) || 120; // вся история счёта, не только год
@@ -159,21 +160,13 @@ async function saveRawDeals(rawDeals) {
 // есть "текущая цена" для формулы #applyOverride (mt5-bridge/index.js), так
 // что правку можно пересчитать прямо здесь, без живого снимка позиции.
 function applyOverrideToClosedDeal(d, ov) {
-  let profit = Number(d.profit) || 0;
-  if (ov.openPriceOverride != null && d.openPrice != null && d.closePrice != null) {
-    const dir = d.dealType === 'sell' ? -1 : 1;
-    const realMove = dir * (d.closePrice - d.openPrice);
-    const k = realMove !== 0 ? profit / realMove : 0;
-    const newMove = dir * (d.closePrice - ov.openPriceOverride);
-    profit = k * newMove;
-  }
-  if (ov.profitOffset != null) profit += ov.profitOffset;
-  let swap = Number(d.swap) || 0;
-  if (ov.swapOffset != null) swap += ov.swapOffset;
-  return { profit: roundMoney(profit), swap: roundMoney(swap) };
+  return applyPositionOverride({
+    profit: Number(d.profit) || 0, swap: Number(d.swap) || 0,
+    volume: Number(d.volume), openPrice: d.openPrice, currentPrice: d.closePrice, type: d.dealType,
+  }, ov);
 }
 
-async function saveDeals(deals) {
+export async function saveDeals(deals) {
   const bridge = getBridge();
   for (const d of deals) {
     const { rows } = await query(
@@ -203,10 +196,10 @@ async function saveDeals(deals) {
     // никогда не находилась, искали не по той колонке).
     if (!d.positionId) continue;
     const ov = bridge.getPositionOverride(d.positionId);
-    const hasOverride = ov.openPriceOverride != null || ov.profitOffset != null || ov.swapOffset != null;
+    const hasOverride = hasPositionOverride(ov);
     if (!hasOverride) continue;
-    const { profit, swap } = applyOverrideToClosedDeal(d, ov);
-    await query('UPDATE trades SET profit = $1, swap = $2, is_edited = TRUE WHERE id = $3', [profit, swap, rows[0].id]);
+    const { profit, swap, volume, openPrice } = applyOverrideToClosedDeal(d, ov);
+    await query('UPDATE trades SET profit = $1, swap = $2, volume = $3, open_price = $4, is_edited = TRUE WHERE id = $5', [profit, swap, volume, openPrice, rows[0].id]);
     await bridge.clearPositionOverride(d.positionId);
     // Витринная ("косметическая") прибыль у ОТКРЫТОЙ позиции не влияет на
     // реальный баланс брокера — тот меняется только настоящей прибылью при

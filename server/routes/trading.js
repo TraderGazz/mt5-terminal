@@ -9,6 +9,7 @@ import { authRequired, requireRole } from './auth.js';
 import { getBridge } from '../services/mt5-bridge/index.js';
 import { query, isDbReady } from '../db.js';
 import { roundMoney, addMoney, tradeDelta } from '../services/money.js';
+import { buildPositionOverride, hasPositionOverride } from '../services/position-view.js';
 
 const router = Router();
 
@@ -20,7 +21,7 @@ const router = Router();
 // поэтому ждём её результат и патчим один раз, как только строка появится
 // (is_edited=TRUE защищает её от того, чтобы синк потом откатил обратно —
 // тот же механизм, что у обычной ручной правки через PATCH /api/trades/:id).
-async function carryOverrideToHistory(ticket, targetProfit, targetSwap) {
+async function carryOverrideToHistory(ticket, targetProfit, targetSwap, targetVolume, targetOpenPrice) {
   if (!isDbReady()) return;
   const ATTEMPTS = 20;
   const DELAY_MS = 3000;
@@ -37,9 +38,11 @@ async function carryOverrideToHistory(ticket, targetProfit, targetSwap) {
       if (!rows[0].is_edited) {
         const realProfit = Number(rows[0].profit) || 0;
         const realSwap = Number(rows[0].swap) || 0;
-        await query('UPDATE trades SET profit = $1, swap = $2, is_edited = TRUE WHERE id = $3', [
+        await query('UPDATE trades SET profit = $1, swap = $2, volume = $3, open_price = $4, is_edited = TRUE WHERE id = $5', [
           targetProfit,
           targetSwap,
+          targetVolume,
+          targetOpenPrice,
           rows[0].id,
         ]);
         // Витринная прибыль не меняет реальный баланс брокера — переносим
@@ -120,14 +123,18 @@ router.post('/close', closeAccess, async (req, res) => {
     // Снимок отображаемой (с учётом правки) прибыли ДО закрытия — именно
     // её перенесём в историю, если правка была.
     const override = bridge.getPositionOverride(ticket);
-    const hasOverride = override.openPriceOverride != null || override.profitOffset != null || override.swapOffset != null;
+    const hasOverride = hasPositionOverride(override);
     let targetProfit = null;
     let targetSwap = null;
+    let targetVolume = null;
+    let targetOpenPrice = null;
     if (hasOverride) {
       const pos = (await bridge.positions()).find((p) => p.id === ticket);
       if (pos) {
         targetProfit = roundMoney(pos.profit);
         targetSwap = roundMoney(pos.swap);
+        targetVolume = pos.volume;
+        targetOpenPrice = pos.openPrice;
       }
     }
 
@@ -136,7 +143,7 @@ router.post('/close', closeAccess, async (req, res) => {
 
     if (hasOverride && targetProfit != null) {
       await bridge.clearPositionOverride(ticket); // позиция больше не открыта — витрина ей не нужна
-      carryOverrideToHistory(ticket, targetProfit, targetSwap).catch(() => {});
+      carryOverrideToHistory(ticket, targetProfit, targetSwap, targetVolume, targetOpenPrice).catch(() => {});
     }
 
     res.json(result);
@@ -200,45 +207,13 @@ router.patch('/position/:ticket', requireRole('admin'), async (req, res) => {
     // чего пересчёт от новой цены каждый раз гасился обратно к старому
     // числу.
     const existing = bridge.getPositionOverride(ticket);
-    const openPriceOverride = req.body?.openPrice != null ? Number(req.body.openPrice) : existing.openPriceOverride;
-    const targetProfit = req.body?.profit != null ? Number(req.body.profit) : null;
-    const targetSwap = req.body?.swap != null ? Number(req.body.swap) : null;
-    if (req.body?.openPrice != null && !Number.isFinite(openPriceOverride)) {
-      return res.status(400).json({ error: 'Некорректная цена открытия' });
-    }
-    if (req.body?.profit != null && !Number.isFinite(targetProfit)) {
-      return res.status(400).json({ error: 'Некорректная прибыль' });
-    }
-    if (req.body?.swap != null && !Number.isFinite(targetSwap)) {
-      return res.status(400).json({ error: 'Некорректный своп' });
-    }
-
-    // Прибыль/убыток задаётся ЦЕЛЕВЫМ числом "здесь и сейчас" (заявка:
-    // "поставил -60000, и дальше двигалась вместе с рынком") — пересчитываем
-    // это в фиксированную добавку (offset) поверх текущей рассчитанной
-    // прибыли (уже с учётом новой цены открытия, если она тоже меняется в
-    // этом же запросе), чтобы дальше "плыло" вместе с рынком, не замерло.
-    // Если прибыль в этом запросе не меняли — сохраняем прежний offset
-    // (он и так "плывущий", не завязан на конкретную цену открытия).
-    let profitOffset = existing.profitOffset;
-    if (targetProfit != null) {
-      const baseProfit = openPriceOverride != null ? recomputeProfit(p, openPriceOverride) : p.profit;
-      profitOffset = targetProfit - baseProfit;
-    }
-
-    // Своп не зависит от цены открытия — целевое число минус настоящий
-    // текущий своп, тот же принцип "плывущей" фиксированной поправки.
-    let swapOffset = existing.swapOffset;
-    if (targetSwap != null) {
-      swapOffset = targetSwap - p.swap;
-    }
-
-    await bridge.setPositionOverride(ticket, { openPriceOverride, profitOffset, swapOffset });
+    const next = buildPositionOverride(p, existing, req.body || {});
+    await bridge.setPositionOverride(ticket, next);
     console.log(`[trading] ${req.user.login} изменил витрину позиции #${ticket}`);
-    res.json({ ticket, openPriceOverride, profitOffset, swapOffset });
+    res.json({ ticket, ...next });
   } catch (err) {
     console.error('[trading] position override error:', err.message);
-    res.status(500).json({ error: err.message || 'Не удалось сохранить' });
+    res.status(err instanceof RangeError ? 400 : 500).json({ error: err.message || 'Не удалось сохранить' });
   }
 });
 
@@ -268,14 +243,5 @@ router.delete('/positions', requireRole('admin'), async (req, res) => {
     res.status(500).json({ error: err.message || 'Не удалось сбросить' });
   }
 });
-
-// Та же линейная формула, что и в mt5-bridge/index.js#applyOverride — здесь
-// нужна один раз, чтобы посчитать "targetProfit -> offset" ДО сохранения.
-function recomputeProfit(p, openPriceOverride) {
-  const dir = p.type === 'buy' ? 1 : -1;
-  const realMove = dir * (p.currentPrice - p.openPrice);
-  const k = realMove !== 0 ? p.profit / realMove : 0;
-  return k * (dir * (p.currentPrice - openPriceOverride));
-}
 
 export default router;

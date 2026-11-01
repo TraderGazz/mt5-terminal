@@ -162,10 +162,10 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
   // resetEdit() ниже, которая сбрасывает только editTarget.
   const [resetAllConfirm, setResetAllConfirm] = useState(false);
   const [resettingAll, setResettingAll] = useState(false);
-  const [editForm, setEditForm] = useState({ openPrice: '', profit: '', swap: '' });
+  const [editForm, setEditForm] = useState({ openPrice: '', profit: '', swap: '', volume: '' });
   // Исходные значения на момент открытия формы — нужны для dirty-check в
   // submitEdit (см. комментарий там): нельзя слать оба поля всегда.
-  const [editInitial, setEditInitial] = useState({ openPrice: '', profit: '', swap: '' });
+  const [editInitial, setEditInitial] = useState({ openPrice: '', profit: '', swap: '', volume: '' });
   const [savingEdit, setSavingEdit] = useState(false);
 
   const load = () => {
@@ -178,7 +178,7 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
 
   const openEdit = (p: ApiPosition) => {
     setEditTarget(p);
-    const initial = { openPrice: String(p.openPrice), profit: String(p.profit), swap: String(p.swap) };
+    const initial = { openPrice: String(p.openPrice), profit: String(p.profit), swap: String(p.swap), volume: String(p.volume) };
     setEditForm(initial);
     setEditInitial(initial);
   };
@@ -190,7 +190,7 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
     // profit всегда, сервер пересчитывает profit_offset так, что он ровно
     // гасит пересчёт от новой цены открытия, и прибыль визуально "не
     // меняется" при правке одной только цены (баг-репорт заказчика).
-    const patch: { openPrice?: number; profit?: number; swap?: number } = {};
+    const patch: { openPrice?: number; profit?: number; swap?: number; volume?: number } = {};
     if (editForm.openPrice !== editInitial.openPrice) {
       const openPrice = Number(editForm.openPrice.replace(',', '.'));
       if (!Number.isFinite(openPrice)) { showToast('Введите корректную цену открытия'); return; }
@@ -206,7 +206,15 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
       if (!Number.isFinite(swap)) { showToast('Введите корректный своп'); return; }
       patch.swap = swap;
     }
-    if (patch.openPrice == null && patch.profit == null && patch.swap == null) {
+    if (editForm.volume !== editInitial.volume) {
+      const volume = Number(editForm.volume.trim().replace(',', '.'));
+      if (!Number.isFinite(volume) || volume <= 0 || volume > 99999999.99 || Math.abs(volume * 100 - Math.round(volume * 100)) > 0.000001) {
+        showToast('Введите объём больше нуля, не более 99 999 999,99 и с точностью до 0,01 лота');
+        return;
+      }
+      patch.volume = Math.round(volume * 100) / 100;
+    }
+    if (patch.openPrice == null && patch.profit == null && patch.swap == null && patch.volume == null) {
       setEditTarget(null);
       return;
     }
@@ -368,6 +376,12 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
         }
       >
         <div className="flex flex-col gap-3">
+          <AdminInput
+            label="Объём (лоты)"
+            inputMode="decimal"
+            value={editForm.volume}
+            onChange={(e) => setEditForm((f) => ({ ...f, volume: e.target.value }))}
+          />
           <AdminInput
             label="Цена открытия"
             inputMode="decimal"

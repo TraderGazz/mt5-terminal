@@ -237,6 +237,7 @@ CREATE TABLE IF NOT EXISTS position_overrides (
     open_price_override DECIMAL(18, 5),
     profit_offset       DECIMAL(18, 2),
     swap_offset         DECIMAL(18, 2),
+    volume_override     NUMERIC(10, 2) CHECK (volume_override > 0),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

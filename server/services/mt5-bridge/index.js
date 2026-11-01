@@ -13,6 +13,7 @@ import { RealBridge } from './real.js';
 import * as N from './normalize.js';
 import { query } from '../../db.js';
 import { roundMoney } from '../money.js';
+import { applyPositionOverride } from '../position-view.js';
 import { readClosedTradeEditDelta } from '../closed-trade-edits.js';
 
 const MODE = (process.env.MT5_BRIDGE || 'mock').toLowerCase();
@@ -65,12 +66,13 @@ class Bridge extends EventEmitter {
   // соединения пула (pg сам это умеет), а catch — реальные сбои.
   async #loadOverrides() {
     try {
-      const { rows } = await query('SELECT ticket, open_price_override, profit_offset, swap_offset FROM position_overrides');
+      const { rows } = await query('SELECT ticket, open_price_override, profit_offset, swap_offset, volume_override FROM position_overrides');
       for (const r of rows) {
         this.overrides.set(Number(r.ticket), {
           openPriceOverride: r.open_price_override != null ? Number(r.open_price_override) : null,
           profitOffset: r.profit_offset != null ? Number(r.profit_offset) : null,
           swapOffset: r.swap_offset != null ? Number(r.swap_offset) : null,
+          volumeOverride: r.volume_override != null ? Number(r.volume_override) : null,
         });
       }
     } catch (err) {
@@ -82,31 +84,34 @@ class Bridge extends EventEmitter {
   // PATCH одного поля (например только цены) не затирать null'ом уже
   // сохранённое другое (например profit_offset от предыдущей правки).
   getPositionOverride(ticket) {
-    return this.overrides.get(Number(ticket)) ?? { openPriceOverride: null, profitOffset: null, swapOffset: null };
+    return this.overrides.get(Number(ticket)) ?? { openPriceOverride: null, profitOffset: null, swapOffset: null, volumeOverride: null };
   }
 
   // Правка сохраняется сразу и в памяти (эффект мгновенный), и в БД
   // (переживает рестарт сервера). Реальная позиция у брокера не трогается.
-  async setPositionOverride(ticket, { openPriceOverride, profitOffset, swapOffset }) {
-    this.overrides.set(Number(ticket), {
-      openPriceOverride: openPriceOverride ?? null,
-      profitOffset: profitOffset ?? null,
-      swapOffset: swapOffset ?? null,
-    });
+  async setPositionOverride(ticket, { openPriceOverride, profitOffset, swapOffset, volumeOverride }) {
+
     // Не гейтим на isDbReady() (см. #loadOverrides) — если запрос реально
     // упадёт, пусть бросает наверх: маршрут (routes/trading.js) вернёт
     // админу настоящую ошибку вместо тихого "как будто сохранилось", пока
     // на деле в БД ничего не записалось.
     await query(
-      `INSERT INTO position_overrides (ticket, open_price_override, profit_offset, swap_offset, updated_at)
-       VALUES ($1, $2, $3, $4, now())
+      `INSERT INTO position_overrides (ticket, open_price_override, profit_offset, swap_offset, volume_override, updated_at)
+       VALUES ($1, $2, $3, $4, $5, now())
        ON CONFLICT (ticket) DO UPDATE SET
          open_price_override = EXCLUDED.open_price_override,
          profit_offset = EXCLUDED.profit_offset,
          swap_offset = EXCLUDED.swap_offset,
+         volume_override = EXCLUDED.volume_override,
          updated_at = now()`,
-      [ticket, openPriceOverride ?? null, profitOffset ?? null, swapOffset ?? null],
+      [ticket, openPriceOverride ?? null, profitOffset ?? null, swapOffset ?? null, volumeOverride ?? null],
     );
+    this.overrides.set(Number(ticket), {
+      openPriceOverride: openPriceOverride ?? null,
+      profitOffset: profitOffset ?? null,
+      swapOffset: swapOffset ?? null,
+      volumeOverride: volumeOverride ?? null,
+    });
   }
 
   async clearPositionOverride(ticket) {
@@ -326,20 +331,7 @@ class Bridge extends EventEmitter {
   #applyOverride(p) {
     const ov = this.overrides.get(p.id);
     if (!ov) return p;
-    let profit = p.profit;
-    let openPrice = p.openPrice;
-    if (ov.openPriceOverride != null) {
-      const dir = p.type === 'buy' ? 1 : -1;
-      const realMove = dir * (p.currentPrice - p.openPrice);
-      const k = realMove !== 0 ? p.profit / realMove : 0;
-      const newMove = dir * (p.currentPrice - ov.openPriceOverride);
-      profit = k * newMove;
-      openPrice = ov.openPriceOverride;
-    }
-    if (ov.profitOffset != null) profit += ov.profitOffset;
-    let swap = p.swap;
-    if (ov.swapOffset != null) swap += ov.swapOffset;
-    return { ...p, openPrice, profit: roundMoney(profit), swap: roundMoney(swap) };
+    return applyPositionOverride(p, ov);
   }
 
   // Активно подтягивает курс USDRUB REST-запросом (с коротким TTL-кэшем),
