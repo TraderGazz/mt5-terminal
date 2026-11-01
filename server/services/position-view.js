@@ -5,11 +5,16 @@ export function hasPositionOverride(override) {
     .some(key => override[key] != null);
 }
 
-// Absolute profit/swap corrections remain absolute when volume changes.
-// Only market P/L is proportional to lots; already accrued swap is preserved.
+export function hasFinancialPositionOverride(override) {
+  return ['openPriceOverride', 'profitOffset', 'swapOffset'].some(key => override[key] != null);
+}
+
+// Customer clarification: lots are display metadata only. They must not change
+// P/L, swap, equity, free margin or the actual broker order.
 export function applyPositionOverride(position, override = {}) {
   const openPrice = override.openPriceOverride ?? position.openPrice;
   const volume = override.volumeOverride ?? position.volume;
+  if (!hasFinancialPositionOverride(override)) return { ...position, volume };
   let profit = position.profit;
   if (override.openPriceOverride != null) {
     const direction = position.type === 'buy' ? 1 : -1;
@@ -17,7 +22,6 @@ export function applyPositionOverride(position, override = {}) {
     const coefficient = realMove !== 0 ? profit / realMove : 0;
     profit = coefficient * direction * (position.currentPrice - openPrice);
   }
-  if (override.volumeOverride != null) profit *= volume / position.volume;
   profit += override.profitOffset ?? 0;
   const swap = position.swap + (override.swapOffset ?? 0);
   return { ...position, openPrice, volume, profit: roundMoney(profit), swap: roundMoney(swap) };

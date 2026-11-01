@@ -1,3 +1,4 @@
+import { roundMoney } from '../services/money.js';
 import { Router } from 'express';
 import { query, requireDb } from '../db.js';
 import { authRequired, requireRole, hashPassword } from './auth.js';
@@ -394,7 +395,7 @@ const LEDGER_LABELS = { balance: 'Пополнение', withdrawal: 'Сняти
  * equity, margin, freeMargin, marginLevel, floatingProfit } } — см. GET
  * /api/account для источника этих же полей.
  */
-function toHtml(rows, meta = {}) {
+export function toHtml(rows, meta = {}) {
   const esc = (v) =>
     String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const acc = meta.account || {};
@@ -427,8 +428,9 @@ function toHtml(rows, meta = {}) {
   const grossProfit = wins.reduce((a, b) => a + b, 0);
   const grossLoss = losses.reduce((a, b) => a + b, 0);
   const netProfit = grossProfit + grossLoss;
+  const cleanProfit = netProfit + swapSum + tradeRows.reduce((sum, row) => sum + (Number(row.commission) || 0), 0);
   const profitFactor = grossLoss !== 0 ? Math.abs(grossProfit / grossLoss) : 0;
-  const expectedPayoff = profits.length ? netProfit / profits.length : 0;
+  const expectedPayoff = profits.length ? roundMoney(netProfit / profits.length) : 0;
   const winRate = profits.length ? (wins.length / profits.length) * 100 : 0;
   const lossRate = profits.length ? (losses.length / profits.length) * 100 : 0;
   const bestTrade = profits.length ? Math.max(...profits) : 0;
@@ -486,13 +488,16 @@ ${ledgerTrs}` : ''}
 <table cellspacing="1" cellpadding="3" border="0">
 <tr><td colspan="13" align="center" style="height:30px"><div style="font: 10pt Tahoma"><b>Результаты</b></div></td></tr>
 <tr align="right">
-<td nowrap colspan="3">Чистая прибыль:</td><td nowrap><b>${fmtNum(netProfit)}</b></td>
-<td nowrap colspan="3">Общая прибыль:</td><td nowrap><b>${fmtNum(grossProfit)}</b></td>
-<td nowrap colspan="3">Общий убыток:</td><td nowrap colspan="2"><b>${fmtNum(grossLoss)}</b></td>
+<td nowrap colspan="3">Прибыль по сделкам:</td><td nowrap><b>${fmtNum(netProfit)}</b></td>
+<td nowrap colspan="3">Положительные сделки:</td><td nowrap><b>${fmtNum(grossProfit)}</b></td>
+<td nowrap colspan="3">Отрицательные сделки:</td><td nowrap colspan="2"><b>${fmtNum(grossLoss)}</b></td>
+</tr>
+<tr align="right">
+<td nowrap colspan="3">Чистая прибыль:</td><td nowrap><b>${fmtNum(cleanProfit)}</b></td>
 </tr>
 <tr align="right">
 <td nowrap colspan="3">Прибыльность:</td><td nowrap><b>${profitFactor.toFixed(2)}</b></td>
-<td nowrap colspan="3">Матожидание выигрыша:</td><td nowrap><b>${fmtNum(expectedPayoff)}</b></td>
+<td nowrap colspan="3">Средний результат сделки:</td><td nowrap><b>${fmtNum(expectedPayoff)}</b></td>
 </tr>
 <tr><td nowrap style="height: 10px"></td></tr>
 <tr align="right">

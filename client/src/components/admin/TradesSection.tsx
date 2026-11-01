@@ -401,6 +401,9 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
             onChange={(e) => setEditForm((f) => ({ ...f, swap: e.target.value }))}
           />
           <p className="text-[13px] leading-[18px] text-text-secondary">
+            Объём меняется только в отображении. Прибыль, своп и показатели счёта от изменения лота не пересчитываются.
+          </p>
+          <p className="text-[13px] leading-[18px] text-text-secondary">
             Это витрина (что видят сайт и админка) — реальная позиция у
             брокера не меняется. Прибыль дальше продолжит двигаться вместе
             с рынком от заданного здесь значения.

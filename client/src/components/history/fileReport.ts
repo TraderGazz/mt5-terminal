@@ -13,6 +13,11 @@ const HEADERS = ['Тикет', 'Открытие', 'Символ', 'Тип', 'О
 const money = (value: number) => new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 const amount = (deals: ReportDeal[], key: 'swap' | 'commission' | 'profit') =>
   deals.reduce((sum, deal) => sum + Math.round(Number(deal[key] || 0) * 100), 0) / 100;
+const averageProfit = (deals: ReportDeal[]) => {
+  if (!deals.length) return 0;
+  const totalCents = Math.round(amount(deals, 'profit') * 100);
+  return Math.sign(totalCents) * Math.round(Math.abs(totalCents) / deals.length) / 100;
+};
 
 function brokerDate(time: number) {
   const date = new Date(time + 3 * 3600000);
@@ -68,10 +73,15 @@ export async function createExcelReport(deals: ReportDeal[], meta: ReportMeta): 
   total.font = { bold: true, name: 'Arial' };
   const net = sheet.addRow([]);
   sheet.mergeCells(`A${net.number}:H${net.number}`);
-  net.getCell(1).value = `Результат с учётом свопа и комиссии, ${meta.currency}`;
+  net.getCell(1).value = `Чистая прибыль, ${meta.currency}`;
   net.getCell(11).value = deals.length ? { formula: `SUM(I${total.number}:K${total.number})`, result: Math.round((amount(deals, 'profit') + amount(deals, 'swap') + amount(deals, 'commission')) * 100) / 100 } : 0;
   net.getCell(11).numFmt = '#,##0.00;[Red]-#,##0.00';
   net.font = { bold: true, name: 'Arial' };
+  const average = sheet.addRow([]);
+  sheet.mergeCells(`A${average.number}:H${average.number}`);
+  average.getCell(1).value = `Средний результат сделки, ${meta.currency}`;
+  average.getCell(11).value = deals.length ? { formula: `ROUND(K${total.number}/${deals.length},2)`, result: averageProfit(deals) } : 0;
+  average.getCell(11).numFmt = '#,##0.00;[Red]-#,##0.00';
   if (!deals.length) sheet.addRow(['За выбранный период сделок нет']);
   const buffer = await workbook.xlsx.writeBuffer();
   return Uint8Array.from(new Uint8Array(buffer));
@@ -93,7 +103,8 @@ export function pdfReportDefinition(deals: ReportDeal[], meta: ReportMeta): TDoc
       { text: meta.title, fontSize: 10, margin: [0, 0, 0, 4] },
       { text: accountLine(meta), fontSize: 9, margin: [0, 0, 0, 14] },
       { text: `Прибыль: ${money(profit)} · Своп: ${money(swap)} · Комиссия: ${money(commission)} ${meta.currency}`, alignment: 'right', fontSize: 9, margin: [0, 12, 0, 4] },
-      { text: `Результат с учётом свопа и комиссии: ${money((Math.round(profit * 100) + Math.round(swap * 100) + Math.round(commission * 100)) / 100)} ${meta.currency}`, alignment: 'right', bold: true, fontSize: 10 },
+      { text: `Чистая прибыль: ${money((Math.round(profit * 100) + Math.round(swap * 100) + Math.round(commission * 100)) / 100)} ${meta.currency}`, alignment: 'right', bold: true, fontSize: 10 },
+      { text: `Средний результат сделки: ${money(averageProfit(deals))} ${meta.currency}`, alignment: 'right', fontSize: 9, margin: [0, 4, 0, 0] },
       { text: ' ' },
       { table: { headerRows: 1, dontBreakRows: true, widths: ['auto', 67, 'auto', 25, 30, 43, 67, 43, 48, 48, 55], body }, layout: 'lightHorizontalLines' },
       ...(!deals.length ? [{ text: 'За выбранный период сделок нет', margin: [0, 8, 0, 0] as [number, number, number, number] }] : []),

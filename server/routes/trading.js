@@ -9,7 +9,7 @@ import { authRequired, requireRole } from './auth.js';
 import { getBridge } from '../services/mt5-bridge/index.js';
 import { query, isDbReady } from '../db.js';
 import { roundMoney, addMoney, tradeDelta } from '../services/money.js';
-import { buildPositionOverride, hasPositionOverride } from '../services/position-view.js';
+import { buildPositionOverride, hasPositionOverride, hasFinancialPositionOverride } from '../services/position-view.js';
 
 const router = Router();
 
@@ -39,8 +39,8 @@ async function carryOverrideToHistory(ticket, targetProfit, targetSwap, targetVo
         const realProfit = Number(rows[0].profit) || 0;
         const realSwap = Number(rows[0].swap) || 0;
         await query('UPDATE trades SET profit = $1, swap = $2, volume = $3, open_price = $4, is_edited = TRUE WHERE id = $5', [
-          targetProfit,
-          targetSwap,
+          targetProfit ?? realProfit,
+          targetSwap ?? realSwap,
           targetVolume,
           targetOpenPrice,
           rows[0].id,
@@ -48,7 +48,7 @@ async function carryOverrideToHistory(ticket, targetProfit, targetSwap, targetVo
         // Витринная прибыль не меняет реальный баланс брокера — переносим
         // ту же разницу в смещение баланса счёта (см. mt5-sync.js), иначе
         // "Средства/Баланс" на сайте просядут ниже ожидаемого после закрытия.
-        const delta = tradeDelta(targetProfit, targetSwap, realProfit, realSwap);
+        const delta = tradeDelta(targetProfit ?? realProfit, targetSwap ?? realSwap, realProfit, realSwap);
         if (delta) {
           const bridge = getBridge();
           const cur = bridge.getAccountOffset();
@@ -131,8 +131,10 @@ router.post('/close', closeAccess, async (req, res) => {
     if (hasOverride) {
       const pos = (await bridge.positions()).find((p) => p.id === ticket);
       if (pos) {
-        targetProfit = roundMoney(pos.profit);
-        targetSwap = roundMoney(pos.swap);
+        if (hasFinancialPositionOverride(override)) {
+          targetProfit = roundMoney(pos.profit);
+          targetSwap = roundMoney(pos.swap);
+        }
         targetVolume = pos.volume;
         targetOpenPrice = pos.openPrice;
       }
@@ -141,7 +143,7 @@ router.post('/close', closeAccess, async (req, res) => {
     const result = await bridge.closeTrade({ ticket, volume });
     console.log(`[trading] ${req.user.login} закрыл позицию #${ticket}`);
 
-    if (hasOverride && targetProfit != null) {
+    if (hasOverride && targetVolume != null) {
       await bridge.clearPositionOverride(ticket); // позиция больше не открыта — витрина ей не нужна
       carryOverrideToHistory(ticket, targetProfit, targetSwap, targetVolume, targetOpenPrice).catch(() => {});
     }

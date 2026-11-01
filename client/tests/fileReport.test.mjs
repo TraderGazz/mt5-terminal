@@ -29,6 +29,9 @@ test('Excel is an actual workbook with branded account, numeric cells and cached
   assert.equal(sheet.getCell('K8').value.result, 68214.65);
   assert.equal(sheet.getCell('K9').value.result, -44178.91);
   assert.equal(sheet.getCell('K8').value.formula, 'SUM(K6:K7)');
+  assert.equal(sheet.getCell('A9').value, 'Чистая прибыль, RUB');
+  assert.equal(sheet.getCell('A10').value, 'Средний результат сделки, RUB');
+  assert.equal(sheet.getCell('K10').value.result, 34107.33);
   if (process.env.REPORT_TEST_OUTPUT_DIR) {
     await mkdir(process.env.REPORT_TEST_OUTPUT_DIR, {recursive:true});
     await writeFile(path.join(process.env.REPORT_TEST_OUTPUT_DIR, 'trade-report.xlsx'), bytes);

@@ -6,11 +6,11 @@ import pg from 'pg';
 import { applyPositionOverride, buildPositionOverride, hasPositionOverride } from '../services/position-view.js';
 
 const position = { id:123, type:'buy', volume:1, openPrice:1, currentPrice:1.01, profit:100, swap:-2 };
-test('lot size scales market profit and preserves accrued swap and absolute corrections', () => {
+test('lot size is metadata only and preserves profit, swap and existing corrections', () => {
   const result = applyPositionOverride(position, {volumeOverride:2,profitOffset:50,swapOffset:-3});
-  assert.equal(result.volume,2); assert.equal(result.profit,250); assert.equal(result.swap,-5);
+  assert.equal(result.volume,2); assert.equal(result.profit,150); assert.equal(result.swap,-5);
   assert.equal(position.volume,1);
-  assert.equal(applyPositionOverride({...position,type:'sell',profit:-100},{volumeOverride:.5}).profit,-50);
+  assert.equal(applyPositionOverride({...position,type:'sell',profit:-100},{volumeOverride:.5}).profit,-100);
   assert.equal(hasPositionOverride({volumeOverride:2}),true);
 });
 test('simultaneous lot, opening price and profit edits respect explicit target profit', () => {
@@ -18,7 +18,7 @@ test('simultaneous lot, opening price and profit edits respect explicit target p
   const result = applyPositionOverride(position,override);
   assert.equal(result.volume,2); assert.equal(result.profit,175); assert.equal(result.swap,-10);
   const later = applyPositionOverride({...position,currentPrice:1.02,profit:200},override);
-  assert.equal(later.profit,375);
+  assert.equal(later.profit,275);
 });
 test('editing another field preserves saved volume; repeated lot save is idempotent', () => {
   const before = {volumeOverride:2,profitOffset:50,swapOffset:-3};
@@ -65,10 +65,10 @@ test('PostgreSQL and HTTP integration: persistence, access control, both close p
       bridge.impl={
         start(){}, stop(){},
         getPositions:async()=>closed?[]:[{ticket:123,symbol:'EURUSD',type:0,volume:1,price_open:1,price_current:1.01,profit:100,swap:-2}],
-        getAccount:async()=>({login:'test',balance:closed?100098:100000,equity:100098,free_margin:99098,margin:1000,profit:closed?0:98}),
+        getAccount:async()=>({login:'test',balance:closed?100101:100000,equity:100098,free_margin:99098,margin:1000,profit:closed?0:98}),
         closeOrder:async(order)=>{
           brokerCommands.push(order); closed=true;
-          await query("INSERT INTO trades (ticket,position_id,symbol,type,deal_type,volume,open_price,close_price,profit,swap,commission,close_time) VALUES (9001,123,'EURUSD','buy','buy',1,1,1.01,100,-2,0,now())");
+          await query("INSERT INTO trades (ticket,position_id,symbol,type,deal_type,volume,open_price,close_price,profit,swap,commission,close_time) VALUES (9001,123,'EURUSD','buy','buy',1,1,1.01,103,-2,0,now())");
           return {done:true};
         }
       };
@@ -80,9 +80,9 @@ test('PostgreSQL and HTTP integration: persistence, access control, both close p
       for(const volume of [0,-1,.001,100000000]) assert.equal((await request('PATCH','/position/123',{volume})).status,400);
       assert.equal((await request('PATCH','/position/123',{volume:2})).status,200);
       assert.equal((await bridge.positions())[0].volume,2);
-      assert.equal((await bridge.positions())[0].profit,200);
+      assert.equal((await bridge.positions())[0].profit,100);
       const account=await bridge.account();
-      assert.equal(account.balance,100000); assert.equal(account.equity,100198); assert.equal(account.freeMargin,99198);
+      assert.equal(account.balance,100000); assert.equal(account.equity,100098); assert.equal(account.freeMargin,99098);
       assert.equal(brokerCommands.length,0);
       bridge.overrides.clear(); bridge.start();
       for(let i=0;i<100&&!bridge.getPositionOverride(123).volumeOverride;i++) await new Promise(resolve=>setTimeout(resolve,10));
@@ -103,16 +103,16 @@ test('PostgreSQL and HTTP integration: persistence, access control, both close p
         await new Promise(resolve=>setTimeout(resolve,50));
       }
       const trade=(await query('SELECT * FROM trades WHERE ticket=9001')).rows[0];
-      assert.equal(Number(trade.volume),2); assert.equal(Number(trade.profit),200);
+      assert.equal(Number(trade.volume),2); assert.equal(Number(trade.profit),103);
       assert.equal(brokerCommands.length,1); assert.equal(brokerCommands[0].volume,undefined);
-      assert.equal((await bridge.account()).balance,100198);
+      assert.equal((await bridge.account()).balance,100101);
       assert.equal(bridge.getPositionOverride(123).volumeOverride,null);
       // Closing directly at broker uses the sync path, including edited lots.
       await bridge.setPositionOverride(124,{volumeOverride:3});
       const deal={ticket:9002,positionId:124,symbol:'EURUSD',dealType:'buy',volume:1,openPrice:1,closePrice:1.01,profit:100,swap:-2,commission:0,openTime:Date.now()-60000,closeTime:Date.now()};
       await saveDeals([deal]);
       let synced=(await query('SELECT * FROM trades WHERE ticket=9002')).rows[0];
-      assert.equal(Number(synced.volume),3); assert.equal(Number(synced.profit),300);
+      assert.equal(Number(synced.volume),3); assert.equal(Number(synced.profit),100);
       const offset=bridge.getAccountOffset().balance;
       await saveDeals([deal]);
       assert.equal(bridge.getAccountOffset().balance,offset);
