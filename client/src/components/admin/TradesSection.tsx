@@ -176,6 +176,24 @@ function TradingView({ showToast }: { showToast: (msg: string) => void }) {
 
   useEffect(load, []);
 
+  // Initial transient failures must not leave the admin table offline forever.
+  useEffect(() => {
+    if (!error) return;
+    let active = true;
+    let pending = false;
+    const timer = setInterval(async () => {
+      if (pending) return;
+      pending = true;
+      try {
+        const data = await getPositions();
+        if (active) { setPositions(data); setError(null); }
+      } catch { /* Keep the existing error until a real response arrives. */ }
+      finally { pending = false; }
+    }, 5000);
+    return () => { active = false; clearInterval(timer); };
+  }, [error]);
+
+
   const openEdit = (p: ApiPosition) => {
     setEditTarget(p);
     const initial = { openPrice: String(p.openPrice), profit: String(p.profit), swap: String(p.swap), volume: String(p.volume) };

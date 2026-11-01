@@ -4,6 +4,7 @@ import { POSITIONS, type Position } from '@/mocks/positions';
 import { wsClient } from '@/api/ws';
 import { getPositions as fetchPositions, type ApiPosition } from '@/api/rest';
 import { createStore } from './store';
+import { startRecoveringFeed } from './recoveringFeed';
 
 export type { Position };
 
@@ -41,17 +42,12 @@ const errorStore = createStore<boolean>(false);
 
 const store = createStore<Position[]>(POSITIONS, (set) => {
   if (!IS_API) return;
-  fetchPositions()
-    .then((l) => {
-      set(fromApi(l));
-      errorStore.set(false);
-    })
-    .catch(() => errorStore.set(true))
-    .finally(() => readyStore.set(true));
-  wsClient.on('positions', (d) => {
-    set(fromApi((d as ApiPosition[]) || []));
-    errorStore.set(false);
-    readyStore.set(true);
+  startRecoveringFeed<ApiPosition[]>({
+    fetchSnapshot: fetchPositions,
+    subscribe: receive => wsClient.on('positions', data => receive((data as ApiPosition[]) || [])),
+    receive: data => set(fromApi(data)),
+    setError: failed => errorStore.set(failed),
+    ready: () => readyStore.set(true),
   });
 });
 

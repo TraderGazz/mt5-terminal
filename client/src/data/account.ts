@@ -4,6 +4,7 @@ import { ACCOUNT, type Account } from '@/mocks/account';
 import { wsClient } from '@/api/ws';
 import { getAccount as fetchAccount, type ApiAccount } from '@/api/rest';
 import { createStore } from './store';
+import { startRecoveringFeed } from './recoveringFeed';
 
 export type { Account };
 
@@ -31,17 +32,12 @@ const errorStore = createStore<boolean>(false);
 
 const store = createStore<Account>(ACCOUNT, (set) => {
   if (!IS_API) return;
-  fetchAccount()
-    .then((a) => {
-      set(fromApi(a));
-      errorStore.set(false);
-    })
-    .catch(() => errorStore.set(true))
-    .finally(() => readyStore.set(true));
-  wsClient.on('account', (d) => {
-    set(fromApi(d as ApiAccount));
-    errorStore.set(false);
-    readyStore.set(true);
+  startRecoveringFeed<ApiAccount>({
+    fetchSnapshot: fetchAccount,
+    subscribe: receive => wsClient.on('account', data => receive(data as ApiAccount)),
+    receive: data => set(fromApi(data)),
+    setError: failed => errorStore.set(failed),
+    ready: () => readyStore.set(true),
   });
 });
 
