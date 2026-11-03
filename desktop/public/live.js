@@ -303,30 +303,112 @@
       panel.append(button);
     }
   }
+  let candleHistory = null;
+  function historyNotice(message, retry) {
+    let panel = document.getElementById('candleHistoryStatus');
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = 'candleHistoryStatus';
+      panel.style.cssText = 'position:absolute;left:12px;bottom:28px;z-index:21;background:#fff;padding:6px;font:12px Tahoma;color:#333';
+      document.getElementById('chart').append(panel);
+    }
+    panel.replaceChildren();
+    panel.style.display = message ? 'block' : 'none';
+    if (!message) return;
+    panel.append(document.createTextNode(message));
+    if (retry) {
+      const button = document.createElement('button');
+      button.textContent = 'Повторить';
+      button.onclick = retry;
+      panel.append(button);
+    }
+  }
+  const chartBars = rows => rows.map(c => ({ t: c.time * 1000, o: c.open, h: c.high, l: c.low, c: c.close }));
+  function mergeCandleHistory(history, incoming, overwrite = true) {
+    const byTime = new Map(history.data.map(b => [b.t, b]));
+    for (const bar of incoming) if (overwrite || !byTime.has(bar.t)) byTime.set(bar.t, bar);
+    history.data = [...byTime.values()].sort((a, b) => a.t - b.t);
+  }
+  function showCandleHistory(history) {
+    // Keep the viewport on the same bars while new live bars arrive.
+    const previousLast = history.displayedLast;
+    if (state.offset > 0 && previousLast != null) {
+      state.offset += history.data.filter(b => b.t > previousLast).length;
+    }
+    history.displayedLast = history.data.at(-1)?.t;
+    terminalAPI.setBars(history.data);
+  }
+  async function loadOlderCandles(history) {
+    if (history !== candleHistory || history.loading || history.exhausted || history.error || !history.ready) return;
+    history.loading = true;
+    historyNotice('Загрузка ранней истории…');
+    const oldest = history.data[0].t;
+    try {
+      const r = await api('/candles', { query: {
+        symbol: history.symbol, timeframe: history.apiTf, count: 1000,
+        to: new Date(oldest - 1).toISOString(),
+      } });
+      if (history !== candleHistory) return;
+      const older = chartBars(r.bars || []).filter(b => b.t < oldest);
+      if (!older.length) {
+        history.exhausted = true;
+        historyNotice('Более ранняя история у брокера не получена', () => {
+          history.exhausted = false;
+          loadOlderCandles(history);
+        });
+        return;
+      }
+      // A historical response must not overwrite a newer WebSocket candle.
+      mergeCandleHistory(history, older, false);
+      showCandleHistory(history);
+      historyNotice('');
+    } catch (error) {
+      if (history !== candleHistory) return;
+      history.error = true;
+      console.error('[candles history]', history.apiTf, error);
+      historyNotice('Не удалось загрузить раннюю историю', () => {
+        history.error = false;
+        loadOlderCandles(history);
+      });
+    } finally {
+      history.loading = false;
+    }
+  }
+  const beforeHistoryDraw = draw;
+  draw = function (...args) {
+    beforeHistoryDraw(...args);
+    if (view && view.begin < 60 && candleHistory?.ready) loadOlderCandles(candleHistory);
+  };
   function loadCandles(tf) {
     const request = ++candleRequest;
-    const apiTf = tf === 'MN' ? 'MN1' : tf;
+    const history = candleHistory = {
+      symbol: state.symbol, apiTf: tf === 'MN' ? 'MN1' : tf,
+      data: [], loading: false, exhausted: false, error: false, ready: false,
+    };
+    state.offset = 0;
+    historyNotice('');
     candleStatus('Загрузка графика…');
     if (candleUnsub) { candleUnsub(); candleUnsub = null; }
-    // +60 баров запаса слева — Ишимоку/фракталам нужна история ДО начала
-    // окна для расчёта (9–52 бара), иначе у левого края виден обрыв.
-    api('/candles', { query: { timeframe: apiTf, count: tf === 'M1' ? 1000 : 360 } })
+    api('/candles', { query: { symbol: history.symbol, timeframe: history.apiTf, count: tf === 'M1' ? 1000 : 360 } })
       .then((r) => {
         if (request !== candleRequest) return;
         if (!r.bars || !r.bars.length) throw new Error('Empty candle history');
+        // Live updates received during this request take precedence.
+        mergeCandleHistory(history, chartBars(r.bars), false);
         candleStatus('');
-        terminalAPI.setBars((r.bars || []).map((c) => ({ t: c.time * 1000, o: c.open, h: c.high, l: c.low, c: c.close })));
+        showCandleHistory(history);
+        history.ready = true;
       })
       .catch((error) => {
         if (request !== candleRequest) return;
-        console.error('[candles]', apiTf, error);
+        console.error('[candles]', history.apiTf, error);
         candleStatus('Не удалось загрузить график ' + tf, () => loadCandles(tf));
       });
-    candleUnsub = ws.on(`candle:${apiTf}`, (d) => {
-      if (request !== candleRequest) return;
-      const bars = d && d.bars;
-      if (!bars || !bars.length) return;
-      terminalAPI.setBars(bars.map((c) => ({ t: c.time * 1000, o: c.open, h: c.high, l: c.low, c: c.close })));
+    candleUnsub = ws.on(`candle:${history.apiTf}`, (d) => {
+      if (request !== candleRequest || (d?.symbol && d.symbol !== history.symbol)) return;
+      if (!d?.bars?.length) return;
+      mergeCandleHistory(history, chartBars(d.bars));
+      if (history.ready) showCandleHistory(history);
     });
   }
 
