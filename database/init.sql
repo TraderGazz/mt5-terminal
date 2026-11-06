@@ -223,6 +223,7 @@ CREATE TABLE IF NOT EXISTS app_settings (
     id                        INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
     history_visible_to_viewer BOOLEAN NOT NULL DEFAULT TRUE,
     trade_maintenance_mode    BOOLEAN NOT NULL DEFAULT FALSE,
+    mobile_history_edit_visible BOOLEAN NOT NULL DEFAULT TRUE,
     updated_at                TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

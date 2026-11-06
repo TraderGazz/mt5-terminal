@@ -144,6 +144,8 @@ function RealUsersSection({ showToast }: { showToast: (msg: string) => void }) {
   // чтобы сайт не показывал непонятные/битые цифры, пока чинится.
   const [maintenanceMode, setMaintenanceMode] = useState<boolean | null>(null);
   const [maintenanceSaving, setMaintenanceSaving] = useState(false);
+  const [pencilVisible, setPencilVisible] = useState<boolean | null>(null);
+  const [pencilSaving, setPencilSaving] = useState(false);
 
   useEffect(() => {
     adminApi
@@ -151,6 +153,7 @@ function RealUsersSection({ showToast }: { showToast: (msg: string) => void }) {
       .then((s) => {
         setHistoryVisible(s?.history_visible_to_viewer ?? true);
         setMaintenanceMode(s?.trade_maintenance_mode ?? false);
+        setPencilVisible(s?.mobile_history_edit_visible ?? true);
       })
       .catch(() => {
         setHistoryVisible(true);
@@ -170,6 +173,19 @@ function RealUsersSection({ showToast }: { showToast: (msg: string) => void }) {
       })
       .catch((err: Error) => showToast(err.message || 'Не удалось сохранить'))
       .finally(() => setHistorySaving(false));
+  };
+
+  const togglePencilVisible = () => {
+    if (pencilVisible == null || pencilSaving) return;
+    setPencilSaving(true);
+    adminApi
+      .updateAppSettings({ mobile_history_edit_visible: !pencilVisible })
+      .then((settings) => {
+        setPencilVisible(settings.mobile_history_edit_visible);
+        showToast(settings.mobile_history_edit_visible ? 'Карандаш показан' : 'Карандаш скрыт');
+      })
+      .catch((err: Error) => showToast(err.message || 'Не удалось сохранить'))
+      .finally(() => setPencilSaving(false));
   };
 
   const toggleMaintenanceMode = () => {
@@ -297,6 +313,21 @@ function RealUsersSection({ showToast }: { showToast: (msg: string) => void }) {
           disabled={maintenanceMode == null || maintenanceSaving}
           onChange={toggleMaintenanceMode}
           label="Заглушка на Торговле"
+        />
+      </AdminCard>
+
+      <AdminCard className="flex items-center justify-between gap-3 p-4">
+        <div>
+          <p className="text-[14px] font-medium text-black">Карандаш в мобильной истории</p>
+          <p className="text-[12px] text-text-secondary">
+            Показывать кнопку редактирования рядом с закрытыми позициями у администратора.
+          </p>
+        </div>
+        <IosToggle
+          checked={pencilVisible ?? true}
+          disabled={pencilVisible == null || pencilSaving}
+          onChange={togglePencilVisible}
+          label="Карандаш в мобильной истории"
         />
       </AdminCard>
 

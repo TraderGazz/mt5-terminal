@@ -30,16 +30,19 @@ const historyVisibleStore = createStore<boolean | null>(null);
 // соединения". null = ещё не пришло, см. useTradeMaintenanceMode.
 const tradeMaintenanceStore = createStore<boolean | null>(null);
 
+const mobileHistoryEditStore = createStore(true);
+
 const roleStore = createStore<AuthUser['role'] | null>(getAuthUser()?.role ?? null, (set) => {
   if (!IS_API) return;
   const tick = () => {
     if (!isAuthed()) return;
-    api<{ user: { role: AuthUser['role'] }; historyVisibleToViewer: boolean; tradeMaintenanceMode: boolean }>('/auth/me')
-      .then(({ user, historyVisibleToViewer, tradeMaintenanceMode }) => {
+    api<{ user: { role: AuthUser['role'] }; historyVisibleToViewer: boolean; tradeMaintenanceMode: boolean; mobileHistoryEditVisible?: boolean }>('/auth/me')
+      .then(({ user, historyVisibleToViewer, tradeMaintenanceMode, mobileHistoryEditVisible }) => {
         updateAuthUserRole(user.role);
         set(user.role);
         historyVisibleStore.set(historyVisibleToViewer);
         tradeMaintenanceStore.set(tradeMaintenanceMode);
+        mobileHistoryEditStore.set(mobileHistoryEditVisible !== false);
       })
       .catch(() => {
         // 401 (роль/деактивация) уже обрабатывается глобально в api/http.ts.
@@ -48,6 +51,8 @@ const roleStore = createStore<AuthUser['role'] | null>(getAuthUser()?.role ?? nu
   tick();
   setInterval(tick, POLL_MS);
 });
+
+export const useMobileHistoryEditVisible = () => mobileHistoryEditStore.useValue();
 
 export const useLiveRole = () => roleStore.useValue();
 // true, пока не пришёл первый ответ /auth/me (не прячем Историю на миг

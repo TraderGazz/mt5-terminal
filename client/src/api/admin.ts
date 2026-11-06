@@ -130,6 +130,7 @@ export interface ApiAppSettings {
   id: number;
   history_visible_to_viewer: boolean;
   trade_maintenance_mode: boolean;
+  mobile_history_edit_visible: boolean;
   updated_at: string;
 }
 
@@ -137,7 +138,7 @@ export const getAppSettings = () =>
   api<{ settings: ApiAppSettings | null }>('/admin/app-settings').then((r) => r.settings);
 
 export const updateAppSettings = (
-  body: Partial<Pick<ApiAppSettings, 'history_visible_to_viewer' | 'trade_maintenance_mode'>>,
+  body: Partial<Pick<ApiAppSettings, 'history_visible_to_viewer' | 'trade_maintenance_mode' | 'mobile_history_edit_visible'>>,
 ) => api<{ settings: ApiAppSettings }>('/admin/app-settings', { method: 'PATCH', body }).then((r) => r.settings);
 
 export interface ApiSyncLogEntry {

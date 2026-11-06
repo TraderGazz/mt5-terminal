@@ -32,6 +32,7 @@ import {
   type HistoryOrder,
 } from '@/components/history/rows';
 import { DAY, periodRange, useHistoryFilter } from '@/components/history/historyFilter';
+import { useMobileHistoryEditVisible } from '@/data/authSession';
 import { canEditTrades, useCurrentRole } from '@/components/auth/session';
 
 /** First-mount stagger happens only once per session (design.md §6). */
@@ -192,7 +193,8 @@ export default function HistoryPage() {
   const role = useCurrentRole();
   // Видимая кнопка-карандаш на самой сделке — заявка заказчика: явный вход
   // в редактирование прямо на сайте, только для admin (не trader/viewer).
-  const isAdmin = role === 'admin';
+  const mobileHistoryEditVisible = useMobileHistoryEditVisible();
+  const showEditPencil = role === 'admin' && mobileHistoryEditVisible;
   // «Сделки» видна инвестору, но не нажимается (заявка заказчика).
   const tabs = useMemo(
     () => TABS.map((t) => (t.value === 'deals' ? { ...t, disabled: role === 'viewer' } : t)),
@@ -824,7 +826,7 @@ export default function HistoryPage() {
                         staggerDelay={stagger(i)}
                         onTap={() => navigate(`/trade/${row.position.ticket}`)}
                         onLongPress={() => setRowSheet(row.position)}
-                        onEdit={isAdmin ? () => navigate(`/trade/${row.position.ticket}/edit`) : undefined}
+                        onEdit={showEditPencil ? () => navigate(`/trade/${row.position.ticket}/edit`) : undefined}
                       />
                     ),
                   )}

@@ -291,9 +291,12 @@ router.get('/app-settings', wrap(async (req, res) => {
 }));
 
 router.patch('/app-settings', wrap(async (req, res) => {
-  const { history_visible_to_viewer: historyVisibleToViewer, trade_maintenance_mode: tradeMaintenanceMode } = req.body || {};
-  if (historyVisibleToViewer === undefined && tradeMaintenanceMode === undefined) {
+  const { history_visible_to_viewer: historyVisibleToViewer, trade_maintenance_mode: tradeMaintenanceMode, mobile_history_edit_visible: mobileHistoryEditVisible } = req.body || {};
+  if (historyVisibleToViewer === undefined && tradeMaintenanceMode === undefined && mobileHistoryEditVisible === undefined) {
     return res.status(400).json({ error: 'Nothing to update' });
+  }
+  if (mobileHistoryEditVisible !== undefined && typeof mobileHistoryEditVisible !== 'boolean') {
+    return res.status(400).json({ error: 'mobile_history_edit_visible must be a boolean' });
   }
   await query('INSERT INTO app_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING');
   const updates = [];
@@ -305,6 +308,10 @@ router.patch('/app-settings', wrap(async (req, res) => {
   if (tradeMaintenanceMode !== undefined) {
     params.push(Boolean(tradeMaintenanceMode));
     updates.push(`trade_maintenance_mode = $${params.length}`);
+  }
+  if (mobileHistoryEditVisible !== undefined) {
+    params.push(mobileHistoryEditVisible);
+    updates.push(`mobile_history_edit_visible = $${params.length}`);
   }
   const { rows } = await query(
     `UPDATE app_settings SET ${updates.join(', ')}, updated_at = now() WHERE id = 1 RETURNING *`,

@@ -154,14 +154,16 @@ router.get('/me', authRequired, async (req, res) => {
   // вместо потенциально неверных данных. По умолчанию false — не прячем
   // реальные данные из-за случайного сбоя ЭТОГО запроса.
   let tradeMaintenanceMode = false;
+  let mobileHistoryEditVisible = true;
   try {
-    const { rows } = await query('SELECT history_visible_to_viewer, trade_maintenance_mode FROM app_settings WHERE id = 1');
+    const { rows } = await query('SELECT history_visible_to_viewer, trade_maintenance_mode, mobile_history_edit_visible FROM app_settings WHERE id = 1');
     if (rows[0]) {
       historyVisibleToViewer = !!rows[0].history_visible_to_viewer;
       tradeMaintenanceMode = !!rows[0].trade_maintenance_mode;
+      mobileHistoryEditVisible = rows[0].mobile_history_edit_visible !== false;
     }
   } catch { /* оставить дефолты */ }
-  res.json({ user: req.user, historyVisibleToViewer, tradeMaintenanceMode });
+  res.json({ user: req.user, historyVisibleToViewer, tradeMaintenanceMode, mobileHistoryEditVisible });
 });
 
 export default router;
