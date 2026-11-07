@@ -65,7 +65,7 @@ const dbRowToDeal = (r) => ({
 // не должна мозолить глаза пустой строкой "Balance 0.00".
 const ZEROED_LEDGER_ROW = `NOT (deal_type IN ('balance', 'withdrawal') AND profit = 0)`;
 
-async function loadDeals(range) {
+async function loadDeals(range, dbOnly = false) {
   // Источник правды — БД (с правками). Если пусто/недоступна — берём из моста.
   // При фильтре по периоду пустой результат — законный ответ, мост не трогаем.
   if (isDbReady()) {
@@ -78,9 +78,10 @@ async function loadDeals(range) {
         return { deals: rows.map(dbRowToDeal), from: 'db' };
       }
       const { rows } = await query(`SELECT * FROM trades WHERE ${ZEROED_LEDGER_ROW} ORDER BY close_time DESC NULLS LAST, id DESC`);
-      if (rows.length) return { deals: rows.map(dbRowToDeal), from: 'db' };
-    } catch { /* fall through */ }
+      if (rows.length || dbOnly) return { deals: rows.map(dbRowToDeal), from: 'db' };
+    } catch (error) { if (dbOnly) throw error; }
   }
+  if (dbOnly) throw new Error('Database unavailable');
   const deals = await getBridge().history({ from: range.from, to: range.to });
   return { deals, from: 'bridge' };
 }
@@ -128,7 +129,7 @@ router.get('/raw', authRequired, async (req, res) => {
   const fromDate = req.query.from ? new Date(req.query.from) : null;
   const from = fromDate && !Number.isNaN(fromDate.getTime()) ? fromDate.toISOString() : null;
   try {
-    const { deals } = await loadDeals({ from, to: null });
+    const { deals } = await loadDeals({ from, to: null }, res.locals.historyDbOnly === true);
     const trade = deals.filter((d) => d.dealType === 'buy' || d.dealType === 'sell');
     const balanceOps = deals.filter((d) => d.dealType === 'balance' || d.dealType === 'withdrawal');
     const cfdOps = deals.filter((d) => d.dealType === 'cfd');
@@ -148,7 +149,7 @@ router.get('/', authRequired, async (req, res) => {
   const range = resolveRange({ period: req.query.period, from: req.query.from, to: req.query.to });
 
   try {
-    const { deals, from: origin } = await loadDeals(range);
+    const { deals, from: origin } = await loadDeals(range, res.locals.historyDbOnly === true);
     const result = buildHistory(deals, { tab, symbol, from: range.from, to: range.to, sort, period: range.period });
     res.json({
       ...result,
