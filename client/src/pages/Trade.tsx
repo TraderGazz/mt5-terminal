@@ -25,7 +25,7 @@ import {
 } from '@/api/rest';
 import { SYMBOL, VIEWER_CAN_CLOSE } from '@/config';
 import { useCurrentRole } from '@/components/auth/session';
-import { useTradeMaintenanceMode } from '@/data/authSession';
+import { useTradeMaintenanceMode, useMobileHistoryEditVisible } from '@/data/authSession';
 import { logEvent } from '@/data/journal';
 
 /** First-mount animations run once per session (design.md §6). */
@@ -95,7 +95,7 @@ export default function TradePage() {
   // как и в отдельной админке.
   const role = useCurrentRole();
   const canTrade = role === 'admin';
-  const canEditShowcase = role === 'admin';
+  const mobileEditVisible = useMobileHistoryEditVisible();
   // Заявка заказчика 2026-10-22 (только новый сайт, только мобильная
   // версия): инвестору разрешить ТОЛЬКО закрывать позицию — не открывать
   // новые, не менять SL/TP, не трогать витрину (см. config.ts).
@@ -456,7 +456,7 @@ export default function TradePage() {
           canClose && selectedData ? () => setCloseConfirm(selectedData.position) : undefined
         }
         onRequestModifyPosition={canTrade && selectedData ? () => setModifySheet(true) : undefined}
-        onRequestEditShowcase={canEditShowcase && selectedData ? () => setEditSheet(true) : undefined}
+        onRequestEditShowcase={canTrade && mobileEditVisible && selectedData ? () => setEditSheet(true) : undefined}
       />
 
       {/* Настоящий S/L и T/P (admin) — реальный ордер брокеру */}

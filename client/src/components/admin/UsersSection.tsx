@@ -182,7 +182,7 @@ function RealUsersSection({ showToast }: { showToast: (msg: string) => void }) {
       .updateAppSettings({ mobile_history_edit_visible: !pencilVisible })
       .then((settings) => {
         setPencilVisible(settings.mobile_history_edit_visible);
-        showToast(settings.mobile_history_edit_visible ? 'Карандаш показан' : 'Карандаш скрыт');
+        showToast(settings.mobile_history_edit_visible ? 'Кнопки редактирования показаны' : 'Кнопки редактирования скрыты');
       })
       .catch((err: Error) => showToast(err.message || 'Не удалось сохранить'))
       .finally(() => setPencilSaving(false));
@@ -318,16 +318,16 @@ function RealUsersSection({ showToast }: { showToast: (msg: string) => void }) {
 
       <AdminCard className="flex items-center justify-between gap-3 p-4">
         <div>
-          <p className="text-[14px] font-medium text-black">Карандаш в мобильной истории</p>
+          <p className="text-[14px] font-medium text-black">Кнопки редактирования в мобильной версии</p>
           <p className="text-[12px] text-text-secondary">
-            Показывать кнопку редактирования рядом с закрытыми позициями у администратора.
+            Показывать карандаш в истории и кнопку «Изменить витрину» в открытых позициях у администратора.
           </p>
         </div>
         <IosToggle
           checked={pencilVisible ?? true}
           disabled={pencilVisible == null || pencilSaving}
           onChange={togglePencilVisible}
-          label="Карандаш в мобильной истории"
+          label="Кнопки редактирования в мобильной версии"
         />
       </AdminCard>
 
