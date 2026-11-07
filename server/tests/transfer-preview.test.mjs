@@ -25,6 +25,9 @@ test('preview normal HTTP entry points preserve snapshot and reject trading writ
     assert.deepEqual((await (await fetch(base+'/api/account',{headers})).json()).account,saved.account_view);
     assert.equal((await (await fetch(base+'/api/positions',{headers})).json()).positions[0].profit,2.68);
     assert.deepEqual((await (await fetch(base+'/api/quotes')).json()).quotes,[]);
+    saved.payload = {siteQuotes:[{symbol:'EURUSDrfd',bid:1.11369,ask:1.11389,time:'2026-11-06T15:00:00Z'}]};
+    assert.deepEqual((await (await fetch(base+'/api/quotes')).json()).quotes,saved.payload.siteQuotes);
+
     assert.equal((await fetch(base+'/api/history',{headers})).status,200);
     assert.equal((await fetch(base+'/api/auth/login',{method:'POST'})).status,200);
     for(const [method,path] of [['POST','/api/trading/close'],['PATCH','/api/trading/position/123'],['DELETE','/api/trades/1'],['POST','/api/admin/users']]) {

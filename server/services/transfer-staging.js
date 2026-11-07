@@ -2,6 +2,16 @@ import { createHash } from 'node:crypto';
 import { normalizePosition } from './mt5-bridge/normalize.js';
 import { addMoney, roundMoney } from './money.js';
 
+// Ignore synchronizer timestamps while retaining every financial/configuration
+// value. Sort a copy for comparison, preserving the captured presentation order.
+export function transferCaptureSignature(state, settings) {
+  const stableSettings = Object.fromEntries(Object.entries(settings).map(([table, rows]) => [
+    table, rows.map(({ updated_at, ...fields }) => fields),
+  ]));
+  const stableState = { ...state, positions: [...state.positions].sort((a, b) => a.id - b.id) };
+  return createHash('sha256').update(JSON.stringify({ state: stableState, settings: stableSettings })).digest('hex');
+}
+
 function positive(value, label) {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
     throw new Error(`Invalid ${label}`);

@@ -33,9 +33,9 @@ export async function createTransferPreviewApp({ saved, positions, clientDir, au
       profit:roundMoney(p.model.view.profit),swap:roundMoney(p.model.view.swap),commission:roundMoney(p.model.view.commission),
     })),count:positions.length,source,
   }));
-  // Each stored position keeps its own reference price. Publishing one common
-  // quote here would revalue the snapshot in the browser and spoil the comparison.
-  app.get('/api/quotes',(req,res)=>res.json({quotes:[],source}));
+  // New captures include the same frozen quote snapshot used by the source UI.
+  // Older archives keep their individual position prices when quotes are absent.
+  app.get('/api/quotes',(req,res)=>res.json({quotes:saved.payload?.siteQuotes || [],source}));
   app.use('/api/history',(req,res,next)=>{ res.locals.historyDbOnly = true; next(); },historyRouter);
   app.use('/api',(req,res)=>res.status(404).json({error:'Раздел недоступен в тестовом просмотре'}));
   const sendIndex = (req,res)=>res.type('html').send(html);

@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import pg from 'pg';
 import { normalizePosition } from '../services/mt5-bridge/normalize.js';
 import { inspectTransferSnapshot, prepareTransfer, valueTransferredPosition,
-  importPreparedTransfer, closeTransferredPosition } from '../services/transfer-staging.js';
+  importPreparedTransfer, closeTransferredPosition, transferCaptureSignature } from '../services/transfer-staging.js';
 
 const now = Date.parse('2026-11-07T10:00:00Z');
 const specs = {EURUSDrfd: {calculation:'forex', contractSize:100000, referenceRate:80,
@@ -104,4 +104,20 @@ test('anchor preserves displayed half-kopeck values despite floating-point cance
   const model=plan().positions[0];
   model.view.profit=2.675;
   assert.equal(valueTransferredPosition(model,quotes(),{now}).profit,2.68);
+});
+
+
+test('capture stability ignores sync timestamps and order, but detects price and setting changes', () => {
+  const state = {account:{balance:100},positions:[{id:2,profit:10},{id:1,profit:20}]};
+  const settings = {accounts:[{id:1,balance:'100',updated_at:'old'}],position_overrides:[{ticket:'2',profit_offset:'10',updated_at:'old'}]};
+  const hash = transferCaptureSignature(state,settings);
+  const later = structuredClone(settings);
+  later.accounts[0].updated_at = 'new';
+  assert.equal(hash,transferCaptureSignature({...state,positions:[...state.positions].reverse()},later));
+  assert.deepEqual(state.positions.map(p=>p.id),[2,1]);
+  later.position_overrides[0].profit_offset = '11';
+  assert.notEqual(hash,transferCaptureSignature(state,later));
+  const moved = structuredClone(state);
+  moved.positions[0].profit = 9;
+  assert.notEqual(hash,transferCaptureSignature(moved,settings));
 });

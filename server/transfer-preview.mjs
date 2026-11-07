@@ -34,6 +34,8 @@ try {
   if (!saved || positions.length !== saved.payload.sitePositions.positions.length || positions.some(p=>p.status !== 'open')) {
     throw new Error('Preview requires a complete open snapshot');
   }
+  const sourceOrder = new Map(saved.payload.sitePositions.positions.map((p, i) => [String(p.id), i]));
+  positions.sort((a, b) => sourceOrder.get(String(a.original_ticket)) - sourceOrder.get(String(b.original_ticket)));
   await client.query('COMMIT');
 } finally {
   await client.end();
