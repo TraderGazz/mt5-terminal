@@ -126,7 +126,7 @@ export function valueTransferredPosition(model, quotes, { now = Date.now(), maxA
   const rate = conversion ? (conversion.bid + conversion.ask) / 2 : 1;
   const closePrice = model.raw.type === 'buy' ? quote.bid : quote.ask;
   const gross = v.direction * (closePrice - model.view.openPrice) * v.units * rate;
-  const profit = roundMoney(model.view.profit + gross - v.anchorGross);
+  const profit = addMoney(model.view.profit, gross - v.anchorGross);
   return {
     ...model.view, currentPrice: closePrice, profit,
     swap: roundMoney(model.view.swap), commission: roundMoney(model.view.commission),

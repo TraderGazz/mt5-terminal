@@ -99,3 +99,9 @@ test('PostgreSQL staging import and concurrent close', {skip:!process.env.TEST_D
     await admin.end();
   }
 });
+
+test('anchor preserves displayed half-kopeck values despite floating-point cancellation',()=>{
+  const model=plan().positions[0];
+  model.view.profit=2.675;
+  assert.equal(valueTransferredPosition(model,quotes(),{now}).profit,2.68);
+});
