@@ -47,6 +47,11 @@ const {default:historyRouter} = await import('./routes/history.js');
 initDb();
 for (let attempt=0; attempt<50 && !isDbReady(); attempt++) await new Promise(r=>setTimeout(r,100));
 if (!isDbReady()) throw new Error('Test database unavailable');
-const app = await createTransferPreviewApp({saved,positions,clientDir,authRouter,authRequired,historyRouter});
+let quoteCheck;
+if (process.env.TRANSFER_PREVIEW_QUOTE_URL) {
+  const { createTransferQuoteCheck } = await import('./services/transfer-quote-check.js');
+  quoteCheck = createTransferQuoteCheck({baseUrl:process.env.TRANSFER_PREVIEW_QUOTE_URL,saved,positions});
+}
+const app = await createTransferPreviewApp({saved,positions,clientDir,authRouter,authRequired,historyRouter,quoteCheck});
 const server = app.listen(port,'127.0.0.1',()=>console.log(`[transfer-preview] http://127.0.0.1:${port}/mobile/login; ${positions.length} saved positions`));
 for (const signal of ['SIGINT','SIGTERM']) process.on(signal,()=>server.close(()=>process.exit(0)));

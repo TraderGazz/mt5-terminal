@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { roundMoney } from './money.js';
 
-export async function createTransferPreviewApp({ saved, positions, clientDir, authRouter, authRequired, historyRouter }) {
+export async function createTransferPreviewApp({ saved, positions, clientDir, authRouter, authRequired, historyRouter, quoteCheck }) {
   const capturedAt = new Date(saved.captured_at).toISOString();
   const source = {mode:'transfer-preview', capturedAt, live:false};
   const account = saved.account_view;
@@ -26,6 +26,11 @@ export async function createTransferPreviewApp({ saved, positions, clientDir, au
   app.get('/api/account/public-branding',(req,res)=>res.json({
     company:account.company,server:account.server,accessServer:account.accessServer,accountNumber:account.login,
   }));
+  app.get('/api/transfer/quote-check',authRequired,async(req,res,next)=>{
+    if (req.user?.role !== 'admin') return res.status(403).json({error:'Только для администратора'});
+    if (!quoteCheck) return res.status(503).json({error:'Тестовый мост ещё не настроен'});
+    try { res.json(await quoteCheck()); } catch(error) { next(error); }
+  });
   app.get('/api/account',authRequired,(req,res)=>res.json({account,source}));
   app.get('/api/positions',authRequired,(req,res)=>res.json({
     positions:positions.map(p=>({
