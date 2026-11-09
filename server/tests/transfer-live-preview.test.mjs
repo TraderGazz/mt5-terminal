@@ -29,13 +29,13 @@ test('stale quote results never become live positions',async()=>{
 test('HTTP and WebSocket use same calculated state; writes stay blocked; stale REST rejects and WS disconnects',async()=>{
  const directory=await mkdtemp(join(tmpdir(),'mt5-live-'));await writeFile(join(directory,'index.html'),'<body></body>');
  let stale=false;
- const state={account:anchor,positions:valued,source:{live:true}};
+ const state={account:anchor,positions:valued,source:{live:true,quoteStatus:[{symbol:'EURUSDrfd',bid:1.11,ask:1.1102,time:'2026-11-09T15:00:00Z'}]}};
  const readState=async()=>{if(stale){const e=new Error('stale');e.status=503;throw e;}return state;};
  const authRequired=async(req,res,next)=>{await new Promise(r=>setTimeout(r,5));if(req.headers.authorization==='Bearer valid'){req.user={role:'admin'};next();}else res.status(401).json({});};
  const app=await createTransferPreviewApp({saved,positions,clientDir:directory,authRouter:express.Router(),historyRouter:express.Router(),authRequired,readState});
  const server=app.listen(0,'127.0.0.1');await once(server,'listening');
  const stop=attachTransferPreviewFeed(server,{readState,authRequired,intervalMs:30});
- const base='http://127.0.0.1:'+server.address().port;let ws;
+ const base='http://127.0.0.1:'+server.address().port;let ws,pcWs;
  try{
   const headers={Authorization:'Bearer valid'};
   assert.equal((await fetch(base+'/api/transfer/feed-status')).status,200);
@@ -45,12 +45,19 @@ test('HTTP and WebSocket use same calculated state; writes stay blocked; stale R
   assert.equal((await fetch(base+'/api/trading/close',{method:'POST',headers})).status,403);
   ws=new WebSocket(base.replace('http:','ws:')+'/ws?token=valid');
   await once(ws,'open');const messages=[];ws.on('message',b=>messages.push(JSON.parse(b)));
-  ws.send(JSON.stringify({op:'subscribe',channels:['account','positions']}));
+  ws.send(JSON.stringify({op:'subscribe',channels:['account','positions','quote']}));
   for(let i=0;i<50&&!messages.some(m=>m.channel==='account');i++)await new Promise(r=>setTimeout(r,10));
   assert.deepEqual(messages.find(m=>m.channel==='positions')?.data,valued);
   assert.deepEqual(messages.find(m=>m.channel==='account')?.data,anchor);
+  assert.equal(messages.some(m=>m.channel==='quote'),false);
+  pcWs=new WebSocket(base.replace('http:','ws:')+'/ws?token=valid&surface=pc');await once(pcWs,'open');
+  const pcMessages=[];pcWs.on('message',b=>pcMessages.push(JSON.parse(b)));
+  pcWs.send(JSON.stringify({op:'subscribe',channels:['positions','quote']}));
+  for(let i=0;i<50&&!pcMessages.some(m=>m.channel==='quote');i++)await new Promise(r=>setTimeout(r,10));
+  assert.equal(pcMessages.find(m=>m.channel==='quote')?.data.bid,1.11);
+  assert.equal(pcMessages.find(m=>m.channel==='positions')?.data[0].serverValued,true);
   const closed=once(ws,'close');stale=true;assert.equal((await fetch(base+'/api/transfer/feed-status')).status,503);assert.equal((await fetch(base+'/api/account',{headers})).status,503);
   assert.equal((await closed)[0],1013);
   const bad=new WebSocket(base.replace('http:','ws:')+'/ws?token=bad');assert.equal((await once(bad,'close'))[0],4401);
- }finally{ws?.terminate();stop();await new Promise(r=>server.close(r));await rm(directory,{recursive:true,force:true});}
+ }finally{ws?.terminate();pcWs?.terminate();stop();await new Promise(r=>server.close(r));await rm(directory,{recursive:true,force:true});}
 });

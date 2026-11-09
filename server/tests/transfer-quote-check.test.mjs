@@ -48,3 +48,16 @@ test('fresh EURUSD and final RUB session rate allow valuation after RUB trading 
  assert.equal(result.quotes[1].fresh,false);assert.equal(result.quotes[1].usable,true);
  assert.equal(result.quotes[1].reason,'conversion-session-close');assert.equal(result.valuation.profit,-72000);
 });
+
+test('desktop candles share the single-request bridge queue and reject invalid parameters',async()=>{
+ let active=0,maximum=0;const paths=[];
+ const fetchImpl=async url=>{active++;maximum=Math.max(maximum,active);paths.push(url.pathname);await new Promise(r=>setTimeout(r,2));active--;
+  return{ok:true,json:async()=>url.pathname.endsWith('account')?{login:2000138707,currency:'RUB'}:
+    url.pathname.endsWith('history/prices')?{data:[{time:'2026.11.09T12:00:00',open:1.1,high:1.12,low:1.09,close:1.11}]}:
+    {symbol:url.searchParams.get('symbol'),bid:80,ask:80,time:'2026.11.09T12:00:00'}};};
+ const check=createTransferQuoteCheck({baseUrl:'http://172.17.0.3:8890/v1',saved,positions:[{model}],fetchImpl,now:()=>now});
+ const [,chart]=await Promise.all([check(),check.candles({timeframe:'H4'})]);
+ assert.equal(maximum,1);assert.equal(chart.bars[0].time,now/1000);assert.ok(paths.every(p=>['/v1/account','/v1/quote','/v1/history/prices'].includes(p)));
+ const count=paths.length;await assert.rejects(check.candles({timeframe:'constructor'}));await assert.rejects(check.candles({symbol:'../../order/open'}));
+ assert.equal(paths.length,count);
+});

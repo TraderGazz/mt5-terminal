@@ -67,7 +67,7 @@
       if (!token) return;
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
       let ws;
-      try { ws = new WebSocket(`${proto}://${location.host}/ws?token=${encodeURIComponent(token)}`); }
+      try { ws = new WebSocket(`${proto}://${location.host}/ws?token=${encodeURIComponent(token)}&surface=pc`); }
       catch { this.retry(); return; }
       this.ws = ws;
       ws.onopen = () => { this.delay = 1000; if (this.channels.size) this.send({ op: 'subscribe', channels: [...this.channels] }); };
@@ -182,11 +182,12 @@
       tp: p.takeProfit || 0,
       swap: p.swap || 0,
       profit: p.profit,
+      current: p.serverValued ? p.currentPrice : undefined,
     };
   }
   function loadPositions() {
     api('/positions')
-      .then((r) => terminalAPI.setPositions(sortNewestFirst((r.positions || []).map(mapPosition))))
+      .then((r) => terminalAPI.setPositions(sortNewestFirst((r.positions || []).map(p=>mapPosition({...p,serverValued:String(r.source?.mode||'').startsWith('transfer-')})))))
       .catch(() => {});
   }
 
@@ -397,6 +398,7 @@
         mergeCandleHistory(history, chartBars(r.bars), false);
         candleStatus('');
         showCandleHistory(history);
+        if(r.quote&&history.symbol===state.symbol)terminalAPI.setQuote(r.quote.bid,r.quote.ask);
         history.ready = true;
       })
       .catch((error) => {
@@ -706,7 +708,7 @@
       const hint = document.getElementById('hint');
       if (!canTrade()) { if (hint) hint.textContent = 'Торговля доступна только администратору'; return; }
       api('/trading/close', { method: 'POST', body: { ticket: id } })
-        .then(() => { if (hint) hint.textContent = `Позиция #${id} закрыта`; loadPositions(); })
+        .then(() => { if (hint) hint.textContent = `Позиция #${id} закрыта`; loadPositions(); loadAccount(); loadHistory(); loadHistoryTotals(); })
         .catch((err) => { if (hint) hint.textContent = err.message || 'Не удалось закрыть позицию'; });
     };
   }

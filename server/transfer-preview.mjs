@@ -17,6 +17,8 @@ const allowClose=process.env.TRANSFER_PREVIEW_ALLOW_CLOSE==='true';
 if(allowClose&&(!/^terminal_migration_test_close_[a-z0-9_]+$/.test(database)||port!==4003))throw new Error('Close UI requires separate close clone and port 4003');
 const clientDir = resolve(process.env.TRANSFER_PREVIEW_CLIENT_DIR || '');
 if (basename(clientDir) !== 'preview-client') throw new Error('Use a separate preview-client build directory');
+const desktopDir=process.env.TRANSFER_PREVIEW_DESKTOP_DIR?resolve(process.env.TRANSFER_PREVIEW_DESKTOP_DIR):undefined;
+if(desktopDir&&(!allowClose||basename(desktopDir)!=='preview-desktop'))throw new Error('Use separate preview-desktop only for close rehearsal');
 const databaseUrl = new URL(process.env.DATABASE_URL);
 databaseUrl.pathname = '/' + database;
 process.env.DATABASE_URL = databaseUrl.href;
@@ -67,7 +69,7 @@ if(allowClose){
   closeUi=await createCloseUi({pool:closePool,saved,positions,baseUrl:process.env.TRANSFER_PREVIEW_QUOTE_URL});
   readState=closeUi.readState;quoteCheck=closeUi.quoteCheck;
 }
-const app = await createTransferPreviewApp({saved,positions,clientDir,authRouter,authRequired,historyRouter,quoteCheck,readState,closeUi});
+const app = await createTransferPreviewApp({saved,positions,clientDir,authRouter,authRequired,historyRouter,quoteCheck,readState,closeUi,desktopDir});
 const server = app.listen(port,'127.0.0.1',()=>console.log(`[transfer-preview] http://127.0.0.1:${port}/mobile/login; ${positions.length} saved positions`));
 const closeFeed=readState?attachTransferPreviewFeed(server,{readState,authRequired}):()=>{};
 for (const signal of ['SIGINT','SIGTERM']) process.on(signal,()=>{closeFeed();server.close(async()=>{if(closePool)await closePool.end();process.exit(0);});});

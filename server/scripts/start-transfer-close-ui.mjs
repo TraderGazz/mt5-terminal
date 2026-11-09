@@ -32,7 +32,10 @@ await run('npm',['--workspace','client','run','build','--','--outDir',directory,
  ...process.env,VITE_DATA_SOURCE:'api',VITE_API_URL:'/api',VITE_WS_URL:'ws://127.0.0.1:4003/ws',
  VITE_SYMBOL:'EURUSDrfd',VITE_VIEWER_CAN_CLOSE:'false',VITE_DEPOSIT_LEDGER_ENABLED:'true',
 });
-const env={...process.env,TRANSFER_PREVIEW_DATABASE:database,TRANSFER_PREVIEW_SNAPSHOT_ID:snapshotId,
+const desktopDirectory='/root/mt5-account-test/close-ui/preview-desktop';
+await mkdir(desktopDirectory,{recursive:true,mode:0o700});
+await run('npm',['--workspace','desktop','run','build','--','--outDir',desktopDirectory,'--emptyOutDir']);
+const env={...process.env,TRANSFER_PREVIEW_DESKTOP_DIR:desktopDirectory,TRANSFER_PREVIEW_DATABASE:database,TRANSFER_PREVIEW_SNAPSHOT_ID:snapshotId,
  TRANSFER_PREVIEW_CLIENT_DIR:directory,TRANSFER_PREVIEW_PORT:'4003',TRANSFER_PREVIEW_QUOTE_URL:baseUrl,
  TRANSFER_PREVIEW_LIVE:'true',TRANSFER_PREVIEW_ALLOW_CLOSE:'true'};
 // Use a new process name; never replace or restart either production API or 4002.
@@ -45,4 +48,4 @@ for(let attempt=0;attempt<20;attempt++){
  await new Promise(resolve=>setTimeout(resolve,500));
 }
 if(!ready)throw new Error('Close UI did not start; inspect pm2 logs mt5-transfer-close-ui');
-console.log('CLOSE_UI_READY — http://127.0.0.1:4003/mobile/login; isolated close-test clone');
+console.log('CLOSE_UI_READY — http://127.0.0.1:4003/mobile/login; isolated close-test clone; PC: http://127.0.0.1:4003/pc/login.html');

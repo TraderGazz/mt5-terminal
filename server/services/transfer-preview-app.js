@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { roundMoney } from './money.js';
 
-export async function createTransferPreviewApp({ saved, positions, clientDir, authRouter, authRequired, historyRouter, quoteCheck, readState, closeUi }) {
+export async function createTransferPreviewApp({ saved, positions, clientDir, authRouter, authRequired, historyRouter, quoteCheck, readState, closeUi, desktopDir }) {
   const capturedAt = new Date(saved.captured_at).toISOString();
   const source = {mode:'transfer-preview', capturedAt, live:false};
   const account = saved.account_view;
@@ -22,7 +22,7 @@ export async function createTransferPreviewApp({ saved, positions, clientDir, au
     <script>(function(){const button=document.getElementById('close-test-restore'),label=document.getElementById('close-test-state');
       async function status(){try{const r=await fetch('/api/transfer/feed-status',{cache:'no-store'});if(!r.ok)throw new Error();const d=await r.json();label.textContent=d.rehearsalClosed?'Позиция закрыта · цены зафиксированы':'Живые котировки · позиция открыта';}catch{label.textContent='Нет доступных котировок';}}
       status();setInterval(status,3000);button.onclick=async()=>{if(!confirm('Восстановить тестовую позицию, баланс и историю?'))return;
-       button.disabled=true;try{const token=localStorage.getItem('terminal-auth-token');const r=await fetch('/api/transfer/rehearsal/restore',{method:'POST',headers:{Authorization:'Bearer '+token}});const d=await r.json();if(!r.ok)throw new Error(d.error||'Ошибка восстановления');location.reload();}catch(e){alert(e.message);button.disabled=false;}};
+       button.disabled=true;try{const token=localStorage.getItem(location.pathname.startsWith('/pc')?'mt5pc-token':'terminal-auth-token');const r=await fetch('/api/transfer/rehearsal/restore',{method:'POST',headers:{Authorization:'Bearer '+token}});const d=await r.json();if(!r.ok)throw new Error(d.error||'Ошибка восстановления');location.reload();}catch(e){alert(e.message);button.disabled=false;}};
     })();</script>`:'';
   const html = index.replace('</body>',(closeUi?rehearsalPanel:banner+liveStatusScript)+'</body>');
   const app = express();
@@ -77,6 +77,19 @@ export async function createTransferPreviewApp({ saved, positions, clientDir, au
   // New captures include the same frozen quote snapshot used by the source UI.
   // Older archives keep their individual position prices when quotes are absent.
   app.get('/api/quotes',(req,res)=>res.json({quotes:readState ? [] : saved.payload?.siteQuotes || [],source}));
+  if(desktopDir&&quoteCheck?.candles){
+    app.get('/api/candles',authRequired,async(req,res,next)=>{
+      try{
+        const state=closeUi?await readState():null;
+        const end=state?.source.rehearsalClosed?state.source.valuedAt:undefined;
+        const to=end&&(!req.query.to||Date.parse(req.query.to)>Date.parse(end))?end:req.query.to;
+        const result=await quoteCheck.candles({symbol:req.query.symbol,timeframe:req.query.timeframe,count:req.query.count?Number(req.query.count):360,to});
+        if(end)result.quote=state.source.quoteStatus?.find(q=>q.symbol===result.symbol);
+        res.json(result);
+      }
+      catch(error){next(error);}
+    });
+  }
   app.use('/api/history',(req,res,next)=>{ res.locals.historyDbOnly = true; next(); },historyRouter);
   app.use('/api',(req,res)=>res.status(404).json({error:'Раздел недоступен в тестовом просмотре'}));
   const sendIndex = (req,res)=>res.type('html').send(html);
@@ -84,6 +97,14 @@ export async function createTransferPreviewApp({ saved, positions, clientDir, au
   app.get(['/mobile','/mobile/','/mobile/index.html'],sendIndex);
   app.use('/mobile',express.static(clientDir,{index:false,etag:false,maxAge:0}));
   app.get(/^\/mobile\/.*$/,sendIndex);
+  if(desktopDir){
+    const inject=async file=>(await readFile(join(desktopDir,file),'utf8')).replace('</body>',rehearsalPanel+'</body>');
+    const pcIndex=await inject('index.html'),pcLogin=await inject('login.html');
+    app.get(/^\/pc$/,(req,res)=>res.redirect('/pc/'));
+    app.get(['/pc/','/pc/index.html'],(req,res)=>res.type('html').send(pcIndex));
+    app.get('/pc/login.html',(req,res)=>res.type('html').send(pcLogin));
+    app.use('/pc',express.static(desktopDir,{index:false,etag:false,maxAge:0}));
+  }
   app.use((error,req,res,next)=>res.status([400,409,503].includes(error.status)?error.status:500).json({error:[400,409,503].includes(error.status)?error.message:'Ошибка тестового просмотра'}));
   return app;
 }

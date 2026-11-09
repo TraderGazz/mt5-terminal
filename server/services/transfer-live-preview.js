@@ -45,6 +45,7 @@ export function attachTransferPreviewFeed(server,{readState,authRequired,interva
   }
   wss.on('connection',async(ws,req)=>{
     req.headers.authorization='Bearer '+new URL(req.url,'http://localhost').searchParams.get('token');
+    const pc=new URL(req.url,'http://localhost').searchParams.get('surface')==='pc';
     const channels=new Set();let busy=false,timer;
     const send=(channel,data)=>{if(ws.readyState===1)ws.send(JSON.stringify({channel,data}));};
     async function push() {
@@ -52,7 +53,8 @@ export function attachTransferPreviewFeed(server,{readState,authRequired,interva
       try {
         if(!await authorized(req)){ws.close(4401,'Unauthorized');return;}
         const state=await readState();
-        if(channels.has('positions'))send('positions',state.positions);
+        if(channels.has('positions'))send('positions',pc?state.positions.map(p=>({...p,serverValued:true})):state.positions);
+        if(pc&&channels.has('quote'))for(const q of state.source.quoteStatus||[])send('quote',q);
         if(channels.has('account'))send('account',state.account);
         send('status',{connected:true,stale:false,mode:'transfer-preview'});
       }catch{send('status',{connected:false,stale:true,mode:'transfer-preview'});ws.close(1013,'Fresh quotes unavailable');}
@@ -62,7 +64,7 @@ export function attachTransferPreviewFeed(server,{readState,authRequired,interva
     ws.on('message',raw=>{
       let msg;try{msg=JSON.parse(raw);}catch{return;}
       if(msg.op==='subscribe'&&Array.isArray(msg.channels)){
-        for(const c of msg.channels)if(['account','positions'].includes(c))channels.add(c);
+        for(const c of msg.channels)if((['account','positions'].includes(c)||(pc&&c==='quote')))channels.add(c);
         void push();
       }
       if(msg.op==='unsubscribe'&&Array.isArray(msg.channels))for(const c of msg.channels)channels.delete(c);

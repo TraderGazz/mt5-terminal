@@ -28,7 +28,7 @@ export async function createCloseUi({pool,saved,positions,baseUrl,now=Date.now,f
   if(!p.quote_snapshot||!p.closed_at)throw new Error('Incomplete close rehearsal');
   const valued=compatible(p.quote_snapshot,{now:new Date(p.closed_at).getTime()});
   return {account:p.account_view,positions:valued.positions.filter(v=>String(v.id)!==String(target.original_ticket)),quotes:[],
-   source:{mode:'transfer-close-ui',live:false,rehearsalClosed:true,targetTicket:String(target.original_ticket),valuedAt:new Date(p.closed_at).toISOString()}};
+   source:{mode:'transfer-close-ui',live:false,rehearsalClosed:true,targetTicket:String(target.original_ticket),valuedAt:new Date(p.closed_at).toISOString(),quoteStatus:Object.values(p.quote_snapshot)}};
  }
  async function close(body,actor){
   if(!Number.isSafeInteger(body?.ticket)||String(body.ticket)!==String(target.original_ticket)){

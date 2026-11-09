@@ -7,7 +7,7 @@ import {prepareTransfer,importPreparedTransfer} from '../services/transfer-stagi
 import {createCloseUi} from '../services/transfer-close-ui.js';
 import {createTransferPreviewApp} from '../services/transfer-preview-app.js';
 import express from 'express';
-import {mkdtemp,writeFile,rm} from 'node:fs/promises';
+import {mkdtemp,mkdir,writeFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {closeRehearsalPosition} from '../services/transfer-close-rehearsal.js';
@@ -52,13 +52,16 @@ test('separate close clone: atomic history/balance settlement, repeated close an
   assert.deepEqual((await pool.query('SELECT account_view FROM transfer_snapshots')).rows[0].account_view,account);
   const {rows:[stored]}=await pool.query('SELECT * FROM transfer_snapshots');
   const factory=async()=>createCloseUi({pool,saved:stored,positions:(await pool.query('SELECT * FROM transferred_positions')).rows,
-   baseUrl:'http://127.0.0.1:8890/v1',now:()=>now,fetchImpl:async url=>({ok:true,json:async()=>url.pathname.endsWith('account')?{login:'new',currency:'RUB'}:
+   baseUrl:'http://127.0.0.1:8890/v1',now:()=>now,fetchImpl:async url=>({ok:true,json:async()=>url.pathname.endsWith('account')?{login:'new',currency:'RUB'}:url.pathname.endsWith('history/prices')?{data:[{time:'2026.11.09T17:00:00',open:1.1,high:1.12,low:1.09,close:1.11}]}:
     url.searchParams.get('symbol')==='EURUSDrfd'?{...quotes.EURUSDrfd,time:'2026.11.09T18:00:00Z'}:{...quotes.USDRUBrfd,time:'2026.11.09T18:00:00Z'}})});
   const closeUi=await factory();
   const directory=await mkdtemp(join(tmpdir(),'mt5-close-ui-'));await writeFile(join(directory,'index.html'),'<body>client</body>');
+  const desktopDir=join(directory,'preview-desktop');await mkdir(desktopDir);
+  await writeFile(join(desktopDir,'index.html'),'<body>desktop fixture</body>');await writeFile(join(desktopDir,'login.html'),'<body>pc login</body>');
+  await writeFile(join(desktopDir,'live.js'),'window.pcFixture=true;');
   const authRequired=(req,res,next)=>{const token=req.headers.authorization;if(!token)return res.status(401).json({});req.user={role:token==='Bearer admin'?'admin':'viewer',sub:'1'};next();};
   const historyRouter=express.Router();historyRouter.get('/',authRequired,async(req,res)=>res.json((await pool.query('SELECT * FROM trades')).rows));
-  const app=await createTransferPreviewApp({saved:stored,positions:[position],clientDir:directory,authRouter:express.Router(),historyRouter,authRequired,closeUi,readState:closeUi.readState});
+  const app=await createTransferPreviewApp({saved:stored,positions:[position],clientDir:directory,authRouter:express.Router(),historyRouter,authRequired,closeUi,readState:closeUi.readState,desktopDir,quoteCheck:closeUi.quoteCheck});
   const server=await new Promise(resolve=>{const server=app.listen(0,'127.0.0.1',()=>resolve(server));});
   const base='http://127.0.0.1:'+server.address().port;
   const headers={Authorization:'Bearer admin','Content-Type':'application/json'};
@@ -70,6 +73,14 @@ test('separate close clone: atomic history/balance settlement, repeated close an
    assert.equal((await post('/api/trading/close',{ticket:123,volume:.5})).status,400);
    assert.equal((await post('/api/trading/open',{})).status,403);
    const html=await(await fetch(base+'/mobile/trade')).text();assert.match(html,/Вернуть позицию/);
+   assert.match(await(await fetch(base+'/pc/')).text(),/desktop fixture/);
+   assert.match(await(await fetch(base+'/pc/login.html')).text(),/pc login/);
+   assert.match(await(await fetch(base+'/pc/live.js')).text(),/pcFixture/);
+   assert.match(await(await fetch(base+'/pc/')).text(),/mt5pc-token/);
+   assert.equal((await fetch(base+'/api/candles')).status,401);
+   assert.equal((await fetch(base+'/api/candles?timeframe=BAD',{headers})).status,400);
+   const candles=await(await fetch(base+'/api/candles?timeframe=H4&symbol=EURUSDrfd',{headers})).json();
+   assert.equal(candles.bars.length,1);assert.equal(candles.bars[0].close,1.11);
    const response=await post('/api/trading/close',{ticket:123});assert.equal(response.status,200,await response.text());
    assert.equal((await(await fetch(base+'/api/positions',{headers})).json()).positions.length,0);
    assert.equal((await(await fetch(base+'/api/account',{headers})).json()).account.balance,927500);
