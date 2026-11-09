@@ -61,3 +61,20 @@ test('desktop candles share the single-request bridge queue and reject invalid p
  const count=paths.length;await assert.rejects(check.candles({timeframe:'constructor'}));await assert.rejects(check.candles({symbol:'../../order/open'}));
  assert.equal(paths.length,count);
 });
+
+test('EA receives literal ISO date colons rather than percent-encoded query values',async()=>{
+ let historyUrl;
+ const check=createTransferQuoteCheck({baseUrl:'http://172.17.0.3:8890/v1',saved,positions:[{model}],now:()=>now,
+  fetchImpl:async url=>{
+   if(url.pathname.endsWith('history/prices')){
+    historyUrl=url.href;
+    // Reproduce the EA parser: split raw query without URL decoding.
+    const params=Object.fromEntries(url.search.slice(1).split('&').map(p=>p.split('=')));
+    assert.match(params.from_date,/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
+    assert.equal(params.to_date,'2026-11-09T12:00:00');
+    return{ok:true,json:async()=>({data:[{time:'2026.11.09T12:00:00',open:1.1,high:1.12,low:1.09,close:1.11}]})};
+   }
+   return{ok:true,json:async()=>url.pathname.endsWith('account')?{login:2000138707,currency:'RUB'}:{symbol:'EURUSDrfd',bid:1.11,ask:1.1102,time:'2026.11.09T12:00:00'}};
+  }});
+ const result=await check.candles({timeframe:'H4'});assert.equal(result.bars.length,1);assert.equal(historyUrl.includes('%3A'),false);
+});

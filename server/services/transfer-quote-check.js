@@ -16,7 +16,10 @@ export function createTransferQuoteCheck({ baseUrl, saved, positions, fetchImpl 
   let queue=Promise.resolve();
   function read(path,timeout=10000){
     const task=queue.then(async()=>{
-      const response=await fetchImpl(new URL(path,base),{signal:AbortSignal.timeout(timeout)});
+      const url=new URL(path,base);
+      // SocketBridgeEA splits query strings without URL-decoding ISO dates.
+      url.search=url.search.replace(/%3A/gi,':');
+      const response=await fetchImpl(url,{signal:AbortSignal.timeout(timeout)});
       if(!response.ok){const error=new Error(`Test bridge HTTP ${response.status}`);error.status=response.status;throw error;}
       return response.json();
     });queue=task.catch(()=>{});return task;
