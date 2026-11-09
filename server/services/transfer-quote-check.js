@@ -1,5 +1,6 @@
 import { normalizeQuote } from './mt5-bridge/normalize.js';
 import { valueTransferredPosition } from './transfer-staging.js';
+import { createSourceCompatibleValuation } from './transfer-source-valuation.js';
 import { addMoney } from './money.js';
 
 // Read-only transport: callers cannot supply an endpoint or place broker orders.
@@ -16,6 +17,7 @@ export function createTransferQuoteCheck({ baseUrl, saved, positions, fetchImpl 
     if (!response.ok) throw new Error(`Test bridge HTTP ${response.status}`);
     return response.json();
   }
+  const compatible=createSourceCompatibleValuation(saved,positions);
   let inFlight;
   return function check() {
     if (inFlight) return inFlight;
@@ -42,7 +44,7 @@ export function createTransferQuoteCheck({ baseUrl, saved, positions, fetchImpl 
       const valued = positions.map(p => valueTransferredPosition(p.model, quotes, { now:checkedAt }));
       return {
         status:'ready', targetLogin:String(account.login), quotes:quoteStatus,
-        valuation:{ positions:valued, profit:addMoney(...valued.map(p=>p.profit)),
+        valuation:compatible?compatible(quotes,{now:checkedAt}):{ positions:valued, profit:addMoney(...valued.map(p=>p.profit)),
           swap:addMoney(...valued.map(p=>p.swap)), commission:addMoney(...valued.map(p=>p.commission)) },
       };
     })().finally(() => { inFlight = null; });

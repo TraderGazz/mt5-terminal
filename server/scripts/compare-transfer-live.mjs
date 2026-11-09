@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { fileURLToPath } from 'node:url';
 import { createTransferQuoteCheck } from '../services/transfer-quote-check.js';
 import { createLivePreviewState } from '../services/transfer-live-preview.js';
+import { createSourceCompatibleValuation } from '../services/transfer-source-valuation.js';
 import { valueTransferredPosition } from '../services/transfer-staging.js';
 import { normalizePosition,normalizeQuote } from '../services/mt5-bridge/normalize.js';
 import { addMoney,roundMoney } from '../services/money.js';
@@ -41,10 +42,13 @@ try{
  const missing=positions.filter(p=>!byId.has(String(p.original_ticket))).map(p=>p.original_ticket);
  const testIds=new Set(positions.map(p=>String(p.original_ticket)));
  const added=sourcePositions.filter(p=>!testIds.has(String(p.id))).map(p=>p.id);
+ const compatible=createSourceCompatibleValuation(saved,positions);
+ const controlled=compatible?compatible(sourceQuotes):null;
+ const controlledById=new Map((controlled?.apiPositions||[]).map(p=>[String(p.id),p]));
  const comparison=[];
  for(const p of positions){
   const original=byId.get(String(p.original_ticket));if(!original)continue;
-  const sameQuotes=valueTransferredPosition(p.model,sourceQuotes);
+  const sameQuotes=controlledById.get(String(p.original_ticket))||valueTransferredPosition(p.model,sourceQuotes);
   comparison.push({ticket:p.original_ticket,type:original.type,sourcePrice:original.currentPrice,
    controlPrice:sameQuotes.currentPrice,sourceProfit:original.profit,modelAtSourceQuotes:sameQuotes.profit,
    profitDifference:addMoney(sameQuotes.profit,-original.profit),
@@ -73,7 +77,7 @@ try{
   sourceQuotes,targetQuotes:target.quotes,
   accounts:{snapshot:saved.account_view,source:sourceAccount,preview:liveAccount,
    equityDifference:liveAccount?addMoney(liveAccount.equity,-sourceAccount.equity):null},
-  totals:{snapshotProfit:snapshotTotal,sourceProfit:sourceTotal,targetProfit:target.valuation?.profit,
+  totals:{snapshotProfit:snapshotTotal,sourceProfit:sourceTotal,targetProfit:target.valuation?.profit,accountDelta:target.valuation?.accountDelta,
    modelAtSourceQuotes:addMoney(...comparison.map(p=>p.modelAtSourceQuotes)),
    modelDifferenceAtSourceQuotes:addMoney(...comparison.map(p=>p.profitDifference)),
    swapDifference:addMoney(...comparison.map(p=>p.swapDifference)),

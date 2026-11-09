@@ -12,15 +12,21 @@ export function createLivePreviewState({saved,positions,quoteCheck,now=Date.now}
       if(result.status!=='ready' || !result.valuation) {
         const error=new Error('Свежие котировки нового счёта недоступны');error.status=503;throw error;
       }
-      const delta=addMoney(result.valuation.profit,-originalProfit);
+      const delta=result.valuation.accountDelta ?? addMoney(result.valuation.profit,-originalProfit);
       const anchor=saved.account_view;
       // Preserve every manual account offset, including margin-level offsets.
       // Broker starting balance and deposits are never part of this view.
+      const rawMargin=Number(saved.payload?.brokerAccount?.margin ?? anchor.margin);
+      const rawEquity=Number(saved.payload?.brokerAccount?.equity);
+      const rawLevel=Number(saved.payload?.brokerAccount?.margin_level);
+      const marginLevel=rawMargin>0 && Number.isFinite(rawEquity) && Number.isFinite(rawLevel)
+        ?roundMoney((rawEquity+(result.valuation.brokerProfitDelta ?? delta))/rawMargin*100)+(anchor.marginLevel-rawLevel)
+        :anchor.margin>0?roundMoney(anchor.marginLevel+delta/anchor.margin*100):anchor.marginLevel;
       const account={...anchor,equity:addMoney(anchor.equity,delta),
         freeMargin:addMoney(anchor.freeMargin,delta),floatingProfit:addMoney(anchor.floatingProfit,delta),
-        marginLevel:anchor.margin>0?roundMoney(anchor.marginLevel+delta/anchor.margin*100):anchor.marginLevel};
+        marginLevel:roundMoney(marginLevel)};
       cached={account,positions:result.valuation.positions,quotes:[],source:{
-        mode:'transfer-preview',live:true,capturedAt:new Date(saved.captured_at).toISOString(),
+        mode:'transfer-preview',live:true,valuationMode:result.valuation.mode||'anchored',capturedAt:new Date(saved.captured_at).toISOString(),
         valuedAt:new Date(now()).toISOString(),targetLogin:result.targetLogin,quoteStatus:result.quotes,
       }};
       cachedAt=now();return cached;
