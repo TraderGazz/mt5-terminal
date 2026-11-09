@@ -176,7 +176,12 @@ export async function closeTransferredPosition(client, id, quotes, actor, option
   if (position.status === 'closed') {
     return (await client.query('SELECT * FROM transferred_position_closures WHERE position_id = $1', [id])).rows[0];
   }
-  const value = valueTransferredPosition(position.model, quotes, options);
+  const executionValue = valueTransferredPosition(position.model, quotes, options);
+  // Internal rehearsal may reproduce the original site's displayed P/L. Quote
+  // validation always runs first; no HTTP route accepts a valuation callback.
+  const value = options.valuePosition ? options.valuePosition(position.model, executionValue) : executionValue;
+  if (value.id !== position.model.view.id || value.currentPrice !== executionValue.currentPrice ||
+      !['profit','swap','commission'].every(k=>Number.isFinite(value[k]))) throw new Error('Invalid settlement value');
   const result = await client.query(
     `INSERT INTO transferred_position_closures
        (position_id, closed_at, actor, close_price, profit, swap, commission, total, quote_snapshot)
