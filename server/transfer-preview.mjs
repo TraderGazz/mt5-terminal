@@ -13,12 +13,14 @@ if (!/^terminal_migration_test_[a-z0-9_]+$/.test(database || '') || !/^[1-9]\d*$
   throw new Error('TRANSFER_PREVIEW_DATABASE must be terminal_migration_test_*; set TRANSFER_PREVIEW_SNAPSHOT_ID');
 }
 if (!Number.isInteger(port) || port < 1024 || port > 65535 || [4000,4001].includes(port)) throw new Error('Invalid preview port');
+const hybrid=process.env.TRANSFER_PREVIEW_HYBRID==='true';
+if(hybrid&&(!/^terminal_migration_test_hybrid_[a-z0-9_]+$/.test(database)||port!==4004))throw new Error('Hybrid preview requires separate hybrid database and port 4004');
 const allowClose=process.env.TRANSFER_PREVIEW_ALLOW_CLOSE==='true';
-if(allowClose&&(!/^terminal_migration_test_close_[a-z0-9_]+$/.test(database)||port!==4003))throw new Error('Close UI requires separate close clone and port 4003');
+if(allowClose&&(hybrid||!/^terminal_migration_test_close_[a-z0-9_]+$/.test(database)||port!==4003))throw new Error('Close UI requires separate close clone and port 4003');
 const clientDir = resolve(process.env.TRANSFER_PREVIEW_CLIENT_DIR || '');
 if (basename(clientDir) !== 'preview-client') throw new Error('Use a separate preview-client build directory');
 const desktopDir=process.env.TRANSFER_PREVIEW_DESKTOP_DIR?resolve(process.env.TRANSFER_PREVIEW_DESKTOP_DIR):undefined;
-if(desktopDir&&(!allowClose||basename(desktopDir)!=='preview-desktop'))throw new Error('Use separate preview-desktop only for close rehearsal');
+if(desktopDir&&((!allowClose&&!hybrid)||basename(desktopDir)!=='preview-desktop'))throw new Error('Use separate preview-desktop only for close rehearsal');
 const databaseUrl = new URL(process.env.DATABASE_URL);
 databaseUrl.pathname = '/' + database;
 process.env.DATABASE_URL = databaseUrl.href;
@@ -30,7 +32,7 @@ process.env.JWT_SECRET = randomBytes(32).toString('hex');
 
 const client = new pg.Client({connectionString:databaseUrl.href});
 await client.connect();
-let saved, positions;
+let saved, positions, baseline;
 try {
   await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
   ({rows:[saved]} = await client.query('SELECT * FROM transfer_snapshots WHERE id = $1',[snapshotId]));
@@ -40,6 +42,7 @@ try {
   }
   const sourceOrder = new Map(saved.payload.sitePositions.positions.map((p, i) => [String(p.id), i]));
   positions.sort((a, b) => sourceOrder.get(String(a.original_ticket)) - sourceOrder.get(String(b.original_ticket)));
+  if(hybrid){({rows:[baseline]}=await client.query('SELECT * FROM transfer_target_baselines WHERE snapshot_id=$1',[snapshotId]));if(!baseline)throw new Error('Hybrid baseline missing');}
   await client.query('COMMIT');
 } finally {
   await client.end();
@@ -61,6 +64,12 @@ if(process.env.TRANSFER_PREVIEW_LIVE==='true') {
   if(!quoteCheck)throw new Error('Live preview requires TRANSFER_PREVIEW_QUOTE_URL');
   readState=createLivePreviewState({saved,positions,quoteCheck});
 }
+if(hybrid){
+  if(!quoteCheck||allowClose)throw new Error('Hybrid review requires quote reader and no trading routes');
+  const {createHybridTransferReader}=await import('./services/transfer-hybrid-reader.js');
+  const {createHybridReviewState}=await import('./services/transfer-hybrid-review.js');
+  readState=createHybridReviewState(createHybridTransferReader({saved,positions,baseline,quoteCheck}));
+}
 let closeUi,closePool;
 if(allowClose){
   if(!process.env.TRANSFER_PREVIEW_QUOTE_URL)throw new Error('Quote URL missing');
@@ -69,7 +78,7 @@ if(allowClose){
   closeUi=await createCloseUi({pool:closePool,saved,positions,baseUrl:process.env.TRANSFER_PREVIEW_QUOTE_URL});
   readState=closeUi.readState;quoteCheck=closeUi.quoteCheck;
 }
-const app = await createTransferPreviewApp({saved,positions,clientDir,authRouter,authRequired,historyRouter,quoteCheck,readState,closeUi,desktopDir});
+const app = await createTransferPreviewApp({saved,positions,clientDir,authRouter,authRequired,historyRouter,quoteCheck,readState,closeUi,desktopDir,hybrid});
 const server = app.listen(port,'127.0.0.1',()=>console.log(`[transfer-preview] http://127.0.0.1:${port}/mobile/login; ${positions.length} saved positions`));
 const closeFeed=readState?attachTransferPreviewFeed(server,{readState,authRequired}):()=>{};
 for (const signal of ['SIGINT','SIGTERM']) process.on(signal,()=>{closeFeed();server.close(async()=>{if(closePool)await closePool.end();process.exit(0);});});

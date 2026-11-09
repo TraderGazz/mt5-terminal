@@ -51,7 +51,7 @@ export function createHybridTransferReader({saved,positions,baseline,quoteCheck,
    combined.accounting.marginLevelNeedsBasis=false;
   }
   return {...combined,source:{...oldState.source,mode:'transfer-hybrid-rehearsal',startedAt:new Date(baseline.started_at).toISOString(),
-   brokerBalanceExcluded:baseline.broker_balance_excluded,targetDeals:normalized.deals.length,targetPositions:normalized.positions.length,
+   brokerBalanceExcluded:baseline.broker_balance_excluded,targetDeals:normalized.deals.length,targetTradingDeals:normalized.deals.filter(d=>['buy','sell'].includes(d.type)).length,targetPositions:normalized.positions.length,
    readOnly:true}};
  };
 }

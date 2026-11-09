@@ -3,11 +3,12 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { roundMoney } from './money.js';
 
-export async function createTransferPreviewApp({ saved, positions, clientDir, authRouter, authRequired, historyRouter, quoteCheck, readState, closeUi, desktopDir }) {
+export async function createTransferPreviewApp({ saved, positions, clientDir, authRouter, authRequired, historyRouter, quoteCheck, readState, closeUi, desktopDir, hybrid=false }) {
   const capturedAt = new Date(saved.captured_at).toISOString();
-  const source = {mode:'transfer-preview', capturedAt, live:false};
+  const source = {mode:hybrid?'transfer-hybrid-review':'transfer-preview', capturedAt, live:false,hybridPreview:hybrid};
   const account = saved.account_view;
   const index = await readFile(join(clientDir,'index.html'),'utf8');
+  const reviewStyle='<style>:root{--transfer-review-bar:34px}body{padding-top:var(--transfer-review-bar)}#terminal{height:calc(100dvh - var(--transfer-review-bar));max-height:calc(100dvh - var(--transfer-review-bar));min-height:0}</style>';
   const banner = `<div id="transfer-preview-status" role="status" style="position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#704800;color:white;padding:7px;text-align:center;font:13px Arial;pointer-events:none">ТЕСТОВАЯ КОПИЯ · ${readState ? "Котировки нового счёта" : "Снимок " + capturedAt} · Только просмотр</div>`;
   const liveStatusScript=readState?`<script>
   (function(){const el=document.getElementById('transfer-preview-status');
@@ -27,7 +28,8 @@ export async function createTransferPreviewApp({ saved, positions, clientDir, au
       status();setInterval(status,3000);button.onclick=async()=>{if(!confirm('Восстановить тестовую позицию, баланс и историю?'))return;
        button.disabled=true;try{const token=localStorage.getItem(location.pathname.startsWith('/pc')?'mt5pc-token':'terminal-auth-token');const r=await fetch('/api/transfer/rehearsal/restore',{method:'POST',headers:{Authorization:'Bearer '+token}});const d=await r.json();if(!r.ok)throw new Error(d.error||'Ошибка восстановления');location.reload();}catch(e){alert(e.message);button.disabled=false;}};
     })();</script>`:'';
-  const html = index.replace('</body>',(closeUi?rehearsalPanel:banner+liveStatusScript)+'</body>');
+  const reviewBanner=reviewStyle+banner+liveStatusScript+`<script>(function(){const el=document.getElementById('transfer-preview-status');const fit=()=>document.documentElement.style.setProperty('--transfer-review-bar',Math.ceil(el.getBoundingClientRect().height)+'px');fit();new ResizeObserver(fit).observe(el);})();</script>`;
+  const html = index.replace('</body>',(closeUi?rehearsalPanel:reviewBanner)+'</body>');
   const app = express();
   app.disable('x-powered-by');
   app.use(express.json({limit:'32kb'}));
@@ -101,7 +103,7 @@ export async function createTransferPreviewApp({ saved, positions, clientDir, au
   app.use('/mobile',express.static(clientDir,{index:false,etag:false,maxAge:0}));
   app.get(/^\/mobile\/.*$/,sendIndex);
   if(desktopDir){
-    const inject=async file=>(await readFile(join(desktopDir,file),'utf8')).replace('</body>',rehearsalPanel+'</body>');
+    const inject=async file=>(await readFile(join(desktopDir,file),'utf8')).replace('</body>',(closeUi?rehearsalPanel:reviewBanner)+'</body>');
     const pcIndex=await inject('index.html'),pcLogin=await inject('login.html');
     app.get(/^\/pc$/,(req,res)=>res.redirect('/pc/'));
     app.get(['/pc/','/pc/index.html'],(req,res)=>res.type('html').send(pcIndex));
