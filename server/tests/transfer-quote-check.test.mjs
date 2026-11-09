@@ -37,3 +37,14 @@ test('rejects public bridges and deduplicates concurrent readers',async()=>{
  assert.throws(()=>createTransferQuoteCheck({baseUrl:'http://example.com:8890/v1'}),/private/);
  const {check,calls}=setup();const [a,b]=await Promise.all([check(),check()]);assert.equal(a,b);assert.equal(calls.length,3);
 });
+
+test('fresh EURUSD and final RUB session rate allow valuation after RUB trading ends',async()=>{
+ const check=createTransferQuoteCheck({baseUrl:'http://172.17.0.3:8890/v1',saved,positions:[{model}],
+  now:()=>Date.parse('2026-11-09T16:05:04Z'),fetchImpl:async url=>({ok:true,json:async()=>
+   url.pathname.endsWith('account')?{login:2000138707,currency:'RUB'}:
+   url.searchParams.get('symbol')==='EURUSDrfd'?{symbol:'EURUSDrfd',bid:1.111,ask:1.1112,time:'2026.11.09T19:05:04Z'}:
+   {symbol:'USDRUBrfd',bid:80,ask:80,time:'2026.11.09T18:54:59Z'}})});
+ const result=await check();assert.equal(result.status,'ready');
+ assert.equal(result.quotes[1].fresh,false);assert.equal(result.quotes[1].usable,true);
+ assert.equal(result.quotes[1].reason,'conversion-session-close');assert.equal(result.valuation.profit,-72000);
+});

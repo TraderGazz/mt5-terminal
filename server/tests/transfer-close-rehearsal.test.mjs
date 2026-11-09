@@ -44,6 +44,12 @@ test('separate close clone: atomic history/balance settlement, repeated close an
   assert.deepEqual((await pool.query('SELECT * FROM transferred_positions')).rows[0],position);
   assert.equal((await pool.query('SELECT count(*)::int AS n FROM trades')).rows[0].n,initialHistory);
   assert.deepEqual((await pool.query('SELECT account_view FROM transfer_snapshots')).rows[0].account_view,account);
+  const night=Date.parse('2026-11-09T16:05:04Z');
+  const nightQuotes={EURUSDrfd:{...quotes.EURUSDrfd,time:new Date(night).toISOString()},
+    USDRUBrfd:{...quotes.USDRUBrfd,time:'2026-11-09T15:54:59Z'}};
+  const nightClosed=await tx(c=>closeRehearsalPosition(c,position.id,nightQuotes,'night-test',{now:night}));
+  assert.equal(Number(nightClosed.closure.total),-72500);
+  assert.equal(nightClosed.account.equity,nightClosed.before.equity);
   await assert.rejects(closeRehearsalPosition(admin,position.id,quotes,'admin',{now}),/separate close-test clone/);
  }finally{await pool.end();await admin.query('DROP DATABASE '+database);await admin.end();}
 });

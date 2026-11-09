@@ -1,4 +1,5 @@
-import { normalizeQuote } from './mt5-bridge/normalize.js';
+import { transferQuoteStatus } from './transfer-quote-policy.js';
+import { normalizeQuote,toIso } from './mt5-bridge/normalize.js';
 import { valueTransferredPosition } from './transfer-staging.js';
 import { createSourceCompatibleValuation } from './transfer-source-valuation.js';
 import { addMoney } from './money.js';
@@ -30,15 +31,17 @@ export function createTransferQuoteCheck({ baseUrl, saved, positions, fetchImpl 
       const quotes = {};
       for (const symbol of symbols) {
         const raw = await read('quote?symbol=' + encodeURIComponent(symbol));
-        if (!raw.time || raw.symbol !== symbol) throw new Error('Invalid test bridge quote');
+        if (!raw.time || !toIso(raw.time) || raw.symbol !== symbol) throw new Error('Invalid test bridge quote');
         quotes[symbol] = normalizeQuote(raw);
       }
       const checkedAt = now();
+      const executionSymbols=new Set(positions.map(p=>p.model.raw.symbol));
       const quoteStatus = Object.values(quotes).map(q => ({
         symbol:q.symbol, time:q.time, bid:q.bid, ask:q.ask,
-        fresh: Number.isFinite(Date.parse(q.time)) && checkedAt-Date.parse(q.time) >= -5000 && checkedAt-Date.parse(q.time) <= 60000,
+        ...transferQuoteStatus(q,{now:checkedAt,conversion:!executionSymbols.has(q.symbol)}),
       }));
-      if (quoteStatus.some(q => !q.fresh)) {
+      if(quoteStatus.some(q=>q.reason==='invalid'))throw new Error('Invalid test bridge quote');
+      if (quoteStatus.some(q => !q.usable)) {
         return { status:'stale', targetLogin:String(account.login), quotes:quoteStatus, valuation:null };
       }
       const valued = positions.map(p => valueTransferredPosition(p.model, quotes, { now:checkedAt }));

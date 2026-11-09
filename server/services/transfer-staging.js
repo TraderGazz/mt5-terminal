@@ -1,3 +1,4 @@
+import { transferQuoteStatus } from './transfer-quote-policy.js';
 import { createHash } from 'node:crypto';
 import { normalizePosition } from './mt5-bridge/normalize.js';
 import { addMoney, roundMoney } from './money.js';
@@ -116,13 +117,12 @@ export function prepareTransfer(snapshot, sourceLogin, targetLogin, specificatio
   };
 }
 
-function checkedQuote(symbol, quotes, now, maxAgeMs) {
+function checkedQuote(symbol, quotes, now, maxAgeMs, conversion=false) {
   const quote = quotes[symbol];
   if (!quote || quote.symbol !== symbol) throw new Error(`Missing quote: ${symbol}`);
   positive(quote.bid, `${symbol}.bid`);
   positive(quote.ask, `${symbol}.ask`);
-  const age = now - Date.parse(quote.time);
-  if (!Number.isFinite(age) || age < -5000 || age > maxAgeMs || quote.ask < quote.bid) {
+  if (!transferQuoteStatus(quote,{now,maxAgeMs,conversion}).usable) {
     throw new Error(`Invalid or stale quote: ${symbol}`);
   }
   return quote;
@@ -131,7 +131,7 @@ function checkedQuote(symbol, quotes, now, maxAgeMs) {
 export function valueTransferredPosition(model, quotes, { now = Date.now(), maxAgeMs = 60000 } = {}) {
   const quote = checkedQuote(model.raw.symbol, quotes, now, maxAgeMs);
   const v = model.valuation;
-  const conversion = v.conversionSymbol ? checkedQuote(v.conversionSymbol, quotes, now, maxAgeMs) : null;
+  const conversion = v.conversionSymbol ? checkedQuote(v.conversionSymbol, quotes, now, maxAgeMs,true) : null;
   // Matches the current terminal's midpoint USDRUB conversion convention.
   const rate = conversion ? (conversion.bid + conversion.ask) / 2 : 1;
   const closePrice = model.raw.type === 'buy' ? quote.bid : quote.ask;
