@@ -38,7 +38,9 @@ function aggregatePositions(deals) {
   for (const [positionId, group] of groups) {
     group.sort((a, b) => ms(a.openTime) - ms(b.openTime));
     const first = group[0];
-    const last = group[group.length - 1];
+    // Partial closes share the same opening time. Database rows arrive newest
+    // first, so the last item after sorting by open time may be an old close.
+    const last = group.reduce((latest,deal)=>ms(deal.closeTime)>ms(latest.closeTime)?deal:latest,first);
     out.push({
       ticket: positionId,
       positionId,
