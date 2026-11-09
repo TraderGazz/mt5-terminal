@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { createTransferQuoteCheck } from '../services/transfer-quote-check.js';
 import { createLivePreviewState } from '../services/transfer-live-preview.js';
 import { valueTransferredPosition } from '../services/transfer-staging.js';
-import { normalizeQuote } from '../services/mt5-bridge/normalize.js';
+import { normalizePosition,normalizeQuote } from '../services/mt5-bridge/normalize.js';
 import { addMoney,roundMoney } from '../services/money.js';
 dotenv.config({path:fileURLToPath(new URL('../.env',import.meta.url)),quiet:true});
 const [database,baseUrl]=process.argv.slice(2);
@@ -31,6 +31,7 @@ try{
  const startedAt=new Date().toISOString();
  const brokerAccount=await get(bridge+'/account');
  if(String(brokerAccount.login)!==String(saved.source_login))throw new Error('Wrong source account');
+ const currentRaw=await get(bridge+'/order/list');
  const sourceQuotes={};
  for(const symbol of ['EURUSDrfd','USDRUBrfd'])sourceQuotes[symbol]=normalizeQuote(await get(bridge+'/quote?symbol='+symbol));
  const sourceAccount=(await get(api+'/account',true)).account;
@@ -54,6 +55,19 @@ try{
  const snapshotTotal=addMoney(...positions.map(p=>p.model.view.profit));
  let liveAccount=null;
  if(target.status==='ready')liveAccount=(await createLivePreviewState({saved,positions,quoteCheck:async()=>target})()).account;
+ function rawSummary(raw,fx){
+  const list=(Array.isArray(raw)?raw:raw.opened||raw.positions||[]).map(normalizePosition);
+  return {profit:addMoney(...list.map(p=>p.profit)),swap:addMoney(...list.map(p=>p.swap)),
+   referenceFx:fx, sides:['buy','sell'].map(type=>{
+    const side=list.filter(p=>p.type===type);
+    return {type,count:side.length,profit:addMoney(...side.map(p=>p.profit)),
+     samples:side.filter(p=>Math.abs(p.currentPrice-p.openPrice)>.001).slice(0,4).map(p=>({ticket:p.id,
+      volume:p.volume,open:p.openPrice,current:p.currentPrice,profit:p.profit,
+      impliedConversion:p.profit/((type==='buy'?1:-1)*(p.currentPrice-p.openPrice)*p.volume*100000)}))};
+   })};
+ }
+ const fxSource=sourceQuotes.USDRUBrfd;
+ const snapshotFx=saved.payload.referenceQuotes?.USDRUBrfd;
  console.log(JSON.stringify({startedAt,finishedAt:new Date().toISOString(),snapshotAt:saved.captured_at,
   counts:{snapshot:positions.length,source:sourcePositions.length,missing,added},
   sourceQuotes,targetQuotes:target.quotes,
@@ -66,6 +80,9 @@ try{
    brokerFloating:brokerAccount.profit,brokerEquity:brokerAccount.equity,
    snapshotBrokerFloating:saved.payload.brokerAccount.profit,snapshotBrokerEquity:saved.payload.brokerAccount.equity},
   largestDifferences:comparison.sort((a,b)=>Math.abs(b.profitDifference)-Math.abs(a.profitDifference)).slice(0,8),
+  rawBroker:{snapshot:rawSummary(saved.payload.brokerPositions,snapshotFx),source:rawSummary(currentRaw,fxSource),
+   snapshotAccount:{profit:saved.payload.brokerAccount.profit,margin:saved.payload.brokerAccount.margin,margin_level:saved.payload.brokerAccount.margin_level},
+   sourceAccount:{profit:brokerAccount.profit,margin:brokerAccount.margin,margin_level:brokerAccount.margin_level}},
   changedOpenPrices:comparison.filter(p=>p.openPriceChanged).length,
   warning:'Sequential live reads: quotes may move between requests; no data changed'
  },null,2));
