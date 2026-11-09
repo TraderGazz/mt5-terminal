@@ -78,3 +78,20 @@ test('EA receives literal ISO date colons rather than percent-encoded query valu
   }});
  const result=await check.candles({timeframe:'H4'});assert.equal(result.bars.length,1);assert.equal(historyUrl.includes('%3A'),false);
 });
+
+test('target inspection is read-only, account-bound and shares bridge queue; dates keep literal colons',async()=>{
+ let active=0,maximum=0;const paths=[];
+ const check=createTransferQuoteCheck({baseUrl:'http://172.17.0.3:8890/v1',saved,positions:[],now:()=>now,
+  fetchImpl:async url=>{active++;maximum=Math.max(maximum,active);paths.push(url.pathname+url.search);
+   await new Promise(r=>setTimeout(r,1));active--;
+   return {ok:true,json:async()=>url.pathname.endsWith('account')?{login:2000138707,currency:'RUB',balance:900100}:
+    url.pathname.endsWith('order/list')?{opened:[],pending:[]}:{data:[{ticket:1,type:'DEAL_TYPE_BALANCE',profit:900100}]}};
+  }});
+ const [a]=await Promise.all([check.targetState({from:'2026-11-09T08:00:00Z'}),check.targetState({from:'2026-11-09T08:00:00Z'})]);
+ assert.equal(maximum,1);assert.equal(a.deals.length,1);assert.equal(a.opened.length,0);
+ assert.ok(paths.every(p=>/^\/v1\/(account|order\/list|history\/orders)/.test(p)));
+ assert.ok(paths.some(p=>p.includes('from_date=2026-11-09T11:00:00')));assert.ok(paths.every(p=>!p.includes('%3A')));
+ const wrong=setup({login:1});await assert.rejects(wrong.check.targetState({from:'2026-11-09T08:00:00Z'}),/account/);
+ assert.equal(wrong.calls.length,1);
+ const calls=paths.length;await assert.rejects(check.targetState({from:'invalid'}),/interval/);assert.equal(paths.length,calls);
+});

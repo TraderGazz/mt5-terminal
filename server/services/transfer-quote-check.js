@@ -91,5 +91,19 @@ export function createTransferQuoteCheck({ baseUrl, saved, positions, fetchImpl 
     if(!Number.isFinite(quote.bid)||!Number.isFinite(quote.ask)||quote.bid<=0||quote.ask<quote.bid)throw new Error('Invalid chart quote');
     return {symbol,timeframe,quote,bars:bars.sort((a,b)=>a.time-b.time).slice(-count)};
   };
+  check.targetState=async({from,to=new Date(now()).toISOString()}={})=>{
+    const start=new Date(from),end=new Date(to);
+    if(!Number.isFinite(start.getTime())||!Number.isFinite(end.getTime())||start>end||end.getTime()>now()+5000)throw new Error('Invalid target history interval');
+    const account=await read('account');
+    if(String(account.login)!==String(saved.target_login)||account.currency!==saved.account_view.currency)throw new Error('Wrong target account/currency');
+    const orders=await read('order/list');
+    if(!Array.isArray(orders.opened)||!Array.isArray(orders.pending))throw new Error('Invalid target orders response');
+    const fmt=date=>new Date(date.getTime()+3*3600000).toISOString().slice(0,19);
+    const params=new URLSearchParams({mode:'deals',from_date:fmt(start),to_date:fmt(end)});
+    const history=await read('history/orders?'+params,45000);
+    const deals=Array.isArray(history)?history:history.data;
+    if(!Array.isArray(deals))throw new Error('Invalid target deals response');
+    return {account,opened:orders.opened,pending:orders.pending,deals,from:start.toISOString(),to:end.toISOString()};
+  };
   return check;
 }
