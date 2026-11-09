@@ -53,6 +53,11 @@ try{
  const compatible=createSourceCompatibleValuation(saved,positions);
  const controlled=compatible?compatible(sourceQuotes):null;
  const cacheControl=compatible&&cachedMidpoint?compatible(sourceQuotes,{sourceSellMidpoint:cachedMidpoint}):null;
+ const replay=compatible&&cachedMidpoint?compatible(sourceQuotes,{sourceSellMidpoint:cachedMidpoint,
+  sourceBrokerProfits:new Map([...rawById].map(([id,p])=>[id,p.profit]))}):null;
+ const replayById=new Map((replay?.apiPositions||[]).map(p=>[String(p.id),p]));
+ const replayDifferences=sourcePositions.filter(p=>replayById.has(String(p.id))).map(p=>addMoney(replayById.get(String(p.id)).profit,-p.profit));
+ const replayAccount=replay?(await createLivePreviewState({saved,positions,quoteCheck:async()=>({status:'ready',valuation:replay,quotes:[]})})()).account:null;
  const cacheById=new Map((cacheControl?.apiPositions||[]).map(p=>[String(p.id),p]));
  const controlledById=new Map((controlled?.apiPositions||[]).map(p=>[String(p.id),p]));
  const comparison=[];
@@ -96,6 +101,11 @@ try{
    brokerFloating:brokerAccount.profit,brokerEquity:brokerAccount.equity,
    snapshotBrokerFloating:saved.payload.brokerAccount.profit,snapshotBrokerEquity:saved.payload.brokerAccount.equity},
   largestDifferences:comparison.sort((a,b)=>Math.abs(b.profitDifference)-Math.abs(a.profitDifference)).slice(0,8),
+  sourceInputReplay:{description:'Diagnostic only: reuse actual broker position profits and original cached SELL rate; live preview does not read old broker',
+   positionDifference:replay?addMoney(...replayDifferences):null,
+   maxPositionDifference:replay?Math.max(0,...replayDifferences.map(Math.abs)):null,
+   equityDifference:replayAccount?addMoney(replayAccount.equity,-sourceAccount.equity):null,
+   comparedPositions:replayDifferences.length},
   sourceFxCache:{samples:inferredRates.length,inferredMidpoint:cachedMidpoint,
    currentMidpoint:(fxSource.bid+fxSource.ask)/2,
    positionDifferenceAtCachedRate:cacheControl?addMoney(...cacheDifferences):null,

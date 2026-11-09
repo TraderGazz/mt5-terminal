@@ -21,12 +21,13 @@ export function createSourceCompatibleValuation(saved,positions) {
       throw new Error('Unsupported source-compatible conversion');
     }
   }
-  function calculate(m,quote,conversion,sellMidpoint) {
+  function calculate(m,quote,conversion,sellMidpoint,brokerProfitReplay) {
     const direction=m.raw.type==='buy'?1:-1;
     const close=m.raw.type==='buy'?quote.bid:quote.ask;
     const dollars=direction*(close-m.raw.openPrice)*m.valuation.units;
     // MT5 converts a USD loss at USDRUB Ask and a gain at Bid.
-    const brokerProfit=roundMoney(dollars*(dollars<0?conversion.ask:conversion.bid));
+    const brokerProfit=brokerProfitReplay ?? roundMoney(dollars*(dollars<0?conversion.ask:conversion.bid));
+    if(!Number.isFinite(brokerProfit))throw new Error('Invalid broker profit replay');
     // Existing source bridge fixes SELL at Bid using midpoint conversion.
     const fixedProfit=m.raw.type==='sell'?
       (m.raw.openPrice-quote.bid)*m.valuation.units*(sellMidpoint ?? (conversion.bid+conversion.ask)/2):brokerProfit;
@@ -51,7 +52,7 @@ export function createSourceCompatibleValuation(saved,positions) {
     positions.forEach(({model:m},i)=>{
       // Validate both quotes and their age through the execution core first.
       valueTransferredPosition(m,quotes,options);
-      const current=calculate(m,quotes[m.raw.symbol],quotes.USDRUBrfd,options.sourceSellMidpoint);
+      const current=calculate(m,quotes[m.raw.symbol],quotes.USDRUBrfd,options.sourceSellMidpoint,options.sourceBrokerProfits?.get(String(m.originalTicket)));
       const anchor=anchors[i];
       const correction=m.view.profit-anchor.api.profit;
       const api={...m.view,...current.api,profit:current.api.profit+correction,

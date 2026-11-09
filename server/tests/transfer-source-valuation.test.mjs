@@ -67,3 +67,16 @@ test('control replay may reproduce old SELL FX cache without changing true broke
  assert.equal(fresh.brokerProfitDelta,old.brokerProfitDelta);
  assert.equal(fresh.accountDelta,old.accountDelta); // no financial SELL override in this fixture
 });
+
+test('broker profit may lag a newer FX quote; deterministic replay separates tick timing from formula errors',()=>{
+ const {saved,positions}=fixture();const value=createSourceCompatibleValuation(saved,positions);
+ const q={...quote,bid:1.11923,ask:1.11937};
+ const newerFx={...fx,bid:82.3737,ask:82.5237};
+ const live=value({EURUSDrfd:q,USDRUBrfd:newerFx},{now});
+ const replay=value({EURUSDrfd:q,USDRUBrfd:newerFx},{now,sourceSellMidpoint:82.4485,
+   sourceBrokerProfits:new Map([['1',-684033.98],['2',117711.16]])});
+ assert.equal(replay.apiPositions[0].profit,-684033.98);
+ assert.notEqual(live.apiPositions[0].profit,replay.apiPositions[0].profit);
+ assert.equal(replay.brokerProfitDelta,round(-684033.98+725136.61+117711.16-161737.97));
+ function round(n){return Math.round(n*100)/100;}
+});
