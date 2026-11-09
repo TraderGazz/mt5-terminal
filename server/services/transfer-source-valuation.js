@@ -21,7 +21,7 @@ export function createSourceCompatibleValuation(saved,positions) {
       throw new Error('Unsupported source-compatible conversion');
     }
   }
-  function calculate(m,quote,conversion) {
+  function calculate(m,quote,conversion,sellMidpoint) {
     const direction=m.raw.type==='buy'?1:-1;
     const close=m.raw.type==='buy'?quote.bid:quote.ask;
     const dollars=direction*(close-m.raw.openPrice)*m.valuation.units;
@@ -29,7 +29,7 @@ export function createSourceCompatibleValuation(saved,positions) {
     const brokerProfit=roundMoney(dollars*(dollars<0?conversion.ask:conversion.bid));
     // Existing source bridge fixes SELL at Bid using midpoint conversion.
     const fixedProfit=m.raw.type==='sell'?
-      (m.raw.openPrice-quote.bid)*m.valuation.units*(conversion.bid+conversion.ask)/2:brokerProfit;
+      (m.raw.openPrice-quote.bid)*m.valuation.units*(sellMidpoint ?? (conversion.bid+conversion.ask)/2):brokerProfit;
     const raw={...m.raw,currentPrice:quote.bid,profit:fixedProfit};
     const api=applyPositionOverride(raw,overrides.get(String(m.originalTicket)));
     return {brokerProfit,fixedProfit,api};
@@ -51,7 +51,7 @@ export function createSourceCompatibleValuation(saved,positions) {
     positions.forEach(({model:m},i)=>{
       // Validate both quotes and their age through the execution core first.
       valueTransferredPosition(m,quotes,options);
-      const current=calculate(m,quotes[m.raw.symbol],quotes.USDRUBrfd);
+      const current=calculate(m,quotes[m.raw.symbol],quotes.USDRUBrfd,options.sourceSellMidpoint);
       const anchor=anchors[i];
       const correction=m.view.profit-anchor.api.profit;
       const api={...m.view,...current.api,profit:current.api.profit+correction,

@@ -58,3 +58,12 @@ test('BUY becoming profitable switches conversion to FX Bid',()=>{
  const value=createSourceCompatibleValuation(saved,positions)({EURUSDrfd:q,USDRUBrfd:fx},{now});
  assert.equal(value.apiPositions[0].profit,7245.55);
 });
+
+test('control replay may reproduce old SELL FX cache without changing true broker conversion',()=>{
+ const {saved,positions}=fixture();const value=createSourceCompatibleValuation(saved,positions);
+ const fresh=value({EURUSDrfd:quote,USDRUBrfd:fx},{now});
+ const old=value({EURUSDrfd:quote,USDRUBrfd:fx},{now,sourceSellMidpoint:82.4107});
+ assert.ok(Math.abs(fresh.apiPositions[1].profit-old.apiPositions[1].profit-.1456)<.000001);
+ assert.equal(fresh.brokerProfitDelta,old.brokerProfitDelta);
+ assert.equal(fresh.accountDelta,old.accountDelta); // no financial SELL override in this fixture
+});

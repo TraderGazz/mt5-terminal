@@ -42,8 +42,18 @@ try{
  const missing=positions.filter(p=>!byId.has(String(p.original_ticket))).map(p=>p.original_ticket);
  const testIds=new Set(positions.map(p=>String(p.original_ticket)));
  const added=sourcePositions.filter(p=>!testIds.has(String(p.id))).map(p=>p.id);
+ const {rows:sourceOverrides}=await sourceDb.query('SELECT ticket,open_price_override,profit_offset FROM position_overrides');
+ const financiallyEdited=new Set(sourceOverrides.filter(o=>o.open_price_override!=null||o.profit_offset!=null).map(o=>String(o.ticket)));
+ const rawById=new Map((currentRaw.opened||currentRaw.positions||[]).map(normalizePosition).map(p=>[String(p.id),p]));
+ const inferredRates=sourcePositions.filter(p=>p.type==='sell'&&!financiallyEdited.has(String(p.id))).map(p=>{
+  const raw=rawById.get(String(p.id));const denominator=raw?(p.openPrice-p.currentPrice)*raw.volume*100000:0;
+  return Math.abs(denominator)>1?p.profit/denominator:NaN;
+ }).filter(n=>Number.isFinite(n)&&n>0).sort((a,b)=>a-b);
+ const cachedMidpoint=inferredRates.length?inferredRates[Math.floor(inferredRates.length/2)]:null;
  const compatible=createSourceCompatibleValuation(saved,positions);
  const controlled=compatible?compatible(sourceQuotes):null;
+ const cacheControl=compatible&&cachedMidpoint?compatible(sourceQuotes,{sourceSellMidpoint:cachedMidpoint}):null;
+ const cacheById=new Map((cacheControl?.apiPositions||[]).map(p=>[String(p.id),p]));
  const controlledById=new Map((controlled?.apiPositions||[]).map(p=>[String(p.id),p]));
  const comparison=[];
  for(const p of positions){
@@ -56,6 +66,8 @@ try{
    openPriceChanged:p.model.view.openPrice!==original.openPrice});
  }
  const sourceTotal=addMoney(...sourcePositions.map(p=>p.profit));
+ const cacheDifferences=sourcePositions.filter(p=>cacheById.has(String(p.id))).map(p=>addMoney(cacheById.get(String(p.id)).profit,-p.profit));
+ const cacheAccount=cacheControl?(await createLivePreviewState({saved,positions,quoteCheck:async()=>({status:'ready',valuation:cacheControl,quotes:[]})})()).account:null;
  const snapshotTotal=addMoney(...positions.map(p=>p.model.view.profit));
  let liveAccount=null;
  if(target.status==='ready')liveAccount=(await createLivePreviewState({saved,positions,quoteCheck:async()=>target})()).account;
@@ -84,6 +96,11 @@ try{
    brokerFloating:brokerAccount.profit,brokerEquity:brokerAccount.equity,
    snapshotBrokerFloating:saved.payload.brokerAccount.profit,snapshotBrokerEquity:saved.payload.brokerAccount.equity},
   largestDifferences:comparison.sort((a,b)=>Math.abs(b.profitDifference)-Math.abs(a.profitDifference)).slice(0,8),
+  sourceFxCache:{samples:inferredRates.length,inferredMidpoint:cachedMidpoint,
+   currentMidpoint:(fxSource.bid+fxSource.ask)/2,
+   positionDifferenceAtCachedRate:cacheControl?addMoney(...cacheDifferences):null,
+   maxPositionDifferenceAtCachedRate:cacheControl?Math.max(0,...cacheDifferences.map(Math.abs)):null,
+   equityDifferenceAtCachedRate:cacheAccount?addMoney(cacheAccount.equity,-sourceAccount.equity):null},
   rawBroker:{snapshot:rawSummary(saved.payload.brokerPositions,snapshotFx),source:rawSummary(currentRaw,fxSource),
    snapshotAccount:{profit:saved.payload.brokerAccount.profit,margin:saved.payload.brokerAccount.margin,margin_level:saved.payload.brokerAccount.margin_level},
    sourceAccount:{profit:brokerAccount.profit,margin:brokerAccount.margin,margin_level:brokerAccount.margin_level}},
