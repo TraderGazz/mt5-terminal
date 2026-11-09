@@ -125,6 +125,7 @@ test('desktop loads W1/MN1, ignores stale responses and exposes load failures', 
   const requests = [], displayed = [], elements = {};
   elements.chart = { append: node => { elements[node.id] = node; } };
   const context = vm.createContext({
+    state:{symbol:'EURUSDrfd',offset:0},view:{begin:100},draw(){},
     document: {
       getElementById: id => elements[id],
       createElement: () => ({ style: {}, replaceChildren() {}, append() {} }),
