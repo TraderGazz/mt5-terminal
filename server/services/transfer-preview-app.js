@@ -16,10 +16,13 @@ export async function createTransferPreviewApp({ saved, positions, clientDir, au
     }catch{el.textContent='ТЕСТОВАЯ КОПИЯ · Нет свежих котировок — значения не обновляются';el.style.background='#a32222';}}
     el.textContent='ТЕСТОВАЯ КОПИЯ · Проверяем котировки';check();setInterval(check,5000);
   })();</script>`:'';
-  const rehearsalPanel=closeUi?`<style>body{padding-top:54px}</style><div style="position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#704800;color:white;padding:8px;text-align:center;font:13px Arial">
+  const rehearsalPanel=closeUi?`<style>:root{--transfer-test-bar:54px}body{padding-top:var(--transfer-test-bar)}#terminal{height:calc(100dvh - var(--transfer-test-bar));max-height:calc(100dvh - var(--transfer-test-bar));min-height:0}</style><div id="transfer-rehearsal-bar" style="position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#704800;color:white;padding:8px;text-align:center;font:13px Arial">
     ТЕСТ ЗАКРЫТИЯ · Только позиция #${closeUi.targetTicket} · <span id="close-test-state">проверяем состояние</span>
     <button id="close-test-restore" style="margin-left:8px">Вернуть позицию</button></div>
     <script>(function(){const button=document.getElementById('close-test-restore'),label=document.getElementById('close-test-state');
+      const bar=document.getElementById('transfer-rehearsal-bar');
+      const fit=()=>document.documentElement.style.setProperty('--transfer-test-bar',Math.ceil(bar.getBoundingClientRect().height)+'px');
+      fit();new ResizeObserver(fit).observe(bar);
       async function status(){try{const r=await fetch('/api/transfer/feed-status',{cache:'no-store'});if(!r.ok)throw new Error();const d=await r.json();label.textContent=d.rehearsalClosed?'Позиция закрыта · цены зафиксированы':'Живые котировки · позиция открыта';}catch{label.textContent='Нет доступных котировок';}}
       status();setInterval(status,3000);button.onclick=async()=>{if(!confirm('Восстановить тестовую позицию, баланс и историю?'))return;
        button.disabled=true;try{const token=localStorage.getItem(location.pathname.startsWith('/pc')?'mt5pc-token':'terminal-auth-token');const r=await fetch('/api/transfer/rehearsal/restore',{method:'POST',headers:{Authorization:'Bearer '+token}});const d=await r.json();if(!r.ok)throw new Error(d.error||'Ошибка восстановления');location.reload();}catch(e){alert(e.message);button.disabled=false;}};
