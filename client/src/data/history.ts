@@ -9,6 +9,7 @@ import { useSyncExternalStore } from 'react';
 import { IS_API } from '@/config';
 import { BALANCE_OPS, CFD_OPS, HISTORY, type Deal } from '@/mocks/history';
 import * as editStore from '@/mocks-trade/editStore';
+import { createHistoryRefresh,createHistoryClock } from './historyRefresh';
 import { wsClient } from '@/api/ws';
 import { getHistoryRaw, patchTrade, type ApiHistoryRow, type ApiDealLeg } from '@/api/rest';
 
@@ -143,22 +144,18 @@ export function setHistoryFrom(from: number | null) {
   }
 }
 
-async function refresh() {
-  try {
-    const raw = await getHistoryRaw(fromIso);
-    deals = raw.deals.map(toDeal);
-    balanceOps = raw.balanceOps.map(toDeal);
-    cfdOps = raw.cfdOps.map(toDeal);
-    dealLegs = raw.dealLegs.map(toLeg);
-    loaded = true;
-    hasError = false;
-    notify();
-  } catch {
-    loaded = true;
-    hasError = true;
-    notify();
-  }
-}
+const historyClock=createHistoryClock();
+const refresh=createHistoryRefresh(
+  ()=>getHistoryRaw(fromIso),
+  raw=>{
+    deals=raw.deals.map(toDeal);balanceOps=raw.balanceOps.map(toDeal);
+    cfdOps=raw.cfdOps.map(toDeal);dealLegs=raw.dealLegs.map(toLeg);
+    historyClock.observe(raw.serverTime);loaded=true;hasError=false;notify();
+  },
+  ()=>{loaded=true;hasError=true;notify();},
+);
+export const getHistoryNow=()=>IS_API?historyClock.now():Date.now();
+export async function refreshHistory(){if(IS_API)await refresh();}
 
 // Каждый опрос перекачивает ВЕСЬ /history/raw (тысячи строк). Пробовали
 // увеличить до 60с ради экономии трафика — сразу заметили задержку появления

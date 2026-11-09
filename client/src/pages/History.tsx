@@ -10,6 +10,7 @@ import {
   getBalanceOps,
   getCfdOps,
   getDeals,
+  getHistoryNow,
   getDealLegs,
   useDealsVersion,
   useHistoryLoaded,
@@ -222,15 +223,17 @@ export default function HistoryPage() {
   const [refreshing, setRefreshing] = useState(false);
   const pullRef = useRef<{ startY: number; pulling: boolean }>({ startY: 0, pulling: false });
 
-  const range = useMemo(() => periodRange(filter), [filter]);
+  const dealsVersion = useDealsVersion();
+  // Keep the request's lower boundary stable while advancing the live upper
+  // boundary when new history arrives. Custom ranges remain exact.
+  const selectedRange=useMemo(()=>periodRange(filter),[filter]);
+  const range=useMemo(()=>({...selectedRange,to:filter.period==='custom'?selectedRange.to:getHistoryNow()}),
+    [selectedRange,filter.period,dealsVersion]);
 
   useEffect(() => {
     setHistoryFrom(range.from);
   }, [range.from]);
 
-  // Reads through editStore so edits from TradeEdit («(изм.)», changed
-  // profit/swap/commission) are reflected here immediately.
-  const dealsVersion = useDealsVersion();
 
   const deals = useMemo(
     () =>

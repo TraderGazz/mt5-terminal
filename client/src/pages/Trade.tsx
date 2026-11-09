@@ -26,6 +26,7 @@ import {
 import { SYMBOL, VIEWER_CAN_CLOSE } from '@/config';
 import { useCurrentRole } from '@/components/auth/session';
 import { useTradeMaintenanceMode, useMobileHistoryEditVisible } from '@/data/authSession';
+import { refreshHistory } from '@/data/history';
 import { logEvent } from '@/data/journal';
 
 /** First-mount animations run once per session (design.md §6). */
@@ -199,7 +200,7 @@ export default function TradePage() {
         logEvent(`Закрыта позиция #${target.id}`);
         setCloseConfirm(null);
         setSelected(null);
-        return refreshPositions();
+        return Promise.all([refreshPositions(),refreshHistory()]);
       })
       .catch((err: Error) => setToast(err.message || 'Не удалось закрыть сделку'))
       .finally(() => setClosing(false));

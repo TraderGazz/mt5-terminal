@@ -154,6 +154,7 @@ export interface ApiDealLeg {
 }
 
 export interface ApiHistoryRaw {
+  serverTime?: string;
   deals: ApiHistoryRow[];
   balanceOps: ApiHistoryRow[];
   cfdOps: ApiHistoryRow[];

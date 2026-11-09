@@ -134,7 +134,7 @@ router.get('/raw', authRequired, async (req, res) => {
     const balanceOps = deals.filter((d) => d.dealType === 'balance' || d.dealType === 'withdrawal');
     const cfdOps = deals.filter((d) => d.dealType === 'cfd');
     const dealLegs = await loadDealLegs(from);
-    res.json({ deals: trade, balanceOps, cfdOps, dealLegs, source: getBridge().status() });
+    res.json({ deals: trade, balanceOps, cfdOps, dealLegs, serverTime:new Date().toISOString(), source: getBridge().status() });
   } catch (err) {
     console.error('[history/raw] error:', err.message);
     res.status(502).json({ error: 'Не удалось получить историю', detail: err.message });
