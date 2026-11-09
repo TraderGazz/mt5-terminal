@@ -1,0 +1,56 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import express from 'express';
+import { WebSocket } from 'ws';
+import { once } from 'node:events';
+import { mkdtemp,writeFile,rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createLivePreviewState,attachTransferPreviewFeed } from '../services/transfer-live-preview.js';
+import { createTransferPreviewApp } from '../services/transfer-preview-app.js';
+const anchor={balance:70910502.15,equity:53672528.96,freeMargin:2690359.65,margin:48982623.97,marginLevel:159.62,floatingProfit:-17237973.19};
+const saved={captured_at:'2026-11-07T09:17:13Z',account_view:anchor};
+const positions=[{model:{view:{profit:-100.004}}},{model:{view:{profit:20}}}];
+const valued=[{id:1,profit:-90,swap:-5,commission:0,currentPrice:1.11},{id:2,profit:25,swap:0,commission:0,currentPrice:1.12}];
+const ready={status:'ready',targetLogin:'2000138707',quotes:[],valuation:{positions:valued,profit:-65}};
+test('live state preserves balance, branding/margin offsets and uses integer-cent delta, cached across readers',async()=>{
+ let calls=0,clock=1000;const read=createLivePreviewState({saved,positions,now:()=>clock,quoteCheck:async()=>{calls++;return ready;}});
+ const [a,b]=await Promise.all([read(),read()]);assert.equal(a,b);assert.equal(calls,1);
+ assert.equal(a.account.balance,anchor.balance);assert.equal(a.account.margin,anchor.margin);
+ assert.equal(a.account.equity,53672543.96);assert.equal(a.account.freeMargin,2690374.65);
+ assert.equal(a.account.floatingProfit,-17237958.19);assert.deepEqual(a.quotes,[]);
+ assert.equal(anchor.equity,53672528.96);assert.equal(a.source.live,true);
+ await read();assert.equal(calls,1);clock+=1001;await read();assert.equal(calls,2);
+});
+test('stale quote results never become live positions',async()=>{
+ const read=createLivePreviewState({saved,positions,quoteCheck:async()=>({status:'stale'})});
+ await assert.rejects(read,error=>error.status===503);
+});
+test('HTTP and WebSocket use same calculated state; writes stay blocked; stale REST rejects and WS disconnects',async()=>{
+ const directory=await mkdtemp(join(tmpdir(),'mt5-live-'));await writeFile(join(directory,'index.html'),'<body></body>');
+ let stale=false;
+ const state={account:anchor,positions:valued,source:{live:true}};
+ const readState=async()=>{if(stale){const e=new Error('stale');e.status=503;throw e;}return state;};
+ const authRequired=async(req,res,next)=>{await new Promise(r=>setTimeout(r,5));if(req.headers.authorization==='Bearer valid'){req.user={role:'admin'};next();}else res.status(401).json({});};
+ const app=await createTransferPreviewApp({saved,positions,clientDir:directory,authRouter:express.Router(),historyRouter:express.Router(),authRequired,readState});
+ const server=app.listen(0,'127.0.0.1');await once(server,'listening');
+ const stop=attachTransferPreviewFeed(server,{readState,authRequired,intervalMs:30});
+ const base='http://127.0.0.1:'+server.address().port;let ws;
+ try{
+  const headers={Authorization:'Bearer valid'};
+  assert.equal((await fetch(base+'/api/transfer/feed-status')).status,200);
+  assert.deepEqual((await(await fetch(base+'/api/account',{headers})).json()).account,anchor);
+  assert.deepEqual((await(await fetch(base+'/api/positions',{headers})).json()).positions,valued);
+  assert.deepEqual((await(await fetch(base+'/api/quotes')).json()).quotes,[]);
+  assert.equal((await fetch(base+'/api/trading/close',{method:'POST',headers})).status,403);
+  ws=new WebSocket(base.replace('http:','ws:')+'/ws?token=valid');
+  await once(ws,'open');const messages=[];ws.on('message',b=>messages.push(JSON.parse(b)));
+  ws.send(JSON.stringify({op:'subscribe',channels:['account','positions']}));
+  for(let i=0;i<50&&!messages.some(m=>m.channel==='account');i++)await new Promise(r=>setTimeout(r,10));
+  assert.deepEqual(messages.find(m=>m.channel==='positions')?.data,valued);
+  assert.deepEqual(messages.find(m=>m.channel==='account')?.data,anchor);
+  const closed=once(ws,'close');stale=true;assert.equal((await fetch(base+'/api/transfer/feed-status')).status,503);assert.equal((await fetch(base+'/api/account',{headers})).status,503);
+  assert.equal((await closed)[0],1013);
+  const bad=new WebSocket(base.replace('http:','ws:')+'/ws?token=bad');assert.equal((await once(bad,'close'))[0],4401);
+ }finally{ws?.terminate();stop();await new Promise(r=>server.close(r));await rm(directory,{recursive:true,force:true});}
+});
