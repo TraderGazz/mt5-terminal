@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { roundMoney } from './money.js';
 
-export async function createTransferPreviewApp({ saved, positions, clientDir, authRouter, authRequired, historyRouter, quoteCheck, readState }) {
+export async function createTransferPreviewApp({ saved, positions, clientDir, authRouter, authRequired, historyRouter, quoteCheck, readState, closeUi }) {
   const capturedAt = new Date(saved.captured_at).toISOString();
   const source = {mode:'transfer-preview', capturedAt, live:false};
   const account = saved.account_view;
@@ -16,7 +16,15 @@ export async function createTransferPreviewApp({ saved, positions, clientDir, au
     }catch{el.textContent='ТЕСТОВАЯ КОПИЯ · Нет свежих котировок — значения не обновляются';el.style.background='#a32222';}}
     el.textContent='ТЕСТОВАЯ КОПИЯ · Проверяем котировки';check();setInterval(check,5000);
   })();</script>`:'';
-  const html = index.replace('</body>',banner+liveStatusScript+'</body>');
+  const rehearsalPanel=closeUi?`<style>body{padding-top:54px}</style><div style="position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#704800;color:white;padding:8px;text-align:center;font:13px Arial">
+    ТЕСТ ЗАКРЫТИЯ · Только позиция #${closeUi.targetTicket} · <span id="close-test-state">проверяем состояние</span>
+    <button id="close-test-restore" style="margin-left:8px">Вернуть позицию</button></div>
+    <script>(function(){const button=document.getElementById('close-test-restore'),label=document.getElementById('close-test-state');
+      async function status(){try{const r=await fetch('/api/transfer/feed-status',{cache:'no-store'});if(!r.ok)throw new Error();const d=await r.json();label.textContent=d.rehearsalClosed?'Позиция закрыта · цены зафиксированы':'Живые котировки · позиция открыта';}catch{label.textContent='Нет доступных котировок';}}
+      status();setInterval(status,3000);button.onclick=async()=>{if(!confirm('Восстановить тестовую позицию, баланс и историю?'))return;
+       button.disabled=true;try{const token=localStorage.getItem('terminal-auth-token');const r=await fetch('/api/transfer/rehearsal/restore',{method:'POST',headers:{Authorization:'Bearer '+token}});const d=await r.json();if(!r.ok)throw new Error(d.error||'Ошибка восстановления');location.reload();}catch(e){alert(e.message);button.disabled=false;}};
+    })();</script>`:'';
+  const html = index.replace('</body>',(closeUi?rehearsalPanel:banner+liveStatusScript)+'</body>');
   const app = express();
   app.disable('x-powered-by');
   app.use(express.json({limit:'32kb'}));
@@ -25,13 +33,14 @@ export async function createTransferPreviewApp({ saved, positions, clientDir, au
     next();
   });
   app.use('/api',(req,res,next)=>{
+    if (closeUi&&req.method==='POST'&&['/trading/close','/transfer/rehearsal/restore'].includes(req.path)) return next();
     if (['GET','HEAD'].includes(req.method) || (req.method === 'POST' && req.path === '/auth/login')) return next();
     res.status(403).json({error:'Тестовая копия доступна только для просмотра'});
   });
-  app.get('/api/health',(req,res)=>res.json({status:'ok',source:{...source,liveConfigured:!!readState},positions:positions.length}));
+  app.get('/api/health',(req,res)=>res.json({status:'ok',source:{...source,liveConfigured:!!readState,closeRehearsal:!!closeUi},positions:positions.length}));
   app.get('/api/transfer/feed-status',async(req,res)=>{
     if(!readState)return res.json({live:false});
-    try{const state=await readState();res.json({live:true,valuedAt:state.source.valuedAt});}
+    try{const state=await readState();res.json({live:state.source.live,rehearsalClosed:!!state.source.rehearsalClosed,valuedAt:state.source.valuedAt});}
     catch{res.status(503).json({live:false,stale:true});}
   });
   app.use('/api/auth',authRouter);
@@ -43,6 +52,15 @@ export async function createTransferPreviewApp({ saved, positions, clientDir, au
     if (!quoteCheck) return res.status(503).json({error:'Тестовый мост ещё не настроен'});
     try { res.json(await quoteCheck()); } catch(error) { next(error); }
   });
+  if(closeUi){
+    const admin=(req,res,next)=>req.user?.role==='admin'?next():res.status(403).json({error:'Только для администратора'});
+    app.post('/api/trading/close',authRequired,admin,async(req,res,next)=>{
+      try{res.json(await closeUi.close(req.body,String(req.user.sub)));}catch(error){next(error);}
+    });
+    app.post('/api/transfer/rehearsal/restore',authRequired,admin,async(req,res,next)=>{
+      try{res.json(await closeUi.restore());}catch(error){next(error);}
+    });
+  }
   app.get('/api/account',authRequired,async(req,res,next)=>{
     try { const state=readState?await readState():{account,source};res.json({account:state.account,source:state.source}); }catch(error){next(error);}
   });
@@ -66,6 +84,6 @@ export async function createTransferPreviewApp({ saved, positions, clientDir, au
   app.get(['/mobile','/mobile/','/mobile/index.html'],sendIndex);
   app.use('/mobile',express.static(clientDir,{index:false,etag:false,maxAge:0}));
   app.get(/^\/mobile\/.*$/,sendIndex);
-  app.use((error,req,res,next)=>res.status(error.status===503?503:500).json({error:error.status===503?error.message:'Ошибка тестового просмотра'}));
+  app.use((error,req,res,next)=>res.status([400,409,503].includes(error.status)?error.status:500).json({error:[400,409,503].includes(error.status)?error.message:'Ошибка тестового просмотра'}));
   return app;
 }

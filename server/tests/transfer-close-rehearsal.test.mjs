@@ -4,6 +4,12 @@ import pg from 'pg';
 import {readFile} from 'node:fs/promises';
 import {normalizePosition} from '../services/mt5-bridge/normalize.js';
 import {prepareTransfer,importPreparedTransfer} from '../services/transfer-staging.js';
+import {createCloseUi} from '../services/transfer-close-ui.js';
+import {createTransferPreviewApp} from '../services/transfer-preview-app.js';
+import express from 'express';
+import {mkdtemp,writeFile,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {closeRehearsalPosition} from '../services/transfer-close-rehearsal.js';
 test('separate close clone: atomic history/balance settlement, repeated close and exact restore',{skip:!process.env.TEST_DATABASE_URL},async()=>{
  const root=process.env.TEST_DATABASE_URL;const admin=new pg.Client({connectionString:root});await admin.connect();
@@ -44,6 +50,42 @@ test('separate close clone: atomic history/balance settlement, repeated close an
   assert.deepEqual((await pool.query('SELECT * FROM transferred_positions')).rows[0],position);
   assert.equal((await pool.query('SELECT count(*)::int AS n FROM trades')).rows[0].n,initialHistory);
   assert.deepEqual((await pool.query('SELECT account_view FROM transfer_snapshots')).rows[0].account_view,account);
+  const {rows:[stored]}=await pool.query('SELECT * FROM transfer_snapshots');
+  const factory=async()=>createCloseUi({pool,saved:stored,positions:(await pool.query('SELECT * FROM transferred_positions')).rows,
+   baseUrl:'http://127.0.0.1:8890/v1',now:()=>now,fetchImpl:async url=>({ok:true,json:async()=>url.pathname.endsWith('account')?{login:'new',currency:'RUB'}:
+    url.searchParams.get('symbol')==='EURUSDrfd'?{...quotes.EURUSDrfd,time:'2026.11.09T18:00:00Z'}:{...quotes.USDRUBrfd,time:'2026.11.09T18:00:00Z'}})});
+  const closeUi=await factory();
+  const directory=await mkdtemp(join(tmpdir(),'mt5-close-ui-'));await writeFile(join(directory,'index.html'),'<body>client</body>');
+  const authRequired=(req,res,next)=>{const token=req.headers.authorization;if(!token)return res.status(401).json({});req.user={role:token==='Bearer admin'?'admin':'viewer',sub:'1'};next();};
+  const historyRouter=express.Router();historyRouter.get('/',authRequired,async(req,res)=>res.json((await pool.query('SELECT * FROM trades')).rows));
+  const app=await createTransferPreviewApp({saved:stored,positions:[position],clientDir:directory,authRouter:express.Router(),historyRouter,authRequired,closeUi,readState:closeUi.readState});
+  const server=await new Promise(resolve=>{const server=app.listen(0,'127.0.0.1',()=>resolve(server));});
+  const base='http://127.0.0.1:'+server.address().port;
+  const headers={Authorization:'Bearer admin','Content-Type':'application/json'};
+  const post=(path,body,otherHeaders=headers)=>fetch(base+path,{method:'POST',headers:otherHeaders,body:JSON.stringify(body)});
+  try{
+   assert.equal((await fetch(base+'/api/positions')).status,401);
+   assert.equal((await post('/api/trading/close',{ticket:123},{...headers,Authorization:'Bearer viewer'})).status,403);
+   assert.equal((await post('/api/trading/close',{ticket:124})).status,409);
+   assert.equal((await post('/api/trading/close',{ticket:123,volume:.5})).status,400);
+   assert.equal((await post('/api/trading/open',{})).status,403);
+   const html=await(await fetch(base+'/mobile/trade')).text();assert.match(html,/Вернуть позицию/);
+   const response=await post('/api/trading/close',{ticket:123});assert.equal(response.status,200,await response.text());
+   assert.equal((await(await fetch(base+'/api/positions',{headers})).json()).positions.length,0);
+   assert.equal((await(await fetch(base+'/api/account',{headers})).json()).account.balance,927500);
+   assert.equal((await(await fetch(base+'/api/history',{headers})).json()).length,initialHistory+1);
+   assert.equal((await(await fetch(base+'/api/transfer/feed-status')).json()).rehearsalClosed,true);
+   assert.equal((await(await post('/api/trading/close',{ticket:123})).json()).repeated,true);
+   // A process restart may reconstruct frozen state and restore from DB alone.
+   const restarted=await factory();assert.equal((await restarted.readState()).positions.length,0);
+   assert.equal((await restarted.readState()).account.balance,927500);
+   assert.equal((await post('/api/transfer/rehearsal/restore',{}, {...headers,Authorization:'Bearer viewer'})).status,403);
+   assert.equal((await post('/api/transfer/rehearsal/restore',{})).status,200);
+   assert.equal((await(await fetch(base+'/api/positions',{headers})).json()).positions.length,1);
+   assert.equal((await(await fetch(base+'/api/account',{headers})).json()).account.balance,1000000);
+   assert.equal((await(await fetch(base+'/api/history',{headers})).json()).length,initialHistory);
+   assert.equal((await post('/api/transfer/rehearsal/restore',{})).status,200);
+  }finally{await new Promise(resolve=>server.close(resolve));await rm(directory,{recursive:true,force:true});}
   const night=Date.parse('2026-11-09T16:05:04Z');
   const nightQuotes={EURUSDrfd:{...quotes.EURUSDrfd,time:new Date(night).toISOString()},
     USDRUBrfd:{...quotes.USDRUBrfd,time:'2026-11-09T15:54:59Z'}};

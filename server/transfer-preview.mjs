@@ -13,6 +13,8 @@ if (!/^terminal_migration_test_[a-z0-9_]+$/.test(database || '') || !/^[1-9]\d*$
   throw new Error('TRANSFER_PREVIEW_DATABASE must be terminal_migration_test_*; set TRANSFER_PREVIEW_SNAPSHOT_ID');
 }
 if (!Number.isInteger(port) || port < 1024 || port > 65535 || [4000,4001].includes(port)) throw new Error('Invalid preview port');
+const allowClose=process.env.TRANSFER_PREVIEW_ALLOW_CLOSE==='true';
+if(allowClose&&(!/^terminal_migration_test_close_[a-z0-9_]+$/.test(database)||port!==4003))throw new Error('Close UI requires separate close clone and port 4003');
 const clientDir = resolve(process.env.TRANSFER_PREVIEW_CLIENT_DIR || '');
 if (basename(clientDir) !== 'preview-client') throw new Error('Use a separate preview-client build directory');
 const databaseUrl = new URL(process.env.DATABASE_URL);
@@ -31,7 +33,7 @@ try {
   await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
   ({rows:[saved]} = await client.query('SELECT * FROM transfer_snapshots WHERE id = $1',[snapshotId]));
   ({rows:positions} = await client.query('SELECT * FROM transferred_positions WHERE snapshot_id = $1 ORDER BY original_ticket',[snapshotId]));
-  if (!saved || positions.length !== saved.payload.sitePositions.positions.length || positions.some(p=>p.status !== 'open')) {
+  if (!saved || positions.length !== saved.payload.sitePositions.positions.length || (!allowClose&&positions.some(p=>p.status !== 'open'))) {
     throw new Error('Preview requires a complete open snapshot');
   }
   const sourceOrder = new Map(saved.payload.sitePositions.positions.map((p, i) => [String(p.id), i]));
@@ -57,7 +59,15 @@ if(process.env.TRANSFER_PREVIEW_LIVE==='true') {
   if(!quoteCheck)throw new Error('Live preview requires TRANSFER_PREVIEW_QUOTE_URL');
   readState=createLivePreviewState({saved,positions,quoteCheck});
 }
-const app = await createTransferPreviewApp({saved,positions,clientDir,authRouter,authRequired,historyRouter,quoteCheck,readState});
+let closeUi,closePool;
+if(allowClose){
+  if(!process.env.TRANSFER_PREVIEW_QUOTE_URL)throw new Error('Quote URL missing');
+  closePool=new pg.Pool({connectionString:databaseUrl.href,max:4});
+  const {createCloseUi}=await import('./services/transfer-close-ui.js');
+  closeUi=await createCloseUi({pool:closePool,saved,positions,baseUrl:process.env.TRANSFER_PREVIEW_QUOTE_URL});
+  readState=closeUi.readState;quoteCheck=closeUi.quoteCheck;
+}
+const app = await createTransferPreviewApp({saved,positions,clientDir,authRouter,authRequired,historyRouter,quoteCheck,readState,closeUi});
 const server = app.listen(port,'127.0.0.1',()=>console.log(`[transfer-preview] http://127.0.0.1:${port}/mobile/login; ${positions.length} saved positions`));
 const closeFeed=readState?attachTransferPreviewFeed(server,{readState,authRequired}):()=>{};
-for (const signal of ['SIGINT','SIGTERM']) process.on(signal,()=>{closeFeed();server.close(()=>process.exit(0));});
+for (const signal of ['SIGINT','SIGTERM']) process.on(signal,()=>{closeFeed();server.close(async()=>{if(closePool)await closePool.end();process.exit(0);});});
