@@ -8,7 +8,7 @@ export function createHybridReviewState(read,{now=Date.now,cacheMs=3000}={}){
   pending=(async()=>{
    const state=await read();
    if(state.source.targetPositions||state.source.targetTradingDeals){
-    const error=new Error('На новом счёте появились сделки. Просмотр приостановлен до подключения их истории.');error.status=503;throw error;
+    const error=new Error('На новом счёте появились сделки. Просмотр приостановлен до подключения их истории.');error.status=503;error.code='TARGET_TRADES_NOT_ENABLED';throw error;
    }
    cached=state;at=now();return state;
   })().finally(()=>{pending=null;});

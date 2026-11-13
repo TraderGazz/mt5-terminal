@@ -13,8 +13,8 @@ test('review readers share one broker poll, expire cache, and stop on new tradin
  const read=createHybridReviewState(async()=>{calls++;await new Promise(r=>setTimeout(r,2));return{source:{targetPositions:0,targetTradingDeals:newTrade?1:0},account:{balance:100}};},{now:()=>clock});
  const [a,b]=await Promise.all([read(),read()]);assert.equal(a,b);assert.equal(calls,1);
  await read();assert.equal(calls,1);clock=3001;newTrade=true;
- await assert.rejects(read,error=>error.status===503);assert.equal(calls,2);
- await assert.rejects(read,error=>error.status===503);assert.equal(calls,3);
+ await assert.rejects(read,error=>error.status===503&&error.code==='TARGET_TRADES_NOT_ENABLED');assert.equal(calls,2);
+ await assert.rejects(read,error=>error.status===503&&error.code==='TARGET_TRADES_NOT_ENABLED');assert.equal(calls,3);
 });
 test('domain replacement retains TLS and HTTP redirect; removes all old static routes and touches only online',()=>{
  const tail=`listen 443 ssl;\nssl_certificate /etc/letsencrypt/live/trader-mt5.online/fullchain.pem;\n}\nserver {\nserver_name trader-mt5.online www.trader-mt5.online;\nlisten 80;\nreturn 301 https://$host$request_uri;\n}`;
@@ -29,10 +29,11 @@ test('public hybrid mobile and PC show test banner, use auth, expose candles and
  const client=join(root,'preview-client'),desktop=join(root,'preview-desktop');await mkdir(client);await mkdir(desktop);
  for(const [dir,file] of [[client,'index.html'],[desktop,'index.html'],[desktop,'login.html']])await writeFile(join(dir,file),'<html><body>fixture</body></html>');
  const authRequired=(req,res,next)=>{if(req.headers.authorization==='Bearer test'){req.user={role:'admin'};next();}else res.sendStatus(401);};
+ let blocked=false;
  const state={account:{currency:'RUB',balance:70910502.15},positions:[{id:42,profit:-100}],source:{live:true,targetPositions:0,targetTradingDeals:0}};
  const quoteCheck=()=>{};quoteCheck.candles=async()=>({bars:[]});
  const app=await createTransferPreviewApp({saved:{captured_at:new Date(),account_view:state.account},positions:[],clientDir:client,desktopDir:desktop,
-  authRouter:express.Router(),authRequired,historyRouter:express.Router(),hybrid:true,readState:async()=>state,quoteCheck});
+  authRouter:express.Router(),authRequired,historyRouter:express.Router(),hybrid:true,readState:async()=>{if(blocked){const e=new Error('blocked');e.code='TARGET_TRADES_NOT_ENABLED';e.status=503;throw e;}return state;},quoteCheck});
  const server=await new Promise(resolve=>{const s=app.listen(0,'127.0.0.1',()=>resolve(s));});const base='http://127.0.0.1:'+server.address().port,headers={Authorization:'Bearer test'};
  try{
   assert.equal((await(await fetch(base+'/api/health')).json()).source.hybridPreview,true);
@@ -40,6 +41,7 @@ test('public hybrid mobile and PC show test banner, use auth, expose candles and
   assert.deepEqual((await(await fetch(base+'/api/account',{headers})).json()).account,state.account);
   for(const path of ['/mobile/login','/mobile/trade','/pc/','/pc/login.html']){const response=await fetch(base+path);const html=await response.text();assert.equal(response.status,200);assert.match(html,/ТЕСТОВАЯ КОПИЯ/);assert.match(html,/Только просмотр/);assert.match(html,/--transfer-review-bar/);}
   assert.equal((await fetch(base+'/api/candles',{headers})).status,200);
+  blocked=true;const status=await fetch(base+'/api/transfer/feed-status');assert.equal(status.status,503);assert.deepEqual(await status.json(),{live:false,stale:false,reason:'TARGET_TRADES_NOT_ENABLED'});blocked=false;
   for(const [method,path] of [['POST','/api/trading/open'],['POST','/api/trading/close'],['PATCH','/api/trades/1'],['POST','/api/transfer/rehearsal/restore']])assert.equal((await fetch(base+path,{method,headers})).status,403);
  }finally{await new Promise(r=>server.close(r));await rm(root,{recursive:true,force:true});}
 });

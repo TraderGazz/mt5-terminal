@@ -12,7 +12,7 @@ export async function createTransferPreviewApp({ saved, positions, clientDir, au
   const banner = `<div id="transfer-preview-status" role="status" style="position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#704800;color:white;padding:7px;text-align:center;font:13px Arial;pointer-events:none">ТЕСТОВАЯ КОПИЯ · ${readState ? "Котировки нового счёта" : "Снимок " + capturedAt} · Только просмотр</div>`;
   const liveStatusScript=readState?`<script>
   (function(){const el=document.getElementById('transfer-preview-status');
-    async function check(){try{const r=await fetch('/api/transfer/feed-status',{cache:'no-store',signal:AbortSignal.timeout(5000)});if(!r.ok)throw new Error();
+    async function check(){try{const r=await fetch('/api/transfer/feed-status',{cache:'no-store',signal:AbortSignal.timeout(5000)});if(!r.ok){const d=await r.json();if(d.reason==='TARGET_TRADES_NOT_ENABLED'){el.textContent='ТЕСТОВАЯ КОПИЯ · На новом счёте появились сделки — их отображение ещё не подключено';el.style.background='#a32222';return;}throw new Error();}
       el.textContent='ТЕСТОВАЯ КОПИЯ · Котировки нового счёта · Только просмотр';el.style.background='#285c32';
     }catch{el.textContent='ТЕСТОВАЯ КОПИЯ · Нет свежих котировок — значения не обновляются';el.style.background='#a32222';}}
     el.textContent='ТЕСТОВАЯ КОПИЯ · Проверяем котировки';check();setInterval(check,5000);
@@ -46,7 +46,7 @@ export async function createTransferPreviewApp({ saved, positions, clientDir, au
   app.get('/api/transfer/feed-status',async(req,res)=>{
     if(!readState)return res.json({live:false});
     try{const state=await readState();res.json({live:state.source.live,rehearsalClosed:!!state.source.rehearsalClosed,valuedAt:state.source.valuedAt});}
-    catch{res.status(503).json({live:false,stale:true});}
+    catch(error){res.status(503).json({live:false,stale:error.code!=='TARGET_TRADES_NOT_ENABLED',reason:error.code==='TARGET_TRADES_NOT_ENABLED'?error.code:'FEED_UNAVAILABLE'});}
   });
   app.use('/api/auth',authRouter);
   app.get('/api/account/public-branding',(req,res)=>res.json({
