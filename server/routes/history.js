@@ -1,3 +1,4 @@
+import {addMoney} from '../services/money.js';
 import { Router } from 'express';
 import { authRequired } from './auth.js';
 import { getBridge } from '../services/mt5-bridge/index.js';
@@ -130,11 +131,14 @@ router.get('/raw', authRequired, async (req, res) => {
   const from = fromDate && !Number.isNaN(fromDate.getTime()) ? fromDate.toISOString() : null;
   try {
     const { deals } = await loadDeals({ from, to: null }, res.locals.historyDbOnly === true);
-    const trade = deals.filter((d) => d.dealType === 'buy' || d.dealType === 'sell');
+    const extra=res.locals.historyExtra;
+    const combined=[...deals,...(extra?.rows||[])];
+    const trade = combined.filter((d) => d.dealType === 'buy' || d.dealType === 'sell');
     const balanceOps = deals.filter((d) => d.dealType === 'balance' || d.dealType === 'withdrawal');
     const cfdOps = deals.filter((d) => d.dealType === 'cfd');
-    const dealLegs = await loadDealLegs(from);
-    res.json({ deals: trade, balanceOps, cfdOps, dealLegs, serverTime:new Date().toISOString(), source: getBridge().status() });
+    const afterFrom=d=>!from||Date.parse(d.time)>=Date.parse(from);
+    const dealLegs = [...await loadDealLegs(from),...(extra?.legs||[]).filter(afterFrom)];
+    res.json({ deals: trade.filter(d=>!from||Date.parse(d.closeTime)>=Date.parse(from)),tradeCharges:(extra?.charges||[]).filter(afterFrom), balanceOps, cfdOps, dealLegs, serverTime:new Date().toISOString(), source: getBridge().status() });
   } catch (err) {
     console.error('[history/raw] error:', err.message);
     res.status(502).json({ error: 'Не удалось получить историю', detail: err.message });
@@ -150,7 +154,8 @@ router.get('/', authRequired, async (req, res) => {
 
   try {
     const { deals, from: origin } = await loadDeals(range, res.locals.historyDbOnly === true);
-    const result = buildHistory(deals, { tab, symbol, from: range.from, to: range.to, sort, period: range.period });
+    const extra=res.locals.historyExtra;
+    const result = buildHistory([...deals,...(extra?.rows||[])], { tradeCharges:extra?.charges||[],tab, symbol, from: range.from, to: range.to, sort, period: range.period });
     res.json({
       ...result,
       range: { from: range.from, to: range.to, period: range.period },
@@ -203,9 +208,13 @@ router.get('/totals', authRequired, async (req, res) => {
     const withdrawal =
       -sum(manualBalanceRows, (r) => Number(r.profit) < 0, (r) => r.profit) -
       sum(ledgerRows, (r) => r.deal_type === 'withdrawal', (r) => r.profit);
-    const profit = sum(tradeRows, () => true, (r) => r.profit);
-    const swap = sum(tradeRows, () => true, (r) => r.swap);
-    const commission = sum(tradeRows, () => true, (r) => r.commission);
+    const toMs=range.to?Date.parse(range.to):Infinity;
+    const extra=res.locals.historyExtra;
+    const extraRows=(extra?.rows||[]).filter(d=>Date.parse(d.closeTime)>=fromMs&&Date.parse(d.closeTime)<=toMs);
+    const extraCharges=(extra?.charges||[]).filter(d=>Date.parse(d.time)>=fromMs&&Date.parse(d.time)<=toMs);
+    const profit = addMoney(sum(tradeRows, () => true, (r) => r.profit),...extraRows.map(d=>d.profit));
+    const swap = addMoney(sum(tradeRows, () => true, (r) => r.swap),...extraRows.map(d=>d.swap));
+    const commission = addMoney(sum(tradeRows, () => true, (r) => r.commission),...extraRows.map(d=>d.commission),...extraCharges.map(d=>d.commission));
     const cfd = sum(cfdRows, () => true, (r) => r.profit);
     const balance = deposit - withdrawal + profit + swap + commission + cfd;
     const round2 = (n) => Math.round(n * 100) / 100;

@@ -8,13 +8,13 @@ import {createHybridReviewState} from '../services/transfer-hybrid-review.js';
 import {onlineReviewConfig} from '../services/transfer-online-nginx.js';
 import {createTransferPreviewApp} from '../services/transfer-preview-app.js';
 
-test('review readers share one broker poll, expire cache, and stop on new trading data',async()=>{
+test('review readers share one broker poll, expire cache, and accept validated new trading history',async()=>{
  let calls=0,clock=0,newTrade=false;
- const read=createHybridReviewState(async()=>{calls++;await new Promise(r=>setTimeout(r,2));return{source:{targetPositions:0,targetTradingDeals:newTrade?1:0},account:{balance:100}};},{now:()=>clock});
+ const read=createHybridReviewState(async()=>{calls++;await new Promise(r=>setTimeout(r,2));return{source:{targetPositions:0,targetTradingDeals:newTrade?1:0},targetHistory:{rows:[],legs:[],charges:[]},account:{balance:100}};},{now:()=>clock});
  const [a,b]=await Promise.all([read(),read()]);assert.equal(a,b);assert.equal(calls,1);
  await read();assert.equal(calls,1);clock=3001;newTrade=true;
- await assert.rejects(read,error=>error.status===503&&error.code==='TARGET_TRADES_NOT_ENABLED');assert.equal(calls,2);
- await assert.rejects(read,error=>error.status===503&&error.code==='TARGET_TRADES_NOT_ENABLED');assert.equal(calls,3);
+ const changed=await read();assert.equal(changed.source.targetTradingDeals,1);assert.equal(calls,2);
+ await read();assert.equal(calls,2);
 });
 test('domain replacement retains TLS and HTTP redirect; removes all old static routes and touches only online',()=>{
  const tail=`listen 443 ssl;\nssl_certificate /etc/letsencrypt/live/trader-mt5.online/fullchain.pem;\n}\nserver {\nserver_name trader-mt5.online www.trader-mt5.online;\nlisten 80;\nreturn 301 https://$host$request_uri;\n}`;

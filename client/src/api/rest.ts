@@ -154,6 +154,7 @@ export interface ApiDealLeg {
 }
 
 export interface ApiHistoryRaw {
+  tradeCharges?: Array<{ticket:number;positionId:number;symbol:string;time:string;commission:number}>;
   serverTime?: string;
   deals: ApiHistoryRow[];
   balanceOps: ApiHistoryRow[];

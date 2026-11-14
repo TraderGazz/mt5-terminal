@@ -20,7 +20,7 @@ try{
  if(!positions.length||positions.length!==saved.payload.sitePositions.positions.length||positions.some(p=>p.status!=='open'))throw new Error('Complete open snapshot required');
  const {rows:[baseline]}=await db.query('SELECT * FROM transfer_target_baselines WHERE snapshot_id=$1',[saved.id]);
  if(!baseline)throw new Error('No target baseline');
- const quoteCheck=createTransferQuoteCheck({baseUrl,saved,positions});
+ const quoteCheck=createTransferQuoteCheck({baseUrl,saved,positions,allowWeekendSnapshot:true});
  await createHybridReviewState(createHybridTransferReader({saved,positions,baseline,quoteCheck}))();
  await db.query('COMMIT');
 }finally{await db.end();}

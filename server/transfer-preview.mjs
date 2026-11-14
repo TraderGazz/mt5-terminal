@@ -58,7 +58,7 @@ let quoteCheck,readState;
 const {createLivePreviewState,attachTransferPreviewFeed}=await import('./services/transfer-live-preview.js');
 if (process.env.TRANSFER_PREVIEW_QUOTE_URL) {
   const { createTransferQuoteCheck } = await import('./services/transfer-quote-check.js');
-  quoteCheck = createTransferQuoteCheck({baseUrl:process.env.TRANSFER_PREVIEW_QUOTE_URL,saved,positions});
+  quoteCheck = createTransferQuoteCheck({baseUrl:process.env.TRANSFER_PREVIEW_QUOTE_URL,saved,positions,allowWeekendSnapshot:hybrid});
 }
 if(process.env.TRANSFER_PREVIEW_LIVE==='true') {
   if(!quoteCheck)throw new Error('Live preview requires TRANSFER_PREVIEW_QUOTE_URL');

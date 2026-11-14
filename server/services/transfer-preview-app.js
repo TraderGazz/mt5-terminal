@@ -13,7 +13,7 @@ export async function createTransferPreviewApp({ saved, positions, clientDir, au
   const liveStatusScript=readState?`<script>
   (function(){const el=document.getElementById('transfer-preview-status');
     async function check(){try{const r=await fetch('/api/transfer/feed-status',{cache:'no-store',signal:AbortSignal.timeout(5000)});if(!r.ok){const d=await r.json();if(d.reason==='TARGET_TRADES_NOT_ENABLED'){el.textContent='ТЕСТОВАЯ КОПИЯ · На новом счёте появились сделки — их отображение ещё не подключено';el.style.background='#a32222';return;}throw new Error();}
-      el.textContent='ТЕСТОВАЯ КОПИЯ · Котировки нового счёта · Только просмотр';el.style.background='#285c32';
+      const status=await r.json();el.textContent=status.marketClosed?'ТЕСТОВАЯ КОПИЯ · Рынок закрыт · Последние котировки · Только просмотр':'ТЕСТОВАЯ КОПИЯ · Котировки нового счёта · Только просмотр';el.style.background='#285c32';
     }catch{el.textContent='ТЕСТОВАЯ КОПИЯ · Нет свежих котировок — значения не обновляются';el.style.background='#a32222';}}
     el.textContent='ТЕСТОВАЯ КОПИЯ · Проверяем котировки';check();setInterval(check,5000);
   })();</script>`:'';
@@ -45,7 +45,7 @@ export async function createTransferPreviewApp({ saved, positions, clientDir, au
   app.get('/api/health',(req,res)=>res.json({status:'ok',source:{...source,liveConfigured:!!readState,closeRehearsal:!!closeUi},positions:positions.length}));
   app.get('/api/transfer/feed-status',async(req,res)=>{
     if(!readState)return res.json({live:false});
-    try{const state=await readState();res.json({live:state.source.live,rehearsalClosed:!!state.source.rehearsalClosed,valuedAt:state.source.valuedAt});}
+    try{const state=await readState();res.json({live:state.source.live,marketClosed:!!state.source.marketClosed,rehearsalClosed:!!state.source.rehearsalClosed,valuedAt:state.source.valuedAt});}
     catch(error){res.status(503).json({live:false,stale:error.code!=='TARGET_TRADES_NOT_ENABLED',reason:error.code==='TARGET_TRADES_NOT_ENABLED'?error.code:'FEED_UNAVAILABLE'});}
   });
   app.use('/api/auth',authRouter);
@@ -95,7 +95,7 @@ export async function createTransferPreviewApp({ saved, positions, clientDir, au
       catch(error){next(error);}
     });
   }
-  app.use('/api/history',(req,res,next)=>{ res.locals.historyDbOnly = true; next(); },historyRouter);
+  app.use('/api/history',async(req,res,next)=>{try{res.locals.historyDbOnly=true;if(hybrid){const state=await readState();res.locals.historyExtra=state.targetHistory;}next();}catch(error){next(error);}},historyRouter);
   app.use('/api',(req,res)=>res.status(404).json({error:'Раздел недоступен в тестовом просмотре'}));
   const sendIndex = (req,res)=>res.type('html').send(html);
   app.get('/',(req,res)=>res.redirect('/mobile/login'));

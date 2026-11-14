@@ -86,7 +86,7 @@ export function buildHistory(deals, opts = {}) {
   const withdrawal = sum(balanceOps.filter((d) => d.profit < 0), (d) => d.profit);
   const profit = sum(tradeDeals, (d) => d.profit);
   const swap = sum(tradeDeals, (d) => d.swap);
-  const commission = sum(tradeDeals, (d) => d.commission);
+  const commission = sum(tradeDeals, (d) => d.commission)+sum((opts.tradeCharges||[]).filter(d=>symOk(d)&&ms(d.time)>=fromMs&&ms(d.time)<=toMs),d=>d.commission);
   const cfd = sum(cfdOps, (d) => d.profit);
   const balance = deposit + withdrawal + profit + swap + commission + cfd;
 

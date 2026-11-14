@@ -18,7 +18,7 @@ try{
  if(!baseline)throw new Error('No persisted target baseline');
  const {rows:positions}=await db.query('SELECT * FROM transferred_positions WHERE snapshot_id=$1 ORDER BY original_ticket',[saved.id]);
  if(positions.some(p=>p.status!=='open'))throw new Error('This rehearsal requires restored old positions');
- const check=createTransferQuoteCheck({baseUrl,saved,positions});
+ const check=createTransferQuoteCheck({baseUrl,saved,positions,allowWeekendSnapshot:true});
  const state=await createHybridTransferReader({saved,positions,baseline,quoteCheck:check})();
  assert.equal(state.accounting.marginLevelNeedsBasis,false);
  console.log(JSON.stringify({database,targetLogin:baseline.target_login,startedAt:baseline.started_at,

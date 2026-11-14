@@ -95,6 +95,8 @@ let deals: Array<Deal & { _id?: number }> = [];
 let balanceOps: Deal[] = [];
 let cfdOps: Deal[] = [];
 let dealLegs: DealLeg[] = [];
+let tradeCharges: Array<{symbol:string;time:number;commission:number}>=[];
+export const getTradeCharges=()=>tradeCharges;
 let version = 0;
 let started = false;
 // Пока первый /history/raw ещё не ответил, deals/balanceOps/cfdOps пусты —
@@ -138,6 +140,7 @@ export function setHistoryFrom(from: number | null) {
     balanceOps = [];
     cfdOps = [];
     dealLegs = [];
+    tradeCharges=[];
     loaded = false;
     notify();
     void refresh();
@@ -148,6 +151,7 @@ const historyClock=createHistoryClock();
 const refresh=createHistoryRefresh(
   ()=>getHistoryRaw(fromIso),
   raw=>{
+    tradeCharges=(raw.tradeCharges||[]).map(d=>({...d,time:ms(d.time)}));
     deals=raw.deals.map(toDeal);balanceOps=raw.balanceOps.map(toDeal);
     cfdOps=raw.cfdOps.map(toDeal);dealLegs=raw.dealLegs.map(toLeg);
     historyClock.observe(raw.serverTime);loaded=true;hasError=false;notify();

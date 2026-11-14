@@ -26,7 +26,7 @@ export function createLivePreviewState({saved,positions,quoteCheck,now=Date.now}
         freeMargin:addMoney(anchor.freeMargin,delta),floatingProfit:addMoney(anchor.floatingProfit,delta),
         marginLevel:roundMoney(marginLevel)};
       cached={account,positions:result.valuation.positions,quotes:[],source:{
-        mode:'transfer-preview',live:true,valuationMode:result.valuation.mode||'anchored',capturedAt:new Date(saved.captured_at).toISOString(),
+        mode:'transfer-preview',live:!result.marketClosed,marketClosed:!!result.marketClosed,valuationMode:result.valuation.mode||'anchored',capturedAt:new Date(saved.captured_at).toISOString(),
         valuedAt:new Date(now()).toISOString(),targetLogin:result.targetLogin,quoteStatus:result.quotes,
       }};
       cachedAt=now();return cached;

@@ -11,7 +11,7 @@ function setup(target={account:{login:2000138707,currency:'RUB',balance:900100,m
  return createHybridTransferReader({saved,positions,baseline,quoteCheck:check,now:()=>now});
 }
 const raw={ticket:42,type:'POSITION_TYPE_BUY',symbol:'EURUSDrfd',volume:1,price_open:1.12,price_current:1.121,time:'2026.11.09T22:00:00Z',profit:100,swap:-2};
-const opening={ticket:101,type:'DEAL_TYPE_BUY',entry:'DEAL_ENTRY_IN',time:'2026.11.09T22:00:00Z',profit:0,swap:0,commission:-5};
+const opening={ticket:101,position_id:42,order_ticket:201,symbol:'EURUSDrfd',volume:1,price:1.12,type:'DEAL_TYPE_BUY',entry:'DEAL_ENTRY_IN',time:'2026.11.09T22:00:00Z',profit:0,swap:0,commission:-5};
 test('empty live target preserves account exactly, ignores broker balance, uses persisted UTC baseline',async()=>{
  const state=await setup()();assert.deepEqual(state.account,saved.account_view);assert.equal(state.positions.length,1);assert.equal(state.source.readOnly,true);
 });
@@ -29,4 +29,7 @@ test('fails closed on pending orders, unknown deal types, missing money and wron
  await assert.rejects(setup({...base,deals:[{...opening,type:'DEAL_TYPE_CHARGE'}]}),/Unsupported/);
  await assert.rejects(setup({...base,opened:[{...raw,profit:null}]}),/profit/);
  await assert.rejects(setup({...base,account:{...base.account,login:1}}),/mismatch/);
+});
+test('a position with missing opening legs is rejected instead of silently omitting opening fees',async()=>{
+ await assert.rejects(setup({account:{login:2000138707,currency:'RUB',margin:1000},opened:[raw],pending:[],deals:[]}),/positions\/history changed/);
 });

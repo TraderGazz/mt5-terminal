@@ -1,3 +1,4 @@
+import {weekendValuationTime} from './transfer-weekend-snapshot.js';
 import { transferQuoteStatus } from './transfer-quote-policy.js';
 import { normalizeQuote,normalizeCandle,toIso } from './mt5-bridge/normalize.js';
 import { valueTransferredPosition } from './transfer-staging.js';
@@ -5,7 +6,7 @@ import { createSourceCompatibleValuation } from './transfer-source-valuation.js'
 import { addMoney } from './money.js';
 
 // Read-only transport: callers cannot supply an endpoint or place broker orders.
-export function createTransferQuoteCheck({ baseUrl, saved, positions, fetchImpl = fetch, now = Date.now }) {
+export function createTransferQuoteCheck({ baseUrl, saved, positions, fetchImpl = fetch, now = Date.now, allowWeekendSnapshot=false }) {
   const base = new URL(baseUrl);
   if (base.protocol !== 'http:' || base.port !== '8890' || base.username || base.password ||
       base.search || base.hash || !/^\/(v1\/?)?$/.test(base.pathname) ||
@@ -42,18 +43,21 @@ export function createTransferQuoteCheck({ baseUrl, saved, positions, fetchImpl 
       }
       const checkedAt = now();
       const executionSymbols=new Set(positions.map(p=>p.model.raw.symbol));
+      const snapshotTime=allowWeekendSnapshot?weekendValuationTime(quotes,executionSymbols,checkedAt):null;
+      const valuationTime=snapshotTime??checkedAt;
       const quoteStatus = Object.values(quotes).map(q => ({
         symbol:q.symbol, time:q.time, bid:q.bid, ask:q.ask,
         ...transferQuoteStatus(q,{now:checkedAt,conversion:!executionSymbols.has(q.symbol)}),
       }));
       if(quoteStatus.some(q=>q.reason==='invalid'))throw new Error('Invalid test bridge quote');
+      if(snapshotTime!==null)for(const q of quoteStatus){if(!q.usable&&transferQuoteStatus(quotes[q.symbol],{now:valuationTime,conversion:!executionSymbols.has(q.symbol)}).usable){q.usable=true;q.reason='weekend-snapshot';}}
       if (quoteStatus.some(q => !q.usable)) {
         return { status:'stale', targetLogin:String(account.login), quotes:quoteStatus, valuation:null };
       }
-      const valued = positions.map(p => valueTransferredPosition(p.model, quotes, { now:checkedAt }));
+      const valued = positions.map(p => valueTransferredPosition(p.model, quotes, { now:valuationTime }));
       return {
-        status:'ready', targetLogin:String(account.login), quotes:quoteStatus,
-        valuation:compatible?compatible(quotes,{now:checkedAt}):{ positions:valued, profit:addMoney(...valued.map(p=>p.profit)),
+        status:'ready', marketClosed:snapshotTime!==null,targetLogin:String(account.login), quotes:quoteStatus,
+        valuation:compatible?compatible(quotes,{now:valuationTime}):{ positions:valued, profit:addMoney(...valued.map(p=>p.profit)),
           swap:addMoney(...valued.map(p=>p.swap)), commission:addMoney(...valued.map(p=>p.commission)) },
       };
     })().finally(() => { inFlight = null; });

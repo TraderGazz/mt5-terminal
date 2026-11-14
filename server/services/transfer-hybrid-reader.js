@@ -1,5 +1,7 @@
+import {buildTargetHistory} from './transfer-target-history.js';
 import { normalizePosition, toIso } from './mt5-bridge/normalize.js';
 import { createLivePreviewState } from './transfer-live-preview.js';
+import {targetPositionId} from './transfer-hybrid-rehearsal.js';
 import { composeTransferHybrid } from './transfer-hybrid-rehearsal.js';
 import { roundMoney, addMoney } from './money.js';
 
@@ -24,6 +26,7 @@ function normalizeTarget(target){
   const type=types[raw.type],entry=entries[raw.entry];
   if(['buy','sell'].includes(type)&&!entry)throw new Error('Invalid target deal entry');
   return {ticket:requiredNumber(raw.ticket,'deal ticket'),type,entry:entry||'in',time:toIso(raw.time),
+   ...(['buy','sell'].includes(type)?{positionId:requiredNumber(raw.position_id,'position id'),symbol:raw.symbol,volume:requiredNumber(raw.volume,'deal volume'),price:requiredNumber(raw.price,'deal price'),orderTicket:Number(raw.order_ticket)||null,stopLoss:Number(raw.sl_price)||0,takeProfit:Number(raw.tp_price)||0,comment:raw.comment||''}:{}),
    profit:requiredNumber(raw.profit,'deal profit'),swap:requiredNumber(raw.swap,'deal swap'),commission:requiredNumber(raw.commission,'deal commission')};
  });
  return {positions,deals};
@@ -50,7 +53,10 @@ export function createHybridTransferReader({saved,positions,baseline,quoteCheck,
    combined.account.marginLevel=roundMoney((equity+delta+change)/(margin+combined.accounting.targetMargin)*100+(saved.account_view.marginLevel-level));
    combined.accounting.marginLevelNeedsBasis=false;
   }
-  return {...combined,source:{...oldState.source,mode:'transfer-hybrid-rehearsal',startedAt:new Date(baseline.started_at).toISOString(),
+  const targetHistory=buildTargetHistory(normalized.deals,{startedAt:new Date(baseline.started_at).toISOString()});
+  const expected=new Map(targetHistory.openPositions.map(p=>[p.id,p]));
+  if(expected.size!==normalized.positions.length||normalized.positions.some(p=>{const e=expected.get(targetPositionId(p.id));return !e||e.type!==p.type||e.symbol!==p.symbol||Math.abs(e.volume-p.volume)>1e-8;}))throw new Error('Target positions/history changed during read; retry required');
+  return {...combined,targetHistory,source:{...oldState.source,mode:'transfer-hybrid-rehearsal',startedAt:new Date(baseline.started_at).toISOString(),
    brokerBalanceExcluded:baseline.broker_balance_excluded,targetDeals:normalized.deals.length,targetTradingDeals:normalized.deals.filter(d=>['buy','sell'].includes(d.type)).length,targetPositions:normalized.positions.length,
    readOnly:true}};
  };

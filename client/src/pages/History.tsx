@@ -7,6 +7,7 @@ import Toast from '@/components/Toast';
 import PageLoading from '@/components/PageLoading';
 import ConnectionError from '@/components/ConnectionError';
 import {
+  getTradeCharges,
   getBalanceOps,
   getCfdOps,
   getDeals,
@@ -481,8 +482,9 @@ export default function HistoryPage() {
       swap += d.swap;
       commission += d.commission;
     }
+    for(const charge of getTradeCharges())if((filter.symbol==null||charge.symbol===filter.symbol)&&charge.time>=range.from&&charge.time<=range.to)commission+=charge.commission;
     return { profit, swap, commission, total: profit + swap + commission };
-  }, [deals]);
+  }, [deals,filter.symbol,range,dealsVersion]);
 
   // То же самое, но из СЫРЫХ сделок — специально для вкладки «Сделки».
   // Важно: это НЕ обязано совпадать с totals выше (который из уже слитых
